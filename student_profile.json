@@ -1,0 +1,55 @@
+{
+    "student_name": "Student",
+    "first_lesson": null,
+    "last_lesson": "2026-08-15T17:32:16.703062",
+    "mistakes": {
+        "grammar": [],
+        "vocabulary": [],
+        "pronunciation": []
+    },
+    "topics_passed": [],
+    "strengths": [
+        {
+            "date": "2026-05-17T20:56:02.065666",
+            "user_text": "roscosmos that the amish",
+            "jane_response": "🌟 Hi again! How are you doing today? I hope you're having a good day! 😊 We can talk about anything y"
+        },
+        {
+            "date": "2026-05-17T20:59:00.263684",
+            "user_text": "cause used to deal me",
+            "jane_response": "🙋‍♀️ Hello! How are you today? I hope you're having a good day. 😊"
+        },
+        {
+            "date": "2026-05-31T20:31:30.127307",
+            "user_text": "the been you mash they ago i do",
+            "jane_response": "🙋‍♀️ Hello again! It looks like you're having a little trouble with sentence structure today. No wor"
+        },
+        {
+            "date": "2026-05-31T20:41:32.936837",
+            "user_text": "the lady podolski",
+            "jane_response": "🌟 Hello! How are you doing today? I hope you're having a great day!"
+        },
+        {
+            "date": "2026-05-31T20:41:50.423857",
+            "user_text": "i read novels come",
+            "jane_response": "🌟 Hello! How are you doing today? I hope you're having a great day!"
+        },
+        {
+            "date": "2026-05-31T20:46:27.376135",
+            "user_text": "at the generals come",
+            "jane_response": "🤖 Hello again! I hope you're having a good day. How are you? 😊"
+        },
+        {
+            "date": "2026-08-13T21:35:57.551162",
+            "user_text": "привет, как дела?",
+            "jane_response": "Hello! How are you doing today? I see you greeted me in Russian! That's great. For our first task, c"
+        },
+        {
+            "date": "2026-08-15T17:32:16.703062",
+            "user_text": "помимо английского ты можешь в другие темы разговаривать.",
+            "jane_response": "Отлично. Да, я могу обсуждать с вами множество тем, не только английский. Мы можем поговорить о куль"
+        }
+    ],
+    "total_lessons": 31,
+    "last_week_mistakes": []
+}

@@ -1,0 +1,69 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "🚀 Запустить сервер",
+            "type": "shell",
+            "command": "D:\\llama.cpp\\llama-server.exe",
+            "args": [
+                "-m",
+                "D:\\EnglishTeacher\\models\\gemma\\Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+                "-c",
+                "4096",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                "8080",
+                "--jinja"
+            ],
+            "options": {
+                "cwd": "D:\\EnglishTeacher"
+            },
+            "group": "none",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "dedicated",
+                "showReuseMessage": true,
+                "clear": true
+            },
+            "isBackground": true,
+            "problemMatcher": []
+        },
+        {
+            "label": "🎤 Запустить преподавателя",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "gui.py"
+            ],
+            "options": {
+                "cwd": "D:\\EnglishTeacher"
+            },
+            "group": "none",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "dedicated",
+                "showReuseMessage": true,
+                "clear": true
+            }
+        },
+        {
+            "label": "⚡ Запустить всё (сервер + преподаватель)",
+            "dependsOn": [
+                "🚀 Запустить сервер",
+                "🎤 Запустить преподавателя"
+            ],
+            "dependsOrder": "sequence",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "dedicated"
+            }
+        }
+    ]
+}
