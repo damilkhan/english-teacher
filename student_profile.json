@@ -1,7 +1,7 @@
 {
     "student_name": "Student",
     "first_lesson": null,
-    "last_lesson": "2026-08-15T17:32:16.703062",
+    "last_lesson": "2026-08-16T08:53:48.466941",
     "mistakes": {
         "grammar": [],
         "vocabulary": [],
@@ -48,8 +48,28 @@
             "date": "2026-08-15T17:32:16.703062",
             "user_text": "помимо английского ты можешь в другие темы разговаривать.",
             "jane_response": "Отлично. Да, я могу обсуждать с вами множество тем, не только английский. Мы можем поговорить о куль"
+        },
+        {
+            "date": "2026-08-16T07:53:20.315110",
+            "user_text": "p-p-p-p-p-p-p-p-p",
+            "jane_response": "Hello again! I hope you're having a good day. I see you wrote \"p-p-p-p-p-p-p-p-p.\" Are you feeling e"
+        },
+        {
+            "date": "2026-08-16T08:28:30.716336",
+            "user_text": "хэлло, это всё будет по чьёсу, ты ляги, ты ляги, ты ляги.",
+            "jane_response": "Hello! 👋 I see you greeted me in Russian. Отлично!\n\nSince we haven't covered specific topics yet, le"
+        },
+        {
+            "date": "2026-08-16T08:53:24.033256",
+            "user_text": "привет, как дела?",
+            "jane_response": "Привет! У меня всё отлично, спасибо. Как твои дела? Мы можем начать изучать английский прямо сейчас."
+        },
+        {
+            "date": "2026-08-16T08:53:48.466941",
+            "user_text": "hello, let's start!",
+            "jane_response": "Great! To start, how about we learn some basic greetings and introductions? Would you like to tell m"
         }
     ],
-    "total_lessons": 31,
+    "total_lessons": 42,
     "last_week_mistakes": []
 }

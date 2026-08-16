@@ -61,11 +61,9 @@ class EnglishTeacherApp:
         self.conversation_history = []
         self.waiting_for_translation = False
 
-        # Голосовые модули
         self.vad = audio_vad.AudioVAD()
         self.stt = stt_engine.STTEngine()
 
-        # UI
         self.main_container = ctk.CTkFrame(self.window)
         self.main_container.pack(fill="both", expand=True, padx=10, pady=10)
 
@@ -110,7 +108,6 @@ class EnglishTeacherApp:
         self.status_label = ctk.CTkLabel(self.left_frame, text="Статус: Готов", font=ctk.CTkFont(size=9))
         self.status_label.pack(pady=5)
 
-        # Правая панель
         self.right_panel = ctk.CTkFrame(self.main_container, width=220, fg_color="#2b2b2b", border_width=2, border_color="#8C43EB")
         self.panel_title = ctk.CTkLabel(self.right_panel, text="⚙️ НАСТРОЙКИ", font=ctk.CTkFont(size=14, weight="bold"))
         self.panel_title.pack(pady=15)
@@ -140,18 +137,13 @@ class EnglishTeacherApp:
         self.init_profile()
 
     def init_profile(self):
-        """Создаёт файл профиля, если его нет"""
         profile_path = "student_profile.json"
         if not os.path.exists(profile_path):
             default_profile = {
                 "student_name": "Student",
                 "first_lesson": datetime.now().isoformat(),
                 "last_lesson": None,
-                "mistakes": {
-                    "grammar": [],
-                    "vocabulary": [],
-                    "pronunciation": []
-                },
+                "mistakes": {"grammar": [], "vocabulary": [], "pronunciation": []},
                 "topics_passed": [],
                 "strengths": [],
                 "total_lessons": 0,
@@ -162,7 +154,6 @@ class EnglishTeacherApp:
             self.add_message("Джейн", "📊 Создан новый профиль ученика. Я буду запоминать твой прогресс!")
 
     def get_student_profile(self):
-        """Загружает профиль ученика из JSON-файла"""
         profile_path = "student_profile.json"
         if os.path.exists(profile_path):
             with open(profile_path, 'r', encoding='utf-8') as f:
@@ -170,25 +161,18 @@ class EnglishTeacherApp:
         return {"mistakes": {"grammar": [], "vocabulary": [], "pronunciation": []}, "topics_passed": [], "strengths": []}
 
     def save_student_profile(self, profile):
-        """Сохраняет профиль ученика в JSON-файл"""
         profile["last_lesson"] = datetime.now().isoformat()
         profile["total_lessons"] = profile.get("total_lessons", 0) + 1
         with open("student_profile.json", 'w', encoding='utf-8') as f:
             json.dump(profile, f, indent=4, ensure_ascii=False)
 
     def update_profile_from_dialogue(self, user_text, jane_response):
-        """Анализирует диалог и обновляет профиль"""
         profile = self.get_student_profile()
-        
-        # Простейший анализ: ищем индикаторы ошибок в ответе Джейн
         mistake_indicators = ["mistake", "error", "incorrect", "wrong", "неправильно", "ошибка"]
         is_mistake = any(indicator in jane_response.lower() for indicator in mistake_indicators)
-        
         if is_mistake:
-            # Пытаемся извлечь тип ошибки (очень упрощённо)
             grammar_keywords = ["grammar", "tense", "verb", "noun", "adjective", "past", "future", "present"]
             vocab_keywords = ["vocabulary", "word", "spelling", "meaning", "definition"]
-            
             mistake_type = "general"
             for kw in grammar_keywords:
                 if kw in jane_response.lower():
@@ -198,8 +182,6 @@ class EnglishTeacherApp:
                 if kw in jane_response.lower():
                     mistake_type = "vocabulary"
                     break
-            
-            # Добавляем ошибку в профиль
             error_entry = {
                 "date": datetime.now().isoformat(),
                 "user_text": user_text[:100],
@@ -207,23 +189,15 @@ class EnglishTeacherApp:
                 "type": mistake_type
             }
             profile["mistakes"][mistake_type].append(error_entry)
-            
-            # Ограничиваем историю ошибок (последние 20)
             for key in profile["mistakes"]:
                 if len(profile["mistakes"][key]) > 20:
                     profile["mistakes"][key] = profile["mistakes"][key][-20:]
-            
-            # Обновляем статистику за последнюю неделю
             profile["last_week_mistakes"].append({"date": datetime.now().isoformat(), "type": mistake_type})
             if len(profile["last_week_mistakes"]) > 50:
                 profile["last_week_mistakes"] = profile["last_week_mistakes"][-50:]
-            
             self.add_message("Джейн", f"📝 *Записано в профиль: ошибка типа '{mistake_type}'*")
-        
-        # Проверяем, есть ли похвала (сильные стороны)
         praise_indicators = ["good", "excellent", "great", "perfect", "well done", "correct", "правильно", "отлично"]
         is_praise = any(indicator in jane_response.lower() for indicator in praise_indicators)
-        
         if is_praise and len(user_text) > 10:
             profile["strengths"].append({
                 "date": datetime.now().isoformat(),
@@ -232,14 +206,49 @@ class EnglishTeacherApp:
             })
             if len(profile["strengths"]) > 20:
                 profile["strengths"] = profile["strengths"][-20:]
-        
         self.save_student_profile(profile)
 
     def get_dynamic_prompt(self):
-        # Упрощаем промпт — убираем всё, что может заставить модель думать
-        return """You are Jane, an AI English tutor. The student is Russian-speaking.
-- Keep responses short and helpful (2-3 sentences).
-- Do not use emojis."""
+        lang = self.current_lang
+        lang_instruction = "Ответь на русском языке, кратко." if lang == "ru" else "Answer in English, keep responses short."
+        
+        profile = self.get_student_profile()
+        grammar_mistakes = profile.get("mistakes", {}).get("grammar", [])
+        vocab_mistakes = profile.get("mistakes", {}).get("vocabulary", [])
+        
+        recent_grammar = [err.get("jane_response", "")[:50] for err in grammar_mistakes[-5:]]
+        recent_vocab = [err.get("jane_response", "")[:50] for err in vocab_mistakes[-5:]]
+        
+        strengths = profile.get("strengths", [])[-3:]
+        strengths_text = "\n".join([f"- {s.get('jane_response', '')[:50]}" for s in strengths]) if strengths else "Not enough data yet."
+        
+        topics_passed = profile.get("topics_passed", [])
+        topics_str = ", ".join(topics_passed[-5:]) if topics_passed else "None yet."
+        
+        if self.mode == "lesson":
+            prompt = f"""You are Jane, a helpful AI assistant.
+{lang_instruction}
+The student is Russian-speaking, but respond in the language they use.
+
+📊 STUDENT PROGRESS PROFILE:
+Topics covered: {topics_str}
+Recent grammar mistakes: {', '.join(recent_grammar) if recent_grammar else 'None'}
+Recent vocabulary issues: {', '.join(recent_vocab) if recent_vocab else 'None'}
+Strengths: {strengths_text}
+Total lessons: {profile.get('total_lessons', 0)}
+
+Your task: help the student improve their English. If they speak Russian, answer in Russian. If they speak English, answer in English.
+Keep responses short (2-3 sentences). Do NOT use emojis or thought tags.
+"""
+        else:
+            prompt = f"""You are Jane, a friendly AI companion.
+{lang_instruction}
+Respond naturally in the same language as the student.
+The student has completed {profile.get('total_lessons', 0)} lessons.
+Be supportive and helpful.
+"""
+        
+        return prompt
 
     def check_server(self):
         try:
@@ -251,31 +260,24 @@ class EnglishTeacherApp:
     def ask_jane(self, user_text):
         try:
             system_prompt = self.get_dynamic_prompt()
-            
             if self.current_lang == "ru":
                 user_prompt = f"{user_text}\n\nОТВЕТЬ ТОЛЬКО НА РУССКОМ ЯЗЫКЕ. НЕ ИСПОЛЬЗУЙ АНГЛИЙСКИЙ."
             else:
                 user_prompt = f"{user_text}\n\nAnswer ONLY in English. Do NOT use Russian."
-            
             history_str = "\n".join(self.conversation_history[-6:])
             if history_str:
                 history_str += "\n"
-            
             prompt = f"<start_of_turn>system\n{system_prompt}<end_of_turn>\n"
             if history_str:
                 prompt += history_str
             prompt += f"<start_of_turn>user\n{user_prompt}<end_of_turn>\n<start_of_turn>model\n"
-            
             print(f"📤 Язык ответа: {'РУССКИЙ' if self.current_lang == 'ru' else 'ENGLISH'}")
-            
             response = requests.post(self.llm_url, json={
                 "prompt": prompt,
-                "n_predict": 200,
-                "temperature": 0.7,
-                "stop": ["<|thought|>", "<end_of_turn>"],
-                "chat_template_kwargs": {"enable_thinking": False}  # ОТКЛЮЧАЕМ МЫШЛЕНИЕ!
+                "n_predict": 150,
+                "temperature": 0.6,
+                "stop": ["<|thought|>", "<end_of_turn>"]
             }, timeout=60)
-            
             if response.status_code == 200:
                 content = response.json().get("content", "").strip()
                 content = content.replace("<end_of_turn>", "").strip()
@@ -284,10 +286,10 @@ class EnglishTeacherApp:
                 else:
                     return "Извините, я не могу ответить на это." if self.current_lang == "ru" else "Sorry, I can't respond."
             else:
-                print(f"❌ Ошибка: {response.status_code}")
+                print(f"❌ Сервер вернул ошибку: {response.status_code}")
                 return f"Error: {response.status_code}"
         except Exception as e:
-            print(f"❌ Ошибка: {e}")
+            print(f"❌ Исключение в ask_jane: {e}")
             return f"Connection error: {e}"
 
     def toggle_recording(self):
@@ -303,18 +305,12 @@ class EnglishTeacherApp:
     def on_recording_stopped(self, audio_data):
         self.is_recording = False
         self.record_btn.configure(state="normal", text="🎤 Запись", fg_color="green")
+        self.status_label.configure(text="Статус: Распознаю...", text_color="orange")
         
         if len(audio_data) > 8000:
-            self.status_label.configure(text="Статус: Распознаю...", text_color="orange")
-            
-            import numpy as np
-            silence = np.zeros(8000, dtype=np.int16)
-            audio_with_silence = audio_data + silence.tobytes()
-            
-            result = self.stt.recognize(audio_with_silence)
+            result = self.stt.recognize(audio_data)
             if result:
                 text, detected_lang = result
-                print(f"Язык: {detected_lang}")
                 self.current_lang = detected_lang
                 self.add_message("Вы (голос)", text)
                 self._process_input(text)
@@ -341,6 +337,12 @@ class EnglishTeacherApp:
         self.window.after(0, lambda: self._display_response(response, user_text))
 
     def _display_response(self, response, user_text):
+        import re
+        # Удаляем все теги thought и мусор
+        response = re.sub(r'<\|thought\|>.*?(\n|$)', '', response, flags=re.DOTALL)
+        response = re.sub(r'<\|.*?\|>', '', response)
+        response = response.strip()
+        
         if not response or response.startswith("Error") or response.startswith("Connection error"):
             self.add_message("Джейн", f"[Ошибка] {response}")
             self.status_label.configure(text="Статус: Ошибка", text_color="red")
@@ -348,16 +350,12 @@ class EnglishTeacherApp:
             return
         
         self.add_message("Джейн", response)
-        # Воспроизводим голос в отдельном потоке, чтобы не блокировать GUI
         threading.Thread(target=tts.speak, args=(response,), daemon=True).start()
-        
         self.update_profile_from_dialogue(user_text, response)
-        
         self.conversation_history.append(f"Student: {user_text}")
         self.conversation_history.append(f"Assistant: {response}")
         if len(self.conversation_history) > 10:
             self.conversation_history = self.conversation_history[-8:]
-        
         self.send_btn.configure(state="normal", text="📎 Отправить")
         self.status_label.configure(text="Статус: Готов", text_color="white")
         self.visualizer.reset()
@@ -367,6 +365,18 @@ class EnglishTeacherApp:
         self.chat_text.insert("end", f"{sender}: {text}\n\n")
         self.chat_text.see("end")
         self.chat_text.configure(state="disabled")
+
+    def open_panel(self):
+        if not self.panel_visible:
+            self.right_panel.pack(side="right", fill="y", padx=(0, 0))
+            self.settings_btn.pack_forget()
+            self.panel_visible = True
+
+    def close_panel(self):
+        if self.panel_visible:
+            self.right_panel.pack_forget()
+            self.settings_btn.pack(side="right", padx=5)
+            self.panel_visible = False
 
     def save_settings(self):
         self.mode = self.mode_var.get()
@@ -383,18 +393,6 @@ class EnglishTeacherApp:
         self.chat_text.insert("0.0", "Джейн: Чат очищен. Твой профиль сохранён, продолжим с того же места!\n\n")
         self.chat_text.configure(state="disabled")
         self.conversation_history = []
-
-    def open_panel(self):
-        if not self.panel_visible:
-            self.right_panel.pack(side="right", fill="y", padx=(0, 0))
-            self.settings_btn.pack_forget()
-            self.panel_visible = True
-
-    def close_panel(self):
-        if self.panel_visible:
-            self.right_panel.pack_forget()
-            self.settings_btn.pack(side="right", padx=5)
-            self.panel_visible = False
 
     def run(self):
         self.window.protocol("WM_DELETE_WINDOW", self.on_closing)
