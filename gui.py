@@ -63,7 +63,7 @@ class EnglishTeacherApp:
         self.is_recording = False
         self.mode = "lesson"
         self.current_lang = "en"
-        self.llm_url = "http://127.0.0.1:8080/completion"
+        self.llm_url = config.LLM_SERVER_URL
         self.conversation_history = []
         self.waiting_for_translation = False
 
@@ -511,7 +511,7 @@ class EnglishTeacherApp:
             
             print(f"📤 Язык ответа: {'РУССКИЙ' if self.current_lang == 'ru' else 'ENGLISH'}")
             
-            response = requests.post(self.llm_url, json={
+            response = self._http.post(self.llm_url, json={
                 "prompt": prompt,
                 "n_predict": 120,
                 "temperature": 0.5,
