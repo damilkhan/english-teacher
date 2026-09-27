@@ -136,6 +136,10 @@ class EnglishTeacherApp:
         self.chat_text.configure(yscrollcommand=self.chat_scrollbar.set)
 
         self.chat_text.insert("0.0", "Джейн: Привет! Я твой преподаватель английского.\nЯ буду запоминать твои ошибки и подстраивать уроки под тебя.\n\n")
+        self.chat_text.tag_configure("head", foreground="#8C43EB",
+                                     font=("Segoe UI", 12, "bold"))
+        self.chat_text.tag_configure("body", foreground="#e0e0e0",
+                                     font=("Segoe UI Emoji", 14))
         self.chat_text.configure(state="disabled")
         # ---------- ПОЛЕ ВВОДА ----------
         self.input_frame = ctk.CTkFrame(self.left_frame, fg_color="#1a1a1a", corner_radius=12)
