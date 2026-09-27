@@ -1,45 +1,79 @@
+# -*- coding: utf-8 -*-
 # =========================================================
-# LLM_CLIENT.PY — Общение с локальным сервером llama.cpp
+# LLM_CLIENT.PY — общение с локальным сервером llama.cpp
+# =========================================================
+# Здесь живёт весь сетевой слой: ни GUI, ни контроллеры не знают
+# про requests, порт и теги Gemma.
+#
+# Особенности:
+#   * запросы идут через Session с trust_env=False — иначе при активном
+#     VPN/прокси (Amnezia и т.п.) localhost может «уйти наружу»;
+#   * complete() различает ошибку связи и ошибку сервера, чтобы UI мог
+#     показать внятное сообщение.
 # =========================================================
 
 import requests
+
 import config
 
+
 class LLMClient:
-    """Клиент для общения с моделью Gemma 4 через llama.cpp сервер"""
-    
-    def __init__(self):
-        self.url = config.LLM_SERVER_URL
-        self.max_tokens = config.LLM_MAX_TOKENS
-        self.temperature = config.LLM_TEMPERATURE
-        self.stop_words = config.LLM_STOP_WORDS
-    
-    def is_health(self):
-        """Проверяет, работает ли сервер"""
+    """Клиент для модели Gemma через llama.cpp сервер."""
+
+    def __init__(self, url=None, health_url=None, max_tokens=None, temperature=None, stop=None):
+        self.url = url or config.LLM_SERVER_URL
+        self.health_url = health_url or config.LLM_HEALTH_URL
+        self.max_tokens = max_tokens or config.LLM_MAX_TOKENS
+        self.temperature = config.LLM_TEMPERATURE if temperature is None else temperature
+        self.stop_words = list(stop) if stop else list(config.LLM_STOP_WORDS)
+
+        self._http = requests.Session()
+        self._http.trust_env = False
+
+    # ---------- проверка связи ----------
+    def is_health(self, timeout=2):
+        """Есть ли на том конце живой сервер (только 200/ready)."""
         try:
-            requests.get("http://127.0.0.1:8080/health", timeout=2)
-            return True
-        except:
+            resp = self._http.get(self.health_url, timeout=timeout)
+            return resp.status_code == 200
+        except requests.exceptions.RequestException:
             return False
-    
-    def generate_response(self, prompt):
-        """Отправляет промпт модели и возвращает ответ"""
+
+    # ---------- основной вызов ----------
+    def complete(self, prompt, max_tokens=None, temperature=None, stop=None, timeout=60):
+        """Отправляет промпт и возвращает (ok, текст_или_ошибка).
+
+        ok=True  → второй элемент: ответ модели;
+        ok=False → второй элемент: человекочитаемая причина.
+        """
+        payload = {
+            "prompt": prompt,
+            "n_predict": max_tokens if max_tokens is not None else self.max_tokens,
+            "temperature": self.temperature if temperature is None else temperature,
+            "stop": stop if stop is not None else self.stop_words,
+        }
         try:
-            response = requests.post(self.url, json={
-                "prompt": prompt,
-                "n_predict": self.max_tokens,
-                "temperature": self.temperature,
-                "stop": self.stop_words
-            }, timeout=30)
-            
-            if response.status_code == 200:
-                return response.json().get("content", "").strip()
-            else:
-                print(f"❌ Ошибка сервера: {response.status_code}")
-                return None
+            resp = self._http.post(self.url, json=payload, timeout=timeout)
         except requests.exceptions.Timeout:
-            print("❌ Таймаут: сервер не отвечает")
+            return False, "Таймаут: сервер не отвечает"
+        except Exception as exc:
+            return False, f"Connection error: {exc}"
+
+        if resp.status_code != 200:
+            print(f"❌ Сервер вернул ошибку: {resp.status_code}")
+            return False, f"Error: {resp.status_code}"
+
+        try:
+            content = resp.json().get("content", "")
+        except Exception as exc:
+            return False, f"Error: некорректный ответ сервера ({exc})"
+        return True, (content or "").strip()
+
+    # ---------- совместимость со старым кодом (main.py) ----------
+    def generate_response(self, prompt):
+        """Обратная совместимость: текст или None."""
+        ok, text = self.complete(prompt)
+        if not ok:
+            print(f"❌ {text}")
             return None
-        except Exception as e:
-            print(f"❌ Ошибка при запросе: {e}")
-            return None
+        return text

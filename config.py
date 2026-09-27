@@ -31,6 +31,11 @@ LLM_BASE_URL = "http://%s:%d" % (LLM_HOST, LLM_PORT)
 LLM_SERVER_URL = LLM_BASE_URL + "/completion"   # сюда шлём промпты
 LLM_HEALTH_URL = LLM_BASE_URL + "/health"       # здесь проверяем готовность
 
+# Значения по умолчанию для интерфейса
+DEFAULT_MODE = "lesson"    # "lesson" (урок) | "free" (свободное общение)
+DEFAULT_THEME = "dark"     # "dark" | "light"
+DEFAULT_LANGUAGE = "en"    # язык ответа до первой реплики
+
 # Настройки LLM
 LLM_MAX_TOKENS = 200
 LLM_TEMPERATURE = 0.7

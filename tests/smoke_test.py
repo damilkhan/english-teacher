@@ -1,0 +1,311 @@
+# -*- coding: utf-8 -*-
+# =========================================================
+# TESTS/SMOKE_TEST.PY — проверка после рефакторинга
+# =========================================================
+#   python tests\smoke_test.py          — только быстрые проверки (без окна)
+#   python tests\smoke_test.py --gui    — + создание окна и живой диалог
+#
+# Что проверяем:
+#   1) промпт НЕ изменился: сверяем с версией gui.py из git (commit HEAD);
+#   2) чистка тегов Gemma (clean_response);
+#   3) profile_store: создание/чтение/запись во временной папке;
+#   4) окно собирается, тема и режим переключаются (--gui);
+#   5) реальный диалог с llama-server (--gui).
+# =========================================================
+
+import os
+import subprocess
+import sys
+import tempfile
+import textwrap
+import time
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+os.chdir(ROOT)
+
+# консоль Windows по умолчанию cp1251 — без этого тест падает на эмодзи
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        if _stream.encoding and _stream.encoding.lower() != "utf-8":
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+import prompt_builder          # noqa: E402
+import profile_store           # noqa: E402
+
+FAILED = []
+
+
+def check(name, ok, detail=""):
+    print(("  ✅ " if ok else "  ❌ ") + name + ("" if ok else "  ← " + str(detail)))
+    if not ok:
+        FAILED.append(name)
+    return ok
+
+
+def norm(text):
+    """Единственное допустимое отличие — переводы строк (\r\n vs \n)."""
+    return (text or "").replace("\r\n", "\n")
+
+
+# =========================================================
+# 1. Промпт: старое из git vs новое из prompt_builder
+# =========================================================
+def _old_gui_source():
+    try:
+        out = subprocess.run(["git", "show", "HEAD:gui.py"], cwd=ROOT,
+                             capture_output=True, text=True, encoding="utf-8", timeout=30)
+        return out.stdout or None
+    except Exception as exc:
+        print(f"  (git недоступен: {exc})")
+        return None
+
+
+def _extract_method(src, name):
+    start = src.index(f"    def {name}(self")
+    end = src.index("\n    def ", start + 10)
+    return textwrap.indent(textwrap.dedent(src[start:end]), "    ")
+
+
+def _make_fake_app(src, profile, mode, lang, history):
+    """Собирает объект со СТАРЫМИ методами get_dynamic_prompt и ask_jane из gui.py."""
+    class FakeResponse:
+        status_code = 200
+        def json(self):
+            return {"content": "Тестовый ответ"}
+
+    class FakeHttp:
+        def __init__(self):
+            self.payload = None
+        def post(self, url, json=None, timeout=None):
+            self.payload = json
+            return FakeResponse()
+
+    body = _extract_method(src, "get_dynamic_prompt") + "\n" + _extract_method(src, "ask_jane")
+    ns = {}
+    exec("import re\nimport json\nclass FakeApp:\n" + body, ns)
+
+    app = ns["FakeApp"]()
+    app.mode = mode
+    app.current_lang = lang
+    app.conversation_history = list(history)
+    app.llm_url = "http://test"
+    app._http = FakeHttp()
+    app.get_student_profile = lambda: profile
+    return app
+
+
+def test_prompt_unchanged():
+    print("\n[1] Промпт не изменился (сверка с gui.py из git)")
+    src = _old_gui_source()
+    if not src:
+        print("  ⚠️ пропущено: не удалось прочитать старый gui.py")
+        return
+
+    profiles = [
+        {"mistakes": {"grammar": [], "vocabulary": []}, "strengths": [], "topics_passed": [], "total_lessons": 0},
+        {
+            "mistakes": {"grammar": [{"jane_response": "You should use Past Simple here"}],
+                         "vocabulary": [{"jane_response": "Wrong spelling of 'though'"}]},
+            "strengths": [{"jane_response": "Good job with the article!"}],
+            "topics_passed": ["Present Simple", "Travel"],
+            "total_lessons": 7,
+        },
+    ]
+    cases = [("lesson", "ru", []), ("lesson", "en", []), ("free", "ru", []), ("free", "en", [])]
+
+    for pi, profile in enumerate(profiles):
+        for mode, lang, _ in cases:
+            fake = _make_fake_app(src, profile, mode, lang, [])
+            old_prompt = fake.get_dynamic_prompt()
+            new_prompt = prompt_builder.build_system_prompt(mode, profile, lang)
+            check(f"system-промпт mode={mode} lang={lang} профиль#{pi}",
+                  norm(old_prompt) == norm(new_prompt),
+                  f"было {len(old_prompt)} симв., стало {len(new_prompt)}")
+
+    # полный промпт (system + история + user) через СТАРЫЙ ask_jane
+    history = ["Student: hello", "Assistant: hi there"]
+    for mode, lang in [("lesson", "ru"), ("lesson", "en"), ("free", "en")]:
+        profile = profiles[1]
+        fake = _make_fake_app(src, profile, mode, lang, history)
+        fake.ask_jane("How are you?")
+        old_full = fake._http.payload["prompt"]
+        system = prompt_builder.build_system_prompt(mode, profile, lang)
+        new_full = prompt_builder.build_conversation_prompt(system, history, "How are you?", lang)
+        check(f"полный промпт mode={mode} lang={lang} c историей",
+              norm(old_full) == norm(new_full),
+              f"было {len(old_full)} симв., стало {len(new_full)}")
+
+
+def test_clean_response():
+    print("\n[2] Чистка ответа модели")
+    cases = [
+        ("Привет!<end_of_turn>", "Привет!"),
+        ("<|thought|>размышляю\nОтвет", "Ответ"),
+        ("Текст <|channel|> ещё", "Текст  ещё"),
+        ("ГотовоRU", "Готово"),
+        ("  пробелы  ", "пробелы"),
+        ("", ""),
+        (None, ""),
+    ]
+    for raw, expected in cases:
+        got = prompt_builder.clean_response(raw)
+        check(f"clean_response({raw!r})", got == expected, f"получено {got!r}, ждали {expected!r}")
+
+    check("detect_language: русский", prompt_builder.detect_language("привет") == "ru")
+    check("detect_language: английский", prompt_builder.detect_language("hello") == "en")
+
+
+# =========================================================
+# 3. profile_store
+# =========================================================
+def test_profile_store():
+    print("\n[3] profile_store во временной папке")
+    real_path = profile_store.PROFILE_PATH
+    tmp = tempfile.mkdtemp(prefix="et_profile_")
+    try:
+        profile_store.PROFILE_PATH = os.path.join(tmp, "student_profile.json")
+
+        profile, created = profile_store.ensure_profile()
+        check("ensure_profile создаёт файл", created and os.path.exists(profile_store.PROFILE_PATH))
+        check("структура по умолчанию", "mistakes" in profile and profile["total_lessons"] == 0)
+
+        profile, created = profile_store.ensure_profile()
+        check("повторный вызов не пересоздаёт", created is False)
+
+        notes = profile_store.record_from_dialogue(
+            "I go to school yesterday",
+            "Небольшая ошибка: нужен Past Simple — I went to school yesterday.")
+        check("ошибка записана (grammar)", "grammar" in notes[0], notes)
+        saved = profile_store.load()
+        check("ошибка в файле", len(saved["mistakes"]["grammar"]) == 1)
+        check("total_lessons увеличен", saved["total_lessons"] == 1)
+        check("last_lesson проставлен", bool(saved["last_lesson"]))
+
+        notes = profile_store.record_from_dialogue(
+            "I have been learning English for five years",
+            "Excellent! Your Present Perfect is correct, well done!")
+        saved = profile_store.load()
+        check("похвала записана в strengths", len(saved["strengths"]) == 1)
+        check("без ошибок нет заметки", notes == [], notes)
+
+        with open(profile_store.PROFILE_PATH, "w", encoding="utf-8") as fh:
+            fh.write("{ битый json")
+        check("битый файл не роняет загрузку", isinstance(profile_store.load(), dict))
+    finally:
+        profile_store.PROFILE_PATH = real_path
+
+
+# =========================================================
+# 4-5. GUI и живой диалог
+# =========================================================
+def test_gui(e2e=False):
+    print("\n[4] Сборка окна и переключение темы/режима")
+    import tts
+    tts.speak = lambda *a, **k: None          # без звука во время теста
+
+    import gui
+    import theme
+    from ui.app import EnglishTeacherApp
+
+    check("gui.EnglishTeacherApp — тот же класс из ui.app",
+          gui.EnglishTeacherApp is EnglishTeacherApp)
+
+    app = EnglishTeacherApp()
+    for _ in range(30):
+        app.window.update()
+        time.sleep(0.02)
+
+    check("чат создан и доступен", app.chat_view is not None)
+    check("контроллеры созданы", app.chat is not None and app.recorder is not None)
+
+    before = app.chat_view.get_text()
+    app.add_message("Тест", "проверка вывода")
+    for _ in range(10):
+        app.window.update()
+    check("add_message пишет в чат", "проверка вывода" in app.chat_view.get_text(),
+          repr(app.chat_view.get_text()[-60:]))
+    check("чат не пустой изначально", len(before.strip()) > 0, repr(before[:40]))
+
+    app.open_panel()
+    app.window.update()
+    check("панель настроек открывается", app.panel_visible)
+    app.right_panel.mode_var.set("free")
+    app.right_panel.theme_var.set("light")
+    app.save_settings()
+    for _ in range(10):
+        app.window.update()
+    check("режим применён к контроллеру чата", app.chat.mode == "free", app.chat.mode)
+    check("тема применена", app.palette["window"] == theme.LIGHT["window"], app.current_theme)
+    check("панель закрылась", not app.panel_visible)
+    check("сообщение о смене режима в чате",
+          "Свободное общение" in app.chat_view.get_text())
+
+    app.right_panel.theme_var.set("dark")
+    app.save_settings()
+    for _ in range(10):
+        app.window.update()
+    check("возврат к тёмной теме", app.palette["window"] == theme.DARK["window"])
+
+    if e2e:
+        print("\n[5] Живой диалог с llama-server")
+        state = app.check_server()
+        check("сервер готов", state == "ready", state)
+        if state == "ready":
+            app.input_bar.set_text("Hello, my name is Damil.")
+            app.input_bar.on_send()
+            deadline = time.time() + 120
+            while app.chat.busy and time.time() < deadline:
+                app.window.update()
+                time.sleep(0.05)
+            for _ in range(40):
+                app.window.update()
+                time.sleep(0.02)
+            text = app.chat_view.get_text()
+            check("ответ Джейн появился", "Джейн" in text.split("Hello, my name is Damil.")[-1],
+                  text[-200:])
+            check("нет ошибки в ответе", "[Ошибка]" not in text, text[-200:])
+            check("история диалога заполнена", len(app.chat.history) >= 2, app.chat.history)
+            print("  --- последние 400 символов чата ---")
+            print(textwrap.indent(text[-400:], "  | "))
+
+    app.on_closing()
+
+
+def main():
+    e2e = "--gui" in sys.argv
+    print("=" * 60)
+    print("Проверка после рефакторинга" + ("  (+GUI, +диалог)" if e2e else "  (без GUI)"))
+    print("=" * 60)
+
+    test_prompt_unchanged()
+    test_clean_response()
+    test_profile_store()
+
+    if e2e:
+        # во время теста не трогаем реальный профиль ученика
+        real = profile_store.PROFILE_PATH
+        tmp = tempfile.mkdtemp(prefix="et_gui_profile_")
+        profile_store.PROFILE_PATH = os.path.join(tmp, "student_profile.json")
+        if os.path.exists(real):
+            with open(real, "r", encoding="utf-8") as src, \
+                 open(profile_store.PROFILE_PATH, "w", encoding="utf-8") as dst:
+                dst.write(src.read())
+        try:
+            test_gui(e2e=True)
+        finally:
+            profile_store.PROFILE_PATH = real
+    else:
+        print("\n(GUI-проверки пропущены: запустите с флагом --gui)")
+
+    print("\n" + "=" * 60)
+    if FAILED:
+        print(f"ПРОВАЛЕНО: {len(FAILED)} → {FAILED}")
+        sys.exit(1)
+    print("ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ")
+
+
+if __name__ == "__main__":
+    main()
