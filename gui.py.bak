@@ -12,8 +12,6 @@ import stt_engine
 import tts
 import emoji
 import re
-import config
-import server_manager
 from chat_webview import ChatWebView
 
 ctk.set_appearance_mode("dark")
@@ -67,16 +65,6 @@ class EnglishTeacherApp:
         self.conversation_history = []
         self.waiting_for_translation = False
 
-        # --- состояние LLM-сервера (обновляется периодически) ---
-        self.server_state = "offline"
-        self.server_ready = False
-        self.busy = False
-        self._poll_after_id = None
-
-        # --- HTTP-сессия без системного прокси: localhost не должен идти через VPN ---
-        self._http = requests.Session()
-        self._http.trust_env = False
-
         self.vad = audio_vad.AudioVAD()
         self.stt = stt_engine.STTEngine()
 
@@ -102,9 +90,9 @@ class EnglishTeacherApp:
 
         self.status_badge = ctk.CTkLabel(
             self.title_frame,
-            text="● Проверяю сервер…",
+            text="● Готов",
             font=ctk.CTkFont(size=12),
-            text_color="#888888"
+            text_color="#4CAF50"
         )
         self.status_badge.pack(side="right", padx=15)
 
@@ -316,7 +304,6 @@ class EnglishTeacherApp:
 
         self.check_server()
         self.init_profile()
-        self._poll_after_id = self.window.after(2000, self._poll_server)
 
     # ---------- ВСЕ МЕТОДЫ ----------
     def init_profile(self):
@@ -443,49 +430,11 @@ class EnglishTeacherApp:
         return prompt
 
     def check_server(self):
-        """Опрашивает /health и показывает РЕАЛЬНОЕ состояние сервера.
-
-        Раньше проверка делалась один раз при старте — из-за этого бейдж
-        навсегда залипал на «Сервер не запущен», пока модель грузилась ~30 с.
-        """
-        state, msg = server_manager.health_state(timeout=1.5)
-        self.server_state = state
-        self.server_ready = (state == "ready")
-
-        # пока идёт запись или Джейн думает — не перебиваем статус
-        if self.busy:
-            return state
-
-        if state == "ready":
+        try:
+            requests.get("http://127.0.0.1:8080/health", timeout=2)
             self.status_badge.configure(text="● Готов", text_color="#4CAF50")
-        elif state == "loading":
-            self.status_badge.configure(text="● Модель загружается…", text_color="#FF9800")
-        else:
+        except:
             self.status_badge.configure(text="● Сервер не запущен", text_color="#f44336")
-        return state
-
-    def _poll_server(self):
-        """Раз в 3 секунды обновляет состояние сервера (индикатор всегда актуален)."""
-        try:
-            self.check_server()
-        except Exception as exc:
-            print(f"⚠️ Ошибка опроса сервера: {exc}")
-        finally:
-            self._poll_after_id = self.window.after(3000, self._poll_server)
-
-    def _require_server(self):
-        """True, если сервер готов. Иначе пишет в чат понятную причину."""
-        if self.server_ready:
-            return True
-        try:
-            state = self.check_server()
-        except Exception:
-            state = "offline"
-        if state == "loading":
-            self.add_message("Джейн", "⏳ Модель ещё загружается — подожди несколько секунд и попробуй снова.")
-        else:
-            self.add_message("Джейн", "❌ LLM-сервер не отвечает. Подробности в logs\\llama-server.log")
-        return False
 
     def ask_jane(self, user_text):
         russian_chars = set("абвгдеёжзийклмнопрстуфхцчшщъыьэюя")
@@ -570,9 +519,6 @@ class EnglishTeacherApp:
         self._process_input(text)
 
     def _process_input(self, text):
-        if not self._require_server():
-            return
-        self.busy = True
         self.send_btn.configure(state="disabled", text="⏳ Думаю...")
         self.status_badge.configure(text="● Джейн думает...", text_color="#FF9800")
         threading.Thread(target=self._get_response, args=(text,), daemon=True).start()
@@ -590,7 +536,6 @@ class EnglishTeacherApp:
         response = re.sub(r'RU$', '', response).strip()
         
         if not response or response.startswith("Error") or response.startswith("Connection error"):
-            self.busy = False
             self.add_message("Джейн", f"[Ошибка] {response}")
             self.status_badge.configure(text="● Ошибка", text_color="#f44336")
             self.send_btn.configure(state="normal", text="📎 Отправить")
@@ -603,33 +548,18 @@ class EnglishTeacherApp:
         self.conversation_history.append(f"Assistant: {response}")
         if len(self.conversation_history) > 10:
             self.conversation_history = self.conversation_history[-8:]
-        self.busy = False
         self.send_btn.configure(state="normal", text="📎 Отправить")
-        self.check_server()
+        self.status_badge.configure(text="● Готов", text_color="#4CAF50")
         self.visualizer.reset()
 
     def add_message(self, sender, text):
-        """Рисует сообщение в чате и прокручивает его вниз.
-
-        Раньше здесь стоял `pass` (webview так и не создавался), поэтому
-        в окне не появлялось ни одного сообщения.
-        """
-        is_user = sender in ("Вы", "Вы (голос)")
-        if hasattr(self, "chat_webview"):
-            try:
-                self.chat_webview.add_message(sender, text, is_user)
-                return
-            except Exception as exc:
-                print(f"⚠️ WebView недоступен ({exc}) — пишу в tk.Text")
-        try:
-            stamp = datetime.now().strftime("%H:%M")
-            self.chat_text.configure(state="normal")
-            self.chat_text.insert("end", f"{sender}  {stamp}\n", "head")
-            self.chat_text.insert("end", f"{text}\n\n", "body")
-            self.chat_text.configure(state="disabled")
-            self.chat_text.see("end")
-        except Exception as exc:
-            print(f"⚠️ Не удалось вывести сообщение: {exc}")
+        """Добавляет сообщение в чат (WebView)"""
+        is_user = sender == "Вы" or sender == "Вы (голос)"
+        if hasattr(self, 'chat_webview'):
+            self.chat_webview.add_message(sender, text, is_user)
+        else:
+            # Фолбек для старого чата (если webview не загрузился)
+            pass
 
     def open_panel(self):
         if not self.panel_visible:
@@ -705,11 +635,6 @@ class EnglishTeacherApp:
     def on_closing(self):
         if self.is_recording:
             self.vad.stop_recording()
-        try:
-            if self._poll_after_id:
-                self.window.after_cancel(self._poll_after_id)
-        except Exception:
-            pass
         self.window.destroy()
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 {
     "student_name": "Student",
     "first_lesson": null,
-    "last_lesson": "2026-08-17T22:38:28.481778",
+    "last_lesson": "2026-09-27T22:22:11.806927",
     "mistakes": {
         "grammar": [],
         "vocabulary": [],
@@ -90,6 +90,6 @@
             "jane_response": "Привет! 👋 У меня всё отлично, спасибо! Я готова помогать тебе улучшать английский! 📚✨\n\nВот что могу "
         }
     ],
-    "total_lessons": 66,
+    "total_lessons": 68,
     "last_week_mistakes": []
 }

@@ -1,24 +1,9 @@
 import asyncio
 import os
-import sys
 import time
 import pygame
 import edge_tts
 import re
-
-# edge_tts сам закрывает свой event loop, и потом сборщик мусора пишет в лог
-# "RuntimeError: Event loop is closed". Это безобидный шум — глушим только его,
-# остальные необработанные исключения по-прежнему попадают в logs\app.log.
-_default_unraisablehook = sys.unraisablehook
-
-
-def _quiet_unraisable(unraisable):
-    if "Event loop is closed" in str(getattr(unraisable, "exc_value", "")):
-        return
-    _default_unraisablehook(unraisable)
-
-
-sys.unraisablehook = _quiet_unraisable
 
 # Инициализируем pygame.mixer при старте
 pygame.mixer.init()

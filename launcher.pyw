@@ -2,19 +2,21 @@
 # =========================================================
 # LAUNCHER.PYW — запуск English Teacher как обычной программы
 # =========================================================
-# Зачем нужен:
-#   1) Принудительно включает UTF-8 для вывода. Без этого запуск
-#      двойным кликом падает с UnicodeEncodeError на первом же
-#      print() с эмодзи (консоль Windows = cp1251), ещё до того
-#      как появится окно.
-#   2) Запускает llama-server и ждёт его готовности, не блокируя GUI.
-#   3) Пишет весь вывод и ошибки в logs\app.log (терминала-то нет).
-#   4) Показывает понятное окно с ошибкой вместо мгновенного закрытия.
-#   5) Запрещает запуск второй копии приложения.
+# Что делает:
+#   1) Включает UTF-8 на весь процесс. Без этого запуск двойным кликом
+#      падал с UnicodeEncodeError на первом же print() с эмодзи
+#      (консоль Windows = cp1251) ещё до появления окна.
+#   2) Поднимает llama-server в фоне БЕЗ окна консоли
+#      (CREATE_NO_WINDOW в server_manager.py) и ждёт загрузку модели.
+#   3) Пишет вывод приложения в logs\app.log, вывод сервера —
+#      в logs\llama-server.log.
+#   4) Показывает нормальное окно с ошибкой вместо мгновенного закрытия.
+#   5) Запрещает запуск второй копии.
 #
-# Запускать так:  run_teacher.bat   (двойной клик)
-#            или: pythonw.exe launcher.pyw
-#            или: python launcher.pyw  (с консолью, для отладки)
+# Запускать так:
+#   English Teacher.vbs   (двойной клик — вообще без консоли)
+#   run_teacher.bat       (то же самое)
+#   run_teacher.bat debug (с консолью, для отладки)
 # =========================================================
 
 import os
@@ -94,7 +96,7 @@ def _single_instance():
         from ctypes import wintypes
         kernel32 = ctypes.windll.kernel32
         kernel32.CreateMutexW.restype = wintypes.HANDLE
-        handle = kernel32.CreateMutexW(None, False, "EnglishTeacherApp_SingleInstance_v1")
+        handle = kernel32.CreateMutexW(None, False, "EnglishTeacherApp_SingleInstance_v2")
         if kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
             return None
         return handle
@@ -132,27 +134,26 @@ def main():
                 "Ошибка при чтении config.py:\n\n%s" % traceback.format_exc(limit=2))
         return
 
-    # ---------- 2. Запуск llama-server в фоне ----------
-    state = {"ready": False, "error": None}
+    # ---------- 2. llama-server в фоне ----------
+    state = {"ready": False, "error": None, "note": "старт"}
+
+    def _on_progress(server_state, message, elapsed):
+        state["note"] = "%s (%.0f с)" % (message, elapsed)
+        _log("Состояние сервера: %s — %s" % (server_state, message))
 
     def _boot_server():
         try:
             import server_manager
-            if server_manager.is_server_ready():
-                _log("llama-server уже отвечает на /health — старт не нужен")
-                state["ready"] = True
-                return
-            _log("Старт llama-server...")
+            _log("Проверка llama-server...")
             if not server_manager.start_server():
-                state["error"] = ("llama-server.exe или .gguf не найдены.\n"
-                                  "Проверьте SERVER_PATH и MODEL_PATH в server_manager.py")
+                state["error"] = server_manager.get_last_error() or "Не удалось запустить llama-server."
                 return
-            _log("Ожидание готовности модели (до 180 с)...")
-            if server_manager.wait_for_server(timeout=180):
+            _log("Ожидание готовности модели (до %d с)..." % server_manager.STARTUP_TIMEOUT)
+            if server_manager.wait_for_server(on_progress=_on_progress):
                 state["ready"] = True
                 _log("llama-server готов")
             else:
-                state["error"] = "Модель не ответила за 180 секунд."
+                state["error"] = server_manager.get_last_error() or "Модель не ответила."
         except Exception as exc:
             state["error"] = "Ошибка запуска сервера: %s" % exc
             _log(traceback.format_exc())
@@ -171,11 +172,13 @@ def main():
         return
 
     def _watch(counter=[0]):
+        """Обновляет заголовок окна, пока модель грузится. Индикатор внутри
+        приложения обновляется самостоятельно (gui._poll_server)."""
         counter[0] += 1
         try:
             if state["ready"]:
-                app.check_server()
                 app.window.title("English Teacher — Jane")
+                app.check_server()
                 _log("Интерфейс активен, сервер готов")
                 return
             if state["error"]:
@@ -184,16 +187,16 @@ def main():
                 _log("Сервер не поднялся: %s" % state["error"])
                 _msgbox("English Teacher",
                         "LLM-сервер не запустился:\n\n%s\n\n"
-                        "Приложение работает, но ответов не будет.\n"
-                        "Лог: logs\\app.log" % state["error"])
+                        "Приложение работает, но отвечать не сможет.\n"
+                        "Лог сервера: logs\\llama-server.log" % state["error"])
                 return
-            app.window.title("English Teacher — Jane  ⏳ загрузка модели...")
-            if counter[0] < 250:
-                app.window.after(2000, _watch)
+            app.window.title("English Teacher — Jane  ⏳ %s" % state["note"])
+            if counter[0] < 400:
+                app.window.after(1000, _watch)
         except Exception:
             _log(traceback.format_exc())
 
-    app.window.after(2000, _watch)
+    app.window.after(1500, _watch)
 
     # ---------- 4. Главный цикл ----------
     try:

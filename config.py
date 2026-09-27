@@ -20,11 +20,29 @@ SILENCE_THRESHOLD = 30
 SILENCE_TIMEOUT = 1.2
 MIN_PHRASE_DURATION = 0.5
 
+# =========================================================
+# Локальный LLM-сервер (llama.cpp) — ЕДИНЫЙ источник правды
+# =========================================================
+# Раньше адрес и порт были прописаны литералами в 4 файлах.
+# Теперь меняем в одном месте.
+LLM_HOST = "127.0.0.1"
+LLM_PORT = 8080
+LLM_BASE_URL = "http://%s:%d" % (LLM_HOST, LLM_PORT)
+LLM_SERVER_URL = LLM_BASE_URL + "/completion"   # сюда шлём промпты
+LLM_HEALTH_URL = LLM_BASE_URL + "/health"       # здесь проверяем готовность
+
 # Настройки LLM
-LLM_SERVER_URL = "http://127.0.0.1:8080/completion"
 LLM_MAX_TOKENS = 200
 LLM_TEMPERATURE = 0.7
 LLM_STOP_WORDS = ["Student:", "\n\n"]
+
+# =========================================================
+# llama-server
+# =========================================================
+SERVER_EXE_PATH = r"D:\llama.cpp\llama-server.exe"
+SERVER_CONTEXT = 4096          # -c
+SERVER_STARTUP_TIMEOUT = 240   # сколько секунд ждём загрузку модели (реально ~30 с)
+
 
 def check_paths():
     """Проверяет, что все необходимые файлы существуют"""
