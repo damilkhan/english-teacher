@@ -4,23 +4,23 @@
 # --- интерфейс ---
 customtkinter==5.2.2
 
-# --- распознавание речи ---
-faster-whisper==1.2.1        # STT (stt_engine.py), модель "base", CPU int8
+# --- распознавание речи (stt_engine.py) ---
+faster-whisper==1.2.1        # модель "base", CPU, int8
 sounddevice==0.5.5           # захват микрофона (audio_vad.py)
 numpy==2.2.6
 
-# --- синтез речи ---
-edge-tts==7.2.8              # TTS (tts.py)
+# --- синтез речи (tts.py) ---
+edge-tts==7.2.8
 pygame==2.6.1                # воспроизведение mp3
 
-# --- связь с llama.cpp ---
-requests==2.33.1             # llm_client.py, server_manager.py
+# --- связь с llama.cpp (llm_client.py, server_manager.py) ---
+requests==2.33.1
 
-# --- прочее ---
-emoji==2.15.0
+# --- убрано вместе с мёртвым кодом ---
+# emoji      — использовался только в chat_webview.py (удалён)
+# vosk       — только в test_vosk_direct.py (удалён), распознавание на Whisper
+# pywebview  — только в chat_webview.py (удалён)
 
-# --- не используются текущим кодом (задел / альтернативные движки) ---
-# vosk==0.3.45               # test_vosk_direct.py
-# pywebview==6.2.1           # chat_webview.py (модуль webview)
-# pyttsx3==2.99
-# silero-vad==6.2.1
+# --- задел на будущее ---
+# pyttsx3==2.99              # альтернативный TTS без интернета
+# silero-vad==6.2.1          # более точное определение речи, чем порог по громкости

@@ -277,7 +277,3 @@ def stop_server():
     server_process = None
     owns_server = False
 
-
-# Совместимость со старым кодом (main.py)
-def is_server_ready_alias():
-    return is_server_ready()

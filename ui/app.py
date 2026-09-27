@@ -16,6 +16,7 @@ import threading
 import customtkinter as ctk
 
 import audio_vad
+import commands
 import config
 import profile_store
 import stt_engine
@@ -43,7 +44,6 @@ STATUS_COLOR = {"ready": "ok", "loading": "warn", "offline": "err"}
 NEW_PROFILE_NOTE = "📊 Создан новый профиль ученика. Я буду запоминать твой прогресс!"
 NOT_READY_LOADING = "⏳ Модель ещё загружается — подожди несколько секунд и попробуй снова."
 NOT_READY_OFFLINE = "❌ LLM-сервер не отвечает. Подробности в logs\\llama-server.log"
-MODE_LABELS = {"lesson": "Урок", "free": "Свободное общение"}
 
 
 class EnglishTeacherApp:
@@ -177,8 +177,14 @@ class EnglishTeacherApp:
 
     def _on_response(self, user_text, response):
         """Ответ получен: озвучиваем и гасим визуализатор."""
-        threading.Thread(target=tts.speak, args=(response,), daemon=True).start()
+        self._say(response)
         self.visualizer.reset()
+
+    @staticmethod
+    def _say(text):
+        """Озвучка в фоне — окно ждать не должно."""
+        if text:
+            threading.Thread(target=tts.speak, args=(text,), daemon=True).start()
 
     def _on_recording_changed(self, recording):
         """Кнопка записи: красная во время записи, обычная после."""
@@ -188,7 +194,7 @@ class EnglishTeacherApp:
         self.current_lang = lang
         self.chat.set_language(lang)
         self.add_message("Вы (голос)", text)
-        self._submit(text)
+        self._handle_text(text)
 
     def _on_server_state(self, state, message):
         self.server_state = state
@@ -208,9 +214,22 @@ class EnglishTeacherApp:
             return
         self.input_bar.clear_text()
         self.add_message("Вы", text)
-        self._submit(text)
+        self._handle_text(text)
 
-    def _submit(self, text):
+    def _handle_text(self, text):
+        """Ввод пользователя — текстом или голосом (разницы нет).
+
+        Сначала проверяем команду смены режима («урок», «перерыв»…):
+        её выполняем локально, к модели не ходим и сервер не требуем.
+        """
+        mode = commands.parse_mode_command(text)
+        if mode is not None:
+            changed = (mode != self.mode)
+            self._switch_mode(mode)
+            if changed:
+                self._say(commands.GREETINGS.get(mode))
+            return
+
         if not self._require_server():
             return
         self.chat.send(text)
@@ -241,8 +260,7 @@ class EnglishTeacherApp:
             self.panel_visible = False
 
     def save_settings(self):
-        self.mode = self.right_panel.get_mode()
-        self.chat.set_mode(self.mode)
+        self._switch_mode(self.right_panel.get_mode())
 
         new_theme = self.right_panel.get_theme()
         if new_theme != self.current_theme:
@@ -252,7 +270,17 @@ class EnglishTeacherApp:
             self._apply_theme()
 
         self.close_panel()
-        self.add_message("Джейн", f"⚙️ Режим изменён на {MODE_LABELS.get(self.mode, self.mode)}")
+
+    def _switch_mode(self, mode):
+        """Единая точка смены режима: панель настроек и голосовые команды.
+
+        Раньше переключение жило только в консольной версии
+        (profile_manager.switch_to_teacher/friend), теперь — здесь.
+        """
+        self.mode = mode
+        self.chat.set_mode(mode)
+        self.right_panel.set_values(mode=mode)
+        self.add_message("Джейн", f"⚙️ Режим изменён на {commands.MODE_LABELS.get(mode, mode)}")
 
     # =====================================================
     # Тема

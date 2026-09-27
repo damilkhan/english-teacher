@@ -123,8 +123,9 @@ def main():
         import config
         if not config.check_paths():
             _msgbox("English Teacher",
-                    "Не найдены файлы моделей.\n\n"
-                    "Проверьте папку models\\ и пути в config.py.\n"
+                    "Не найдены нужные файлы.\n\n"
+                    "Проверьте MODEL_PATH и SERVER_EXE_PATH в config.py,\n"
+                    "а также папку models\.\n"
                     "Подробности: logs\\app.log", 0x10)
             return
         _log("Проверка путей config.py: OK")

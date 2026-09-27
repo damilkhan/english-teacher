@@ -68,12 +68,3 @@ class LLMClient:
         except Exception as exc:
             return False, f"Error: некорректный ответ сервера ({exc})"
         return True, (content or "").strip()
-
-    # ---------- совместимость со старым кодом (main.py) ----------
-    def generate_response(self, prompt):
-        """Обратная совместимость: текст или None."""
-        ok, text = self.complete(prompt)
-        if not ok:
-            print(f"❌ {text}")
-            return None
-        return text

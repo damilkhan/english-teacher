@@ -37,6 +37,10 @@ import profile_store           # noqa: E402
 
 FAILED = []
 
+# Коммит, где gui.py ещё был монолитом. Нужен, чтобы проверять «промпт не
+# изменился» вечно: HEAD уже указывает на фасад, а не на старую версию.
+OLD_GUI_REF = "b62c09a"
+
 
 def check(name, ok, detail=""):
     print(("  ✅ " if ok else "  ❌ ") + name + ("" if ok else "  ← " + str(detail)))
@@ -54,13 +58,17 @@ def norm(text):
 # 1. Промпт: старое из git vs новое из prompt_builder
 # =========================================================
 def _old_gui_source():
-    try:
-        out = subprocess.run(["git", "show", "HEAD:gui.py"], cwd=ROOT,
-                             capture_output=True, text=True, encoding="utf-8", timeout=30)
-        return out.stdout or None
-    except Exception as exc:
-        print(f"  (git недоступен: {exc})")
-        return None
+    """Старый монолитный gui.py из истории git (НЕ из HEAD — там уже фасад)."""
+    for ref in (OLD_GUI_REF, "HEAD"):
+        try:
+            out = subprocess.run(["git", "show", f"{ref}:gui.py"], cwd=ROOT,
+                                 capture_output=True, text=True, encoding="utf-8", timeout=30)
+            if out.returncode == 0 and "def get_dynamic_prompt" in (out.stdout or ""):
+                print(f"  (сверяемся с {ref}:gui.py — {len(out.stdout.splitlines())} строк)")
+                return out.stdout
+        except Exception as exc:
+            print(f"  (git {ref} недоступен: {exc})")
+    return None
 
 
 def _extract_method(src, name):
@@ -101,7 +109,8 @@ def test_prompt_unchanged():
     print("\n[1] Промпт не изменился (сверка с gui.py из git)")
     src = _old_gui_source()
     if not src:
-        print("  ⚠️ пропущено: не удалось прочитать старый gui.py")
+        print("  ⚠️ пропущено: не нашёл монолитный gui.py в истории git")
+        print(f"     (ожидался коммит {OLD_GUI_REF}; проверьте: git log --oneline)")
         return
 
     profiles = [
@@ -199,10 +208,31 @@ def test_profile_store():
 
 
 # =========================================================
-# 4-5. GUI и живой диалог
+# 4. Команды смены режима (перенесены из консольной версии)
+# =========================================================
+def test_commands():
+    print("\n[4] Команды смены режима")
+    import commands
+
+    cases = [
+        ("урок", "lesson"), ("Урок!", "lesson"), ("заниматься", "lesson"), ("учитель", "lesson"),
+        ("перерыв", "free"), ("Перерыв.", "free"), ("отдохнем", "free"), ("друг", "free"),
+        ("привет, друг!", "None"), ("давай перерыв на десять минут", "None"),
+        ("", "None"), (None, "None"),
+    ]
+    for text, expected in cases:
+        got = commands.parse_mode_command(text)
+        check(f"команда {text!r} → {expected}", str(got) == expected, got)
+
+    check("приветствие для урока есть", bool(commands.GREETINGS.get("lesson")))
+    check("приветствие для свободного режима есть", bool(commands.GREETINGS.get("free")))
+
+
+# =========================================================
+# 5-6. GUI и живой диалог
 # =========================================================
 def test_gui(e2e=False):
-    print("\n[4] Сборка окна и переключение темы/режима")
+    print("\n[5] Сборка окна и переключение темы/режима")
     import tts
     tts.speak = lambda *a, **k: None          # без звука во время теста
 
@@ -249,8 +279,23 @@ def test_gui(e2e=False):
         app.window.update()
     check("возврат к тёмной теме", app.palette["window"] == theme.DARK["window"])
 
+    # команда смены режима должна работать локально, без сервера
+    app.input_bar.set_text("перерыв")
+    app.input_bar.on_send()
+    for _ in range(10):
+        app.window.update()
+    check("команда «перерыв» включает свободный режим", app.chat.mode == "free", app.chat.mode)
+
+    app.input_bar.set_text("урок")
+    app.input_bar.on_send()
+    for _ in range(10):
+        app.window.update()
+    check("команда «урок» возвращает режим урока", app.chat.mode == "lesson", app.chat.mode)
+    check("панель настроек показывает новый режим",
+          app.right_panel.mode_var.get() == "lesson", app.right_panel.mode_var.get())
+
     if e2e:
-        print("\n[5] Живой диалог с llama-server")
+        print("\n[6] Живой диалог с llama-server")
         state = app.check_server()
         check("сервер готов", state == "ready", state)
         if state == "ready":
@@ -283,6 +328,7 @@ def main():
     test_prompt_unchanged()
     test_clean_response()
     test_profile_store()
+    test_commands()
 
     if e2e:
         # во время теста не трогаем реальный профиль ученика

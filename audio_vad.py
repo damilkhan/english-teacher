@@ -58,37 +58,6 @@ class AudioVAD:
         if self.stop_callback:
             self.stop_callback(self.current_audio)
 
-    def get_audio(self):
-        audio = self.current_audio
-        self.current_audio = b""
-        return audio
-
-    # --- Методы совместимости с main.py ---
-    def start(self):
-        """Запускает VAD и подготавливает блокирующий интерфейс get_phrase()"""
-        self._phrase_ready = threading.Event()
-        self._phrase_audio = b""
-        self.set_stop_callback(self._on_phrase_complete)
-        self.start_recording()
-
-    def _on_phrase_complete(self, audio):
-        self._phrase_audio = audio
-        self._phrase_ready.set()
-
-    def get_phrase(self):
-        """Блокирует до завершения фразы и возвращает аудио"""
-        self._phrase_ready.wait()
-        self._phrase_ready.clear()
-        audio = self._phrase_audio
-        self._phrase_audio = b""
-        # Перезапускаем запись для следующей фразы
-        self.start_recording()
-        return audio
-
-    def stop(self):
-        """Останавливает VAD"""
-        self.stop_recording()
-
     def _monitor_silence(self):
         while self.is_recording:
             time.sleep(0.1)
