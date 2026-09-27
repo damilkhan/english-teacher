@@ -16,21 +16,34 @@ class AudioVAD:
     def set_stop_callback(self, callback):
         self.stop_callback = callback
 
+    def _find_input_device(self):
+        """Находит первый доступный входной микрофон"""
+        try:
+            devices = sd.query_devices()
+            for i, d in enumerate(devices):
+                if d['max_input_channels'] > 0:
+                    return i
+        except Exception:
+            pass
+        return None  # None = устройство по умолчанию
+
     def start_recording(self):
         if self.is_recording:
             return
         self.is_recording = True
         self.current_audio = b""
         self.silence_counter = 0
+        device = self._find_input_device()
         self.stream = sd.RawInputStream(
             samplerate=self.sample_rate,
             blocksize=4000,
             dtype='int16',
             channels=1,
+            device=device,
             callback=self._audio_callback
         )
         self.stream.start()
-        print("🎤 Запись начата")
+        print(f"🎤 Запись начата (микрофон: {device})")
         threading.Thread(target=self._monitor_silence, daemon=True).start()
 
     def stop_recording(self):
@@ -49,6 +62,32 @@ class AudioVAD:
         audio = self.current_audio
         self.current_audio = b""
         return audio
+
+    # --- Методы совместимости с main.py ---
+    def start(self):
+        """Запускает VAD и подготавливает блокирующий интерфейс get_phrase()"""
+        self._phrase_ready = threading.Event()
+        self._phrase_audio = b""
+        self.set_stop_callback(self._on_phrase_complete)
+        self.start_recording()
+
+    def _on_phrase_complete(self, audio):
+        self._phrase_audio = audio
+        self._phrase_ready.set()
+
+    def get_phrase(self):
+        """Блокирует до завершения фразы и возвращает аудио"""
+        self._phrase_ready.wait()
+        self._phrase_ready.clear()
+        audio = self._phrase_audio
+        self._phrase_audio = b""
+        # Перезапускаем запись для следующей фразы
+        self.start_recording()
+        return audio
+
+    def stop(self):
+        """Останавливает VAD"""
+        self.stop_recording()
 
     def _monitor_silence(self):
         while self.is_recording:

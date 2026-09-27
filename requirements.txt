@@ -1,0 +1,26 @@
+# Зависимости English Teacher (Python 3.10)
+# Установка: python -m pip install -r requirements.txt
+
+# --- интерфейс ---
+customtkinter==5.2.2
+
+# --- распознавание речи ---
+faster-whisper==1.2.1        # STT (stt_engine.py), модель "base", CPU int8
+sounddevice==0.5.5           # захват микрофона (audio_vad.py)
+numpy==2.2.6
+
+# --- синтез речи ---
+edge-tts==7.2.8              # TTS (tts.py)
+pygame==2.6.1                # воспроизведение mp3
+
+# --- связь с llama.cpp ---
+requests==2.33.1             # llm_client.py, server_manager.py
+
+# --- прочее ---
+emoji==2.15.0
+
+# --- не используются текущим кодом (задел / альтернативные движки) ---
+# vosk==0.3.45               # test_vosk_direct.py
+# pywebview==6.2.1           # chat_webview.py (модуль webview)
+# pyttsx3==2.99
+# silero-vad==6.2.1

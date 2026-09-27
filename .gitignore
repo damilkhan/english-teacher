@@ -1,4 +1,9 @@
-models/ 
-models/ 
-__pycache__/ 
-*.pyc 
+models/
+__pycache__/
+*.pyc
+
+# логи лаунчера
+logs/
+
+# временный файл озвучки
+response.mp3

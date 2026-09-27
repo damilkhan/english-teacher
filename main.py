@@ -8,6 +8,11 @@ import sys
 import config
 import requests
 
+# Фикс кодировки консоли Windows (для корректного вывода эмодзи)
+if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+
 # Наши модули
 from tts import speak
 from llm_client import LLMClient
@@ -29,13 +34,13 @@ def main():
         sys.exit(1)
     
     # 2. Запускаем сервер llama.cpp
-    server_manager.start_llama_server()
+    server_manager.start_server()
     
     # 3. Проверяем, что сервер работает
     llm = LLMClient()
-    if not llm.is_health():
+    if not server_manager.wait_for_server(timeout=30):
         print("❌ Ошибка: Сервер llama.cpp не запустился!")
-        server_manager.stop_llama_server()
+        server_manager.stop_server()
         sys.exit(1)
     print("✅ Сервер готов!")
     
@@ -60,11 +65,13 @@ def main():
             audio_data = vad.get_phrase()
             
             if audio_data:
-                # Распознаём текст
-                recognized_text = stt.recognize(audio_data)
+                # Распознаём текст (возвращает кортеж: текст, язык)
+                result = stt.recognize(audio_data)
                 
-                if not recognized_text:
+                if not result:
                     continue
+                
+                recognized_text, detected_lang = result
                 
                 print(f"\n🎤 Вы: {recognized_text}")
                 
@@ -96,7 +103,7 @@ def main():
         print(f"❌ Непредвиденная ошибка: {e}")
     finally:
         vad.stop()
-        server_manager.stop_llama_server()
+        server_manager.stop_server()
 
 if __name__ == "__main__":
     main()

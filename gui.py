@@ -10,6 +10,9 @@ from datetime import datetime
 import audio_vad
 import stt_engine
 import tts
+import emoji
+import re
+from chat_webview import ChatWebView
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -49,8 +52,9 @@ class EnglishTeacherApp:
     def __init__(self):
         self.window = ctk.CTk()
         self.window.title("English Teacher — Jane")
-        self.window.geometry("1000x700")
-        self.window.minsize(800, 600)
+        self.window.geometry("1100x750")
+        self.window.minsize(900, 650)
+        self.window.configure(fg_color="#121212")
 
         self.current_theme = "dark"
         self.panel_visible = False
@@ -64,78 +68,244 @@ class EnglishTeacherApp:
         self.vad = audio_vad.AudioVAD()
         self.stt = stt_engine.STTEngine()
 
-        self.main_container = ctk.CTkFrame(self.window)
-        self.main_container.pack(fill="both", expand=True, padx=10, pady=10)
+        # ---------- ОСНОВНОЙ КОНТЕЙНЕР ----------
+        self.main_container = ctk.CTkFrame(self.window, fg_color="#121212", corner_radius=0)
+        self.main_container.pack(fill="both", expand=True, padx=15, pady=15)
 
-        self.left_frame = ctk.CTkFrame(self.main_container)
+        # ---------- ЛЕВАЯ ПАНЕЛЬ (ЧАТ) ----------
+        self.left_frame = ctk.CTkFrame(self.main_container, fg_color="#1a1a1a", corner_radius=16)
         self.left_frame.pack(side="left", fill="both", expand=True, padx=(0, 10))
 
-        self.title_label = ctk.CTkLabel(self.left_frame, text="🎙️ ИИ-ПРЕПОДАВАТЕЛЬ АНГЛИЙСКОГО", font=ctk.CTkFont(size=20, weight="bold"))
-        self.title_label.pack(pady=10)
+        # Заголовок
+        self.title_frame = ctk.CTkFrame(self.left_frame, fg_color="transparent")
+        self.title_frame.pack(fill="x", pady=(15, 5))
 
-        self.visualizer = AudioVisualizer(self.left_frame, width=400, height=80)
-        self.visualizer.pack(pady=10)
+        self.title_label = ctk.CTkLabel(
+            self.title_frame,
+            text="🎙️ ИИ-ПРЕПОДАВАТЕЛЬ",
+            font=ctk.CTkFont(size=18, weight="bold"),
+            text_color="#ffffff"
+        )
+        self.title_label.pack(side="left", padx=15)
 
-        self.chat_frame = ctk.CTkFrame(self.left_frame, fg_color="transparent")
-        self.chat_frame.pack(fill="both", expand=True)
+        self.status_badge = ctk.CTkLabel(
+            self.title_frame,
+            text="● Готов",
+            font=ctk.CTkFont(size=12),
+            text_color="#4CAF50"
+        )
+        self.status_badge.pack(side="right", padx=15)
 
-        self.chat_text = ctk.CTkTextbox(self.chat_frame, wrap="word", fg_color="#1e1e1e")
-        self.chat_text.pack(fill="both", expand=True, padx=5, pady=5)
+        # Визуализатор
+        self.visualizer = AudioVisualizer(self.left_frame, width=400, height=40)
+        self.visualizer.pack(pady=(0, 10), padx=15, fill="x")
+
+        # ---------- ЧАТ ----------
+        self.chat_frame = ctk.CTkFrame(self.left_frame, fg_color="#1e1e1e", corner_radius=12, height=400)
+        self.chat_frame.pack(fill="x", padx=15, pady=(0, 10))
+        self.chat_frame.pack_propagate(False)
+        self.chat_text_frame = ctk.CTkFrame(self.chat_frame, fg_color="#1e1e1e")
+        self.chat_text_frame.pack(fill="both", expand=True, padx=5, pady=5)
+
+        self.chat_text = tk.Text(
+            self.chat_text_frame,
+            wrap="word",
+            font=("Segoe UI Emoji", 14),
+            bg="#1e1e1e",
+            fg="#e0e0e0",
+            borderwidth=0,
+            highlightthickness=0,
+            relief="flat"
+        )
+        self.chat_text.pack(side="left", fill="both", expand=True)
+
+        self.chat_scrollbar = ctk.CTkScrollbar(self.chat_text_frame, command=self.chat_text.yview)
+        self.chat_scrollbar.pack(side="right", fill="y")
+        self.chat_text.configure(yscrollcommand=self.chat_scrollbar.set)
+
         self.chat_text.insert("0.0", "Джейн: Привет! Я твой преподаватель английского.\nЯ буду запоминать твои ошибки и подстраивать уроки под тебя.\n\n")
         self.chat_text.configure(state="disabled")
+        # ---------- ПОЛЕ ВВОДА ----------
+        self.input_frame = ctk.CTkFrame(self.left_frame, fg_color="#1a1a1a", corner_radius=12)
+        self.input_frame.pack(fill="both", padx=15, pady=(0, 10))
 
-        self.input_frame = ctk.CTkFrame(self.left_frame)
-        self.input_frame.pack(fill="x", pady=5)
+        self.input_text = ctk.CTkTextbox(
+            self.input_frame,
+            height=50,
+            wrap="word",
+            fg_color="#1a1a1a",
+            border_width=0,
+            corner_radius=8,
+            font=ctk.CTkFont(size=14)
+        )
+        self.input_text.pack(side="left", fill="both", expand=True, padx=(10, 5), pady=5)
 
-        self.input_text = ctk.CTkTextbox(self.input_frame, height=60, wrap="word")
-        self.input_text.pack(side="left", fill="both", expand=True, padx=(0, 5))
+        self.send_btn = ctk.CTkButton(
+            self.input_frame,
+            text="📎 Отправить",
+            fg_color="#8C43EB",
+            hover_color="#6b2fb8",
+            command=lambda: self.send_text(),
+            width=100,
+            height=40,
+            cursor="hand2",
+            text_color="white",
+            corner_radius=8
+        )
+        self.send_btn.pack(side="right", padx=5, pady=5)
 
-        self.send_btn = ctk.CTkButton(self.input_frame, text="📎 Отправить", fg_color="#8C43EB", command=self.send_text, width=100, cursor="hand2", text_color="black")
-        self.send_btn.pack(side="right")
+        # ---------- ПАНЕЛЬ УПРАВЛЕНИЯ ----------
+        self.control_frame = ctk.CTkFrame(self.left_frame, fg_color="#1a1a1a", corner_radius=12)
+        self.control_frame.pack(fill="x", padx=15, pady=(0, 15))
 
-        self.button_frame = ctk.CTkFrame(self.left_frame)
-        self.button_frame.pack(fill="x", pady=10)
+        # Кнопки управления
+        self.record_btn = ctk.CTkButton(
+            self.control_frame,
+            text="🎤 Запись",
+            fg_color="#2a2a2a",
+            hover_color="#3a3a3a",
+            command=lambda: self.toggle_recording(),
+            width=120,
+            height=40,
+            cursor="hand2",
+            text_color="#ffffff",
+            corner_radius=8,
+            border_width=1,
+            border_color="#3a3a3a"
+        )
+        self.record_btn.pack(side="left", padx=10, pady=10)
 
-        self.record_btn = ctk.CTkButton(self.button_frame, text="🎤 Запись", fg_color="green", command=self.toggle_recording, width=120, cursor="hand2")
-        self.record_btn.pack(side="left", padx=5)
+        self.settings_btn = ctk.CTkButton(
+            self.control_frame,
+            text="⚙️ Настройки",
+            fg_color="#2a2a2a",
+            hover_color="#3a3a3a",
+            command=lambda: self.open_panel(),
+            width=120,
+            height=40,
+            cursor="hand2",
+            text_color="#ffffff",
+            corner_radius=8,
+            border_width=1,
+            border_color="#3a3a3a"
+        )
+        self.settings_btn.pack(side="right", padx=10, pady=10)
 
-        self.settings_btn = ctk.CTkButton(self.button_frame, text="⚙️ Настройки", fg_color="#8C43EB", command=self.open_panel, width=120, cursor="hand2", text_color="black")
-        self.settings_btn.pack(side="right", padx=5)
+        self.clear_btn = ctk.CTkButton(
+            self.control_frame,
+            text="🗑️ Очистить",
+            fg_color="#2a2a2a",
+            hover_color="#3a3a3a",
+            command=lambda: self.clear_chat(),
+            width=120,
+            height=40,
+            cursor="hand2",
+            text_color="#ffffff",
+            corner_radius=8,
+            border_width=1,
+            border_color="#3a3a3a"
+        )
+        self.clear_btn.pack(side="right", padx=10, pady=10)
 
-        self.clear_btn = ctk.CTkButton(self.button_frame, text="🗑️ Очистить чат", fg_color="#8C43EB", command=self.clear_chat, width=120, cursor="hand2", text_color="black")
-        self.clear_btn.pack(side="right", padx=5)
+        # ---------- ПРАВАЯ ПАНЕЛЬ ----------
+        self.right_panel = ctk.CTkFrame(self.main_container, width=260, fg_color="#1a1a1a", corner_radius=16)
+        # НЕ пакуем изначально
 
-        self.status_label = ctk.CTkLabel(self.left_frame, text="Статус: Готов", font=ctk.CTkFont(size=9))
-        self.status_label.pack(pady=5)
+        self.panel_title = ctk.CTkLabel(self.right_panel, text="⚙️ НАСТРОЙКИ", font=ctk.CTkFont(size=16, weight="bold"), text_color="#ffffff")
+        self.panel_title.pack(pady=(25, 15))
 
-        self.right_panel = ctk.CTkFrame(self.main_container, width=220, fg_color="#2b2b2b", border_width=2, border_color="#8C43EB")
-        self.panel_title = ctk.CTkLabel(self.right_panel, text="⚙️ НАСТРОЙКИ", font=ctk.CTkFont(size=14, weight="bold"))
-        self.panel_title.pack(pady=15)
+        self.mode_frame = ctk.CTkFrame(self.right_panel, fg_color="#222222", corner_radius=10)
+        self.mode_frame.pack(fill="x", padx=15, pady=5)
 
-        self.mode_label = ctk.CTkLabel(self.right_panel, text="Режим:", font=ctk.CTkFont(size=12))
-        self.mode_label.pack(pady=(10, 5))
+        self.mode_label = ctk.CTkLabel(self.mode_frame, text="Режим:", font=ctk.CTkFont(size=12), text_color="#888888")
+        self.mode_label.pack(anchor="w", padx=15, pady=(10, 5))
+
         self.mode_var = ctk.StringVar(value=self.mode)
-        self.mode_lesson = ctk.CTkRadioButton(self.right_panel, text="🎓 Урок (исправляет ошибки)", variable=self.mode_var, value="lesson", cursor="hand2")
-        self.mode_lesson.pack(pady=5, padx=10, anchor="w")
-        self.mode_free = ctk.CTkRadioButton(self.right_panel, text="💬 Свободное общение", variable=self.mode_var, value="free", cursor="hand2")
-        self.mode_free.pack(pady=5, padx=10, anchor="w")
+        self.mode_lesson = ctk.CTkRadioButton(
+            self.mode_frame,
+            text="🎓 Урок",
+            variable=self.mode_var,
+            value="lesson",
+            cursor="hand2",
+            text_color="#ffffff",
+            fg_color="#8C43EB"
+        )
+        self.mode_lesson.pack(pady=5, padx=15, anchor="w")
 
-        self.theme_label = ctk.CTkLabel(self.right_panel, text="Тема:", font=ctk.CTkFont(size=12))
-        self.theme_label.pack(pady=(15, 5))
+        self.mode_free = ctk.CTkRadioButton(
+            self.mode_frame,
+            text="💬 Свободное общение",
+            variable=self.mode_var,
+            value="free",
+            cursor="hand2",
+            text_color="#ffffff",
+            fg_color="#8C43EB"
+        )
+        self.mode_free.pack(pady=5, padx=15, anchor="w")
+
+        self.theme_frame = ctk.CTkFrame(self.right_panel, fg_color="#222222", corner_radius=10)
+        self.theme_frame.pack(fill="x", padx=15, pady=5)
+
+        self.theme_label = ctk.CTkLabel(self.theme_frame, text="Тема:", font=ctk.CTkFont(size=12), text_color="#888888")
+        self.theme_label.pack(anchor="w", padx=15, pady=(10, 5))
+
         self.theme_var = ctk.StringVar(value=self.current_theme)
-        self.theme_dark = ctk.CTkRadioButton(self.right_panel, text="🌙 Темная", variable=self.theme_var, value="dark", cursor="hand2")
-        self.theme_dark.pack(pady=5, padx=10, anchor="w")
-        self.theme_light = ctk.CTkRadioButton(self.right_panel, text="☀️ Светлая", variable=self.theme_var, value="light", cursor="hand2")
-        self.theme_light.pack(pady=5, padx=10, anchor="w")
+        self.theme_dark = ctk.CTkRadioButton(
+            self.theme_frame,
+            text="🌙 Тёмная",
+            variable=self.theme_var,
+            value="dark",
+            cursor="hand2",
+            text_color="#ffffff",
+            fg_color="#8C43EB"
+        )
+        self.theme_dark.pack(pady=5, padx=15, anchor="w")
 
-        self.save_btn = ctk.CTkButton(self.right_panel, text="Сохранить", command=self.save_settings, fg_color="#8C43EB", width=180, cursor="hand2", text_color="black")
-        self.save_btn.pack(pady=(20, 8), padx=8)
-        self.close_panel_btn = ctk.CTkButton(self.right_panel, text="✖️ Закрыть", command=self.close_panel, fg_color="#4a4a4a", width=180, cursor="hand2", text_color="white")
-        self.close_panel_btn.pack(pady=(0, 15), padx=8)
+        self.theme_light = ctk.CTkRadioButton(
+            self.theme_frame,
+            text="☀️ Светлая",
+            variable=self.theme_var,
+            value="light",
+            cursor="hand2",
+            text_color="#ffffff",
+            fg_color="#8C43EB"
+        )
+        self.theme_light.pack(pady=5, padx=15, anchor="w")
+
+        self.save_btn = ctk.CTkButton(
+            self.right_panel,
+            text="Сохранить",
+            command=lambda: self.save_settings(),
+            fg_color="#8C43EB",
+            hover_color="#6b2fb8",
+            width=200,
+            height=40,
+            cursor="hand2",
+            text_color="white",
+            corner_radius=8
+        )
+        self.save_btn.pack(pady=(20, 10))
+
+        self.close_panel_btn = ctk.CTkButton(
+            self.right_panel,
+            text="✖️ Закрыть",
+            command=lambda: self.close_panel(),
+            fg_color="#2a2a2a",
+            hover_color="#3a3a3a",
+            width=200,
+            height=40,
+            cursor="hand2",
+            text_color="#ffffff",
+            corner_radius=8,
+            border_width=1,
+            border_color="#3a3a3a"
+        )
+        self.close_panel_btn.pack(pady=(0, 20))
 
         self.check_server()
         self.init_profile()
 
+    # ---------- ВСЕ МЕТОДЫ ----------
     def init_profile(self):
         profile_path = "student_profile.json"
         if not os.path.exists(profile_path):
@@ -225,61 +395,82 @@ class EnglishTeacherApp:
         topics_passed = profile.get("topics_passed", [])
         topics_str = ", ".join(topics_passed[-5:]) if topics_passed else "None yet."
         
+        # ОБЩАЯ ИНСТРУКЦИЯ ДЛЯ ВСЕХ РЕЖИМОВ
+        female_identity = """IMPORTANT: You are Jane, a female AI assistant. When speaking in Russian, ALWAYS refer to yourself in the FEMININE GENDER:
+    - Use "я сказала", "я сделала", "я была", "я преподавательница", "я ответила" instead of masculine forms.
+    - Use feminine forms of verbs and adjectives (e.g., "я готова", "я уверена", "я думала", "я хотела").
+    - This applies to ALL your responses in Russian, regardless of the mode (lesson or free)."""
+        
         if self.mode == "lesson":
             prompt = f"""You are Jane, a helpful AI assistant.
-{lang_instruction}
-The student is Russian-speaking, but respond in the language they use.
+    {lang_instruction}
+    {female_identity}
+    The student is Russian-speaking, but respond in the language they use.
 
-📊 STUDENT PROGRESS PROFILE:
-Topics covered: {topics_str}
-Recent grammar mistakes: {', '.join(recent_grammar) if recent_grammar else 'None'}
-Recent vocabulary issues: {', '.join(recent_vocab) if recent_vocab else 'None'}
-Strengths: {strengths_text}
-Total lessons: {profile.get('total_lessons', 0)}
+    📊 STUDENT PROGRESS PROFILE:
+    Topics covered: {topics_str}
+    Recent grammar mistakes: {', '.join(recent_grammar) if recent_grammar else 'None'}
+    Recent vocabulary issues: {', '.join(recent_vocab) if recent_vocab else 'None'}
+    Strengths: {strengths_text}
+    Total lessons: {profile.get('total_lessons', 0)}
 
-Your task: help the student improve their English. If they speak Russian, answer in Russian. If they speak English, answer in English.
-Keep responses short (2-3 sentences). Do NOT use emojis or thought tags.
-"""
+    Your task: help the student improve their English. If they speak Russian, answer in Russian. If they speak English, answer in English.
+    Keep responses short (2-3 sentences). Use colorful emojis to make conversation more engaging and friendly (like in messengers): 😊👍❤️🎉🔥💪🤗✨🌟🎯📚💡💬👏🙌💖
+    Do NOT use thought tags (like <|thought|>).
+    """
         else:
             prompt = f"""You are Jane, a friendly AI companion.
-{lang_instruction}
-Respond naturally in the same language as the student.
-The student has completed {profile.get('total_lessons', 0)} lessons.
-Be supportive and helpful.
-"""
+    {lang_instruction}
+    {female_identity}
+    Respond naturally in the same language as the student.
+    The student has completed {profile.get('total_lessons', 0)} lessons.
+    Be supportive and helpful. Use emojis freely: 😊👍❤️🎉🔥💪🤗✨🌟🎯📚💡💬👏🙌💖
+    """
         
         return prompt
 
     def check_server(self):
         try:
             requests.get("http://127.0.0.1:8080/health", timeout=2)
-            self.status_label.configure(text="Статус: Готов ✅", text_color="white")
+            self.status_badge.configure(text="● Готов", text_color="#4CAF50")
         except:
-            self.status_label.configure(text="Статус: Сервер не запущен ❌", text_color="red")
+            self.status_badge.configure(text="● Сервер не запущен", text_color="#f44336")
 
     def ask_jane(self, user_text):
+        russian_chars = set("абвгдеёжзийклмнопрстуфхцчшщъыьэюя")
+        if any(c in russian_chars for c in user_text.lower()):
+            self.current_lang = "ru"
         try:
             system_prompt = self.get_dynamic_prompt()
+            
+            # Определяем язык ответа
             if self.current_lang == "ru":
                 user_prompt = f"{user_text}\n\nОТВЕТЬ ТОЛЬКО НА РУССКОМ ЯЗЫКЕ. НЕ ИСПОЛЬЗУЙ АНГЛИЙСКИЙ."
             else:
                 user_prompt = f"{user_text}\n\nAnswer ONLY in English. Do NOT use Russian."
+            
             history_str = "\n".join(self.conversation_history[-6:])
             if history_str:
                 history_str += "\n"
+            
             prompt = f"<start_of_turn>system\n{system_prompt}<end_of_turn>\n"
             if history_str:
                 prompt += history_str
             prompt += f"<start_of_turn>user\n{user_prompt}<end_of_turn>\n<start_of_turn>model\n"
+            
             print(f"📤 Язык ответа: {'РУССКИЙ' if self.current_lang == 'ru' else 'ENGLISH'}")
+            
             response = requests.post(self.llm_url, json={
                 "prompt": prompt,
-                "n_predict": 150,
-                "temperature": 0.6,
+                "n_predict": 120,
+                "temperature": 0.5,
                 "stop": ["<|thought|>", "<end_of_turn>"]
             }, timeout=60)
+            
             if response.status_code == 200:
                 content = response.json().get("content", "").strip()
+                # Очищаем от тегов
+                content = re.sub(r'<end_of_turn>.*$', '', content, flags=re.DOTALL).strip()
                 content = content.replace("<end_of_turn>", "").strip()
                 if content:
                     return content
@@ -296,7 +487,7 @@ Be supportive and helpful.
         if not self.is_recording:
             self.is_recording = True
             self.record_btn.configure(state="normal", text="🔴 Запись...", fg_color="red")
-            self.status_label.configure(text="Статус: Говорите...", text_color="green")
+            self.status_badge.configure(text="● Запись...", text_color="#FF9800")
             self.vad.set_stop_callback(self.on_recording_stopped)
             self.vad.start_recording()
         else:
@@ -305,7 +496,7 @@ Be supportive and helpful.
     def on_recording_stopped(self, audio_data):
         self.is_recording = False
         self.record_btn.configure(state="normal", text="🎤 Запись", fg_color="green")
-        self.status_label.configure(text="Статус: Распознаю...", text_color="orange")
+        self.status_badge.configure(text="● Распознаю...", text_color="#FF9800")
         
         if len(audio_data) > 8000:
             result = self.stt.recognize(audio_data)
@@ -315,9 +506,9 @@ Be supportive and helpful.
                 self.add_message("Вы (голос)", text)
                 self._process_input(text)
             else:
-                self.status_label.configure(text="Статус: Не распознано", text_color="red")
+                self.status_badge.configure(text="● Не распознано", text_color="#f44336")
         else:
-            self.status_label.configure(text="Статус: Слишком коротко", text_color="red")
+            self.status_badge.configure(text="● Слишком коротко", text_color="#f44336")
 
     def send_text(self):
         text = self.input_text.get("0.0", "end").strip()
@@ -329,7 +520,7 @@ Be supportive and helpful.
 
     def _process_input(self, text):
         self.send_btn.configure(state="disabled", text="⏳ Думаю...")
-        self.status_label.configure(text="Статус: Джейн думает...", text_color="orange")
+        self.status_badge.configure(text="● Джейн думает...", text_color="#FF9800")
         threading.Thread(target=self._get_response, args=(text,), daemon=True).start()
 
     def _get_response(self, user_text):
@@ -338,14 +529,15 @@ Be supportive and helpful.
 
     def _display_response(self, response, user_text):
         import re
-        # Удаляем все теги thought и мусор
+        # Удаляем теги и служебные символы
         response = re.sub(r'<\|thought\|>.*?(\n|$)', '', response, flags=re.DOTALL)
         response = re.sub(r'<\|.*?\|>', '', response)
-        response = response.strip()
+        response = re.sub(r'<end_of_turn>', '', response)
+        response = re.sub(r'RU$', '', response).strip()
         
         if not response or response.startswith("Error") or response.startswith("Connection error"):
             self.add_message("Джейн", f"[Ошибка] {response}")
-            self.status_label.configure(text="Статус: Ошибка", text_color="red")
+            self.status_badge.configure(text="● Ошибка", text_color="#f44336")
             self.send_btn.configure(state="normal", text="📎 Отправить")
             return
         
@@ -357,41 +549,83 @@ Be supportive and helpful.
         if len(self.conversation_history) > 10:
             self.conversation_history = self.conversation_history[-8:]
         self.send_btn.configure(state="normal", text="📎 Отправить")
-        self.status_label.configure(text="Статус: Готов", text_color="white")
+        self.status_badge.configure(text="● Готов", text_color="#4CAF50")
         self.visualizer.reset()
 
     def add_message(self, sender, text):
-        self.chat_text.configure(state="normal")
-        self.chat_text.insert("end", f"{sender}: {text}\n\n")
-        self.chat_text.see("end")
-        self.chat_text.configure(state="disabled")
+        """Добавляет сообщение в чат (WebView)"""
+        is_user = sender == "Вы" or sender == "Вы (голос)"
+        if hasattr(self, 'chat_webview'):
+            self.chat_webview.add_message(sender, text, is_user)
+        else:
+            # Фолбек для старого чата (если webview не загрузился)
+            pass
 
     def open_panel(self):
         if not self.panel_visible:
             self.right_panel.pack(side="right", fill="y", padx=(0, 0))
-            self.settings_btn.pack_forget()
             self.panel_visible = True
 
     def close_panel(self):
         if self.panel_visible:
             self.right_panel.pack_forget()
-            self.settings_btn.pack(side="right", padx=5)
             self.panel_visible = False
 
     def save_settings(self):
         self.mode = self.mode_var.get()
         new_theme = self.theme_var.get()
+        
         if new_theme != self.current_theme:
             ctk.set_appearance_mode(new_theme)
             self.current_theme = new_theme
+            
+            if new_theme == "dark":
+                self.window.configure(fg_color="#121212")
+                self.main_container.configure(fg_color="#121212")
+                self.left_frame.configure(fg_color="#1a1a1a")
+                self.right_panel.configure(fg_color="#1a1a1a")
+                self.control_frame.configure(fg_color="#1a1a1a")
+                self.input_frame.configure(fg_color="#1a1a1a")
+                self.input_text.configure(fg_color="#1a1a1a", text_color="#e0e0e0")
+                self.chat_frame.configure(fg_color="#1e1e1e")
+                self.chat_text.configure(bg="#1e1e1e", fg="#e0e0e0")
+                self.mode_frame.configure(fg_color="#222222")
+                self.theme_frame.configure(fg_color="#222222")
+                self.status_badge.configure(text_color="#4CAF50")
+                self.record_btn.configure(fg_color="#2a2a2a", hover_color="#3a3a3a", text_color="#ffffff")
+                self.settings_btn.configure(fg_color="#2a2a2a", hover_color="#3a3a3a", text_color="#ffffff")
+                self.clear_btn.configure(fg_color="#2a2a2a", hover_color="#3a3a3a", text_color="#ffffff")
+                self.send_btn.configure(fg_color="#8C43EB", hover_color="#6b2fb8", text_color="white")
+                self.visualizer.canvas.configure(bg="#1e1e1e")
+                for rect in self.visualizer.rects:
+                    self.visualizer.canvas.itemconfig(rect, fill="#8C43EB")
+            else:
+                self.window.configure(fg_color="#f0f0f0")
+                self.main_container.configure(fg_color="#f0f0f0")
+                self.left_frame.configure(fg_color="#ffffff")
+                self.right_panel.configure(fg_color="#ffffff")
+                self.control_frame.configure(fg_color="#ffffff")
+                self.input_frame.configure(fg_color="#e0e0e0")
+                self.input_text.configure(fg_color="#ffffff", text_color="#1a1a1a")
+                self.chat_frame.configure(fg_color="#f5f5f5")
+                self.chat_text.configure(bg="#f5f5f5", fg="#1a1a1a")
+                self.mode_frame.configure(fg_color="#e8e8e8")
+                self.theme_frame.configure(fg_color="#e8e8e8")
+                self.status_badge.configure(text_color="#4CAF50")
+                self.record_btn.configure(fg_color="#e0e0e0", hover_color="#d0d0d0", text_color="#1a1a1a")
+                self.settings_btn.configure(fg_color="#e0e0e0", hover_color="#d0d0d0", text_color="#1a1a1a")
+                self.clear_btn.configure(fg_color="#e0e0e0", hover_color="#d0d0d0", text_color="#1a1a1a")
+                self.send_btn.configure(fg_color="#8C43EB", hover_color="#6b2fb8", text_color="white")
+                self.visualizer.canvas.configure(bg="#f0f0f0")
+                for rect in self.visualizer.rects:
+                    self.visualizer.canvas.itemconfig(rect, fill="#8C43EB")
+        
         self.close_panel()
         self.add_message("Джейн", f"⚙️ Режим изменён на {'Урок' if self.mode == 'lesson' else 'Свободное общение'}")
 
     def clear_chat(self):
-        self.chat_text.configure(state="normal")
-        self.chat_text.delete("0.0", "end")
-        self.chat_text.insert("0.0", "Джейн: Чат очищен. Твой профиль сохранён, продолжим с того же места!\n\n")
-        self.chat_text.configure(state="disabled")
+        if hasattr(self, 'chat_webview'):
+            self.chat_webview.clear()
         self.conversation_history = []
 
     def run(self):

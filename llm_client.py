@@ -9,7 +9,7 @@ class LLMClient:
     """Клиент для общения с моделью Gemma 4 через llama.cpp сервер"""
     
     def __init__(self):
-        self.url = config.LLAMA_SERVER_URL
+        self.url = config.LLM_SERVER_URL
         self.max_tokens = config.LLM_MAX_TOKENS
         self.temperature = config.LLM_TEMPERATURE
         self.stop_words = config.LLM_STOP_WORDS
