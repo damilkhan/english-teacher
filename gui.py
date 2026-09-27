@@ -545,22 +545,43 @@ class EnglishTeacherApp:
             self.vad.stop_recording()
 
     def on_recording_stopped(self, audio_data):
-        self.is_recording = False
-        self.record_btn.configure(state="normal", text="🎤 Запись", fg_color="green")
-        self.status_badge.configure(text="● Распознаю...", text_color="#FF9800")
-        
-        if len(audio_data) > 8000:
-            result = self.stt.recognize(audio_data)
-            if result:
-                text, detected_lang = result
-                self.current_lang = detected_lang
-                self.add_message("Вы (голос)", text)
-                self._process_input(text)
-            else:
-                self.status_badge.configure(text="● Не распознано", text_color="#f44336")
-        else:
-            self.status_badge.configure(text="● Слишком коротко", text_color="#f44336")
+        """Вызывается из потока VAD. Виджеты Tk трогаем только из главного
+        потока, поэтому передаём работу через window.after()."""
+        try:
+            self.window.after(0, lambda: self._on_recording_main(audio_data))
+        except Exception as exc:
+            print(f"⚠️ Не удалось обработать запись: {exc}")
 
+    def _on_recording_main(self, audio_data):
+        """Главный поток: обновляем интерфейс и уходим в фон для распознавания."""
+        self.is_recording = False
+        self.record_btn.configure(state="normal", text="🎤 Запись", fg_color="#2a2a2a")
+
+        if len(audio_data) <= 8000:
+            self.status_badge.configure(text="● Слишком коротко", text_color="#f44336")
+            return
+
+        self.status_badge.configure(text="● Распознаю...", text_color="#FF9800")
+        threading.Thread(target=self._recognize_worker, args=(audio_data,), daemon=True).start()
+
+    def _recognize_worker(self, audio_data):
+        """Фон: Whisper не должен подвешивать окно."""
+        try:
+            result = self.stt.recognize(audio_data)
+        except Exception as exc:
+            print(f"❌ Ошибка распознавания: {exc}")
+            result = None
+        self.window.after(0, lambda: self._after_recognition(result))
+
+    def _after_recognition(self, result):
+        """Главный поток: показываем распознанный текст и отвечаем."""
+        if not result:
+            self.status_badge.configure(text="● Не распознано", text_color="#f44336")
+            return
+        text, detected_lang = result
+        self.current_lang = detected_lang
+        self.add_message("Вы (голос)", text)
+        self._process_input(text)
     def send_text(self):
         text = self.input_text.get("0.0", "end").strip()
         if not text:
