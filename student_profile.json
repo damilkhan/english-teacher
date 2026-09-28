@@ -1,7 +1,7 @@
 {
     "student_name": "Student",
     "first_lesson": null,
-    "last_lesson": "2026-09-27T22:22:11.806927",
+    "last_lesson": "2026-09-27T23:15:13.603871",
     "mistakes": {
         "grammar": [],
         "vocabulary": [],
@@ -88,8 +88,18 @@
             "date": "2026-08-16T18:21:29.140867",
             "user_text": "привет! как дела? расскажи что-нибудь.",
             "jane_response": "Привет! 👋 У меня всё отлично, спасибо! Я готова помогать тебе улучшать английский! 📚✨\n\nВот что могу "
+        },
+        {
+            "date": "2026-09-27T23:12:23.589736",
+            "user_text": "распривет, как слышно.",
+            "jane_response": "Привет! 👋 Слышно отлично, спасибо, что спросили! 😊 Я готова помогать Вам с английским. Чем бы Вы хот"
+        },
+        {
+            "date": "2026-09-27T23:15:13.603871",
+            "user_text": "hello, are you understanding?",
+            "jane_response": "Yes, I am understanding perfectly! 😊 I'm Jane, your helpful AI assistant, and I'm ready to help you "
         }
     ],
-    "total_lessons": 68,
+    "total_lessons": 70,
     "last_week_mistakes": []
 }

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""ui.panels.settings_panel — правая панель: режим, тема, кнопки.
+"""ui.panels.settings_panel — правая панель настроек.
 
-Панель ничего не знает про приложение: наружу отдаёт get_mode() /
-get_theme() и зовёт колбэки on_save / on_close.
+Редизайн: секции с подписями-капсом, переключатели акцентом, кнопки
+«Сохранить» (акцент) и «Закрыть» (стеклянная), тонкая рамка карточки.
 """
 
 import customtkinter as ctk
@@ -13,65 +13,77 @@ import theme
 class SettingsPanel(ctk.CTkFrame):
     def __init__(self, parent, palette, mode="lesson", theme_name="dark",
                  on_save=None, on_close=None):
-        super().__init__(parent, width=260, fg_color=palette["surface"], corner_radius=16)
+        super().__init__(parent, fg_color=palette["surface"],
+                         corner_radius=theme.R["card"],
+                         border_width=1, border_color=palette["border"])
         self.palette = palette
 
-        self.title_label = ctk.CTkLabel(self, text="⚙️ НАСТРОЙКИ",
+        self.title_label = ctk.CTkLabel(self, text="НАСТРОЙКИ",
                                         font=theme.FONT_PANEL_TITLE,
                                         text_color=palette["text_strong"])
-        self.title_label.pack(pady=(25, 15))
+        self.title_label.pack(anchor="w", padx=20, pady=(20, 4))
 
         # ---------- режим ----------
-        self.mode_frame = ctk.CTkFrame(self, fg_color=palette["block"], corner_radius=10)
-        self.mode_frame.pack(fill="x", padx=15, pady=5)
-
-        self.mode_label = ctk.CTkLabel(self.mode_frame, text="Режим:",
-                                       font=theme.FONT_SMALL, text_color=palette["muted"])
-        self.mode_label.pack(anchor="w", padx=15, pady=(10, 5))
-
+        self.mode_frame = self._section("РЕЖИМ РАБОТЫ")
         self.mode_var = ctk.StringVar(value=mode)
-        self.mode_lesson = ctk.CTkRadioButton(
-            self.mode_frame, text="🎓 Урок", variable=self.mode_var, value="lesson",
-            cursor="hand2", text_color=palette["text_strong"], fg_color=palette["accent"])
-        self.mode_lesson.pack(pady=5, padx=15, anchor="w")
-
-        self.mode_free = ctk.CTkRadioButton(
-            self.mode_frame, text="💬 Свободное общение", variable=self.mode_var, value="free",
-            cursor="hand2", text_color=palette["text_strong"], fg_color=palette["accent"])
-        self.mode_free.pack(pady=5, padx=15, anchor="w")
+        self.mode_lesson = self._radio(self.mode_frame, "🎓  Урок", self.mode_var, "lesson")
+        self.mode_free = self._radio(self.mode_frame, "💬  Свободное общение", self.mode_var, "free")
 
         # ---------- тема ----------
-        self.theme_frame = ctk.CTkFrame(self, fg_color=palette["block"], corner_radius=10)
-        self.theme_frame.pack(fill="x", padx=15, pady=5)
-
-        self.theme_label = ctk.CTkLabel(self.theme_frame, text="Тема:",
-                                        font=theme.FONT_SMALL, text_color=palette["muted"])
-        self.theme_label.pack(anchor="w", padx=15, pady=(10, 5))
-
+        self.theme_frame = self._section("ОФОРМЛЕНИЕ")
         self.theme_var = ctk.StringVar(value=theme_name)
-        self.theme_dark = ctk.CTkRadioButton(
-            self.theme_frame, text="🌙 Тёмная", variable=self.theme_var, value="dark",
-            cursor="hand2", text_color=palette["text_strong"], fg_color=palette["accent"])
-        self.theme_dark.pack(pady=5, padx=15, anchor="w")
+        self.theme_dark = self._radio(self.theme_frame, "🌙  Тёмная", self.theme_var, "dark")
+        self.theme_light = self._radio(self.theme_frame, "☀️  Светлая", self.theme_var, "light")
 
-        self.theme_light = ctk.CTkRadioButton(
-            self.theme_frame, text="☀️ Светлая", variable=self.theme_var, value="light",
-            cursor="hand2", text_color=palette["text_strong"], fg_color=palette["accent"])
-        self.theme_light.pack(pady=5, padx=15, anchor="w")
+        # ---------- подсказка про голосовые команды ----------
+        self.hint = ctk.CTkLabel(
+            self,
+            text="Скажи или напиши «урок» либо «перерыв» —\nрежим переключится сам.",
+            font=theme.FONT_SMALL,
+            text_color=palette["muted"],
+            justify="left",
+        )
+        self.hint.pack(anchor="w", padx=20, pady=(14, 0))
 
         # ---------- кнопки ----------
         self.save_btn = ctk.CTkButton(
             self, text="Сохранить", command=on_save,
             fg_color=palette["accent"], hover_color=palette["accent_hover"],
-            width=200, height=40, cursor="hand2", text_color="white", corner_radius=8)
-        self.save_btn.pack(pady=(20, 10))
+            width=200, height=42, cursor="hand2", text_color="#FFFFFF",
+            corner_radius=theme.R["button"], font=theme.FONT_UI)
+        self.save_btn.pack(side="bottom", pady=(0, 16), padx=20, fill="x")
 
         self.close_btn = ctk.CTkButton(
-            self, text="✖️ Закрыть", command=on_close,
+            self, text="Закрыть", command=on_close,
             fg_color=palette["btn"], hover_color=palette["btn_hover"],
-            width=200, height=40, cursor="hand2", text_color=palette["text_strong"],
-            corner_radius=8, border_width=1, border_color=palette["border"])
-        self.close_btn.pack(pady=(0, 20))
+            width=200, height=42, cursor="hand2", text_color=palette["text"],
+            corner_radius=theme.R["button"], border_width=1,
+            border_color=palette["border"], font=theme.FONT_UI)
+        self.close_btn.pack(side="bottom", pady=(0, 10), padx=20, fill="x")
+
+    # ---------- строительные блоки ----------
+    def _section(self, caption):
+        frame = ctk.CTkFrame(self, fg_color=self.palette["surface_alt"],
+                             corner_radius=theme.R["block"])
+        frame.pack(fill="x", padx=20, pady=(14, 0))
+        cap = ctk.CTkLabel(frame, text=caption, font=theme.FONT_SECTION,
+                           text_color=self.palette["muted"])
+        cap.pack(anchor="w", padx=16, pady=(12, 2))
+        frame.caption = cap          # запомним, чтобы перекрашивать
+        return frame
+
+    def _radio(self, parent, text, variable, value):
+        radio = ctk.CTkRadioButton(
+            parent, text=text, variable=variable, value=value,
+            cursor="hand2",
+            text_color=self.palette["text"],
+            fg_color=self.palette["accent"],
+            hover_color=self.palette["accent_hover"],
+            border_color=self.palette["muted"],
+            font=theme.FONT_UI,
+        )
+        radio.pack(pady=5, padx=16, anchor="w")
+        return radio
 
     # ---------- API ----------
     def get_mode(self):
@@ -89,16 +101,21 @@ class SettingsPanel(ctk.CTkFrame):
     # ---------- оформление ----------
     def apply_theme(self, palette):
         self.palette = palette
-        self.configure(fg_color=palette["surface"])
+        self.configure(fg_color=palette["surface"], border_color=palette["border"])
         self.title_label.configure(text_color=palette["text_strong"])
+        self.hint.configure(text_color=palette["muted"])
 
         for block in (self.mode_frame, self.theme_frame):
-            block.configure(fg_color=palette["block"])
-        for label in (self.mode_label, self.theme_label):
-            label.configure(text_color=palette["muted"])
+            block.configure(fg_color=palette["surface_alt"])
+            block.caption.configure(text_color=palette["muted"])
         for radio in (self.mode_lesson, self.mode_free, self.theme_dark, self.theme_light):
-            radio.configure(text_color=palette["text_strong"], fg_color=palette["accent"])
+            radio.configure(text_color=palette["text"], fg_color=palette["accent"],
+                            hover_color=palette["accent_hover"],
+                            border_color=palette["muted"])
 
-        self.save_btn.configure(fg_color=palette["accent"], hover_color=palette["accent_hover"])
-        self.close_btn.configure(fg_color=palette["btn"], hover_color=palette["btn_hover"],
-                                 text_color=palette["text_strong"], border_color=palette["border"])
+        self.save_btn.configure(fg_color=palette["accent"],
+                                hover_color=palette["accent_hover"])
+        self.close_btn.configure(fg_color=palette["btn"],
+                                 hover_color=palette["btn_hover"],
+                                 text_color=palette["text"],
+                                 border_color=palette["border"])

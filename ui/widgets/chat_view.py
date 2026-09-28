@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """ui.widgets.chat_view — область чата.
 
-Раньше add_message() в gui.py уходил в `pass` (WebView так и не создавался),
-и в окне не появлялось ни одного сообщения. Здесь это нормальный метод.
+Редизайн: сообщения получили отступы (lmargin), воздух между репликами
+(spacing1/spacing3), ник окрашен по роли — Джейн акцентом, «Вы» цианом.
 """
 
 import tkinter as tk
@@ -12,23 +12,20 @@ import customtkinter as ctk
 
 import theme
 
-GREETING = ("Джейн: Привет! Я твой преподаватель английского.\n"
-            "Я буду запоминать твои ошибки и подстраивать уроки под тебя.\n\n")
-
 USER_SENDERS = ("Вы", "Вы (голос)")
+DOT = "·"
 
 
 class ChatView(ctk.CTkFrame):
-    def __init__(self, parent, palette, height=400, greeting=GREETING):
-        super().__init__(parent, fg_color=palette["chat_bg"], corner_radius=12, height=height)
-        self.pack_propagate(False)
+    def __init__(self, parent, palette, greeting=None, corner_radius=None):
+        super().__init__(parent, fg_color=palette["chat_bg"],
+                         corner_radius=corner_radius or theme.R["card"],
+                         border_width=1, border_color=palette["border"])
         self.palette = palette
 
-        self.inner = ctk.CTkFrame(self, fg_color=palette["chat_bg"])
-        self.inner.pack(fill="both", expand=True, padx=5, pady=5)
-
+        # область текста внутри карточки
         self.text = tk.Text(
-            self.inner,
+            self,
             wrap="word",
             font=theme.FONT_BODY,
             bg=palette["chat_bg"],
@@ -36,26 +33,42 @@ class ChatView(ctk.CTkFrame):
             borderwidth=0,
             highlightthickness=0,
             relief="flat",
+            padx=10,
+            pady=10,
+            insertbackground=palette["accent"],
+            selectbackground=palette["accent_soft"],
+            selectforeground=palette["text_strong"],
+            cursor="arrow",
         )
         self.text.pack(side="left", fill="both", expand=True)
 
-        self.scrollbar = ctk.CTkScrollbar(self.inner, command=self.text.yview)
-        self.scrollbar.pack(side="right", fill="y")
+        self.scrollbar = ctk.CTkScrollbar(
+            self, command=self.text.yview, width=8,
+            fg_color="transparent",
+            button_color=palette["btn"],
+            button_hover_color=palette["btn_hover"],
+        )
+        self.scrollbar.pack(side="right", fill="y", padx=(0, 4), pady=6)
         self.text.configure(yscrollcommand=self.scrollbar.set)
 
         self._configure_tags(palette)
         if greeting:
-            self.text.insert("0.0", greeting)
+            sender, text = greeting
+            self.add_message(sender, text, stamp=None)
         self.text.configure(state="disabled")
 
     # ---------- API ----------
     def add_message(self, sender, text, stamp=None):
         """Рисует реплику и прокручивает чат вниз."""
         is_user = sender in USER_SENDERS
-        stamp = stamp or datetime.now().strftime("%H:%M")
+        head_tag = "head_user" if is_user else "head"
+        body_tag = "body_user" if is_user else "body"
+
+        header = f"{sender}  {DOT}  {stamp}" if stamp else sender
+
         self.text.configure(state="normal")
-        self.text.insert("end", f"{sender}  {stamp}\n", "head_user" if is_user else "head")
-        self.text.insert("end", f"{text}\n\n", "body")
+        self.text.insert("end", header + "\n", head_tag)
+        self.text.insert("end", f"{text}\n", body_tag)
         self.text.configure(state="disabled")
         self.text.see("end")
 
@@ -70,12 +83,22 @@ class ChatView(ctk.CTkFrame):
     # ---------- оформление ----------
     def apply_theme(self, palette):
         self.palette = palette
-        self.configure(fg_color=palette["chat_bg"])
-        self.inner.configure(fg_color=palette["chat_bg"])
-        self.text.configure(bg=palette["chat_bg"], fg=palette["text"])
+        self.configure(fg_color=palette["chat_bg"], border_color=palette["border"])
+        self.text.configure(bg=palette["chat_bg"], fg=palette["text"],
+                            insertbackground=palette["accent"],
+                            selectbackground=palette["accent_soft"],
+                            selectforeground=palette["text_strong"])
+        self.scrollbar.configure(button_color=palette["btn"],
+                                 button_hover_color=palette["btn_hover"])
         self._configure_tags(palette)
 
     def _configure_tags(self, palette):
-        self.text.tag_configure("head", foreground=palette["accent"], font=theme.FONT_HEAD)
-        self.text.tag_configure("head_user", foreground=palette["text_strong"], font=theme.FONT_HEAD)
-        self.text.tag_configure("body", foreground=palette["text"], font=theme.FONT_BODY)
+        common = dict(lmargin1=14, lmargin2=14, rmargin=14)
+        self.text.tag_configure("head", foreground=palette["accent"],
+                                font=theme.FONT_HEAD, spacing1=8, **common)
+        self.text.tag_configure("head_user", foreground=palette["cyan"],
+                                font=theme.FONT_HEAD, spacing1=8, **common)
+        self.text.tag_configure("body", foreground=palette["text"],
+                                font=theme.FONT_BODY, spacing3=10, **common)
+        self.text.tag_configure("body_user", foreground=palette["text_strong"],
+                                font=theme.FONT_BODY, spacing3=10, **common)

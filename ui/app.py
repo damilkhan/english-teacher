@@ -3,15 +3,20 @@
 # UI/APP.PY — сборка окна English Teacher
 # =========================================================
 # Здесь только «клей»: создать виджеты, связать их с контроллерами,
-# обновить интерфейс. Никакой сетевой логики, промптов и работы
-# с файлом профиля — всё это в controllers/ и модулях верхнего уровня.
+# обновить интерфейс. Логика — в controllers/ и модулях верхнего уровня.
 #
-# Раскладка (как было):
-#   левая  колонка — заголовок, визуализатор, чат, поле ввода, кнопки
-#   правая колонка — настройки (режим, тема), выезжает по кнопке
+# Раскладка после редизайна:
+#   фон окна — вертикальный градиент (рисуется на tk.Canvas полосками);
+#   карточки («левая колонка» и «настройки») лежат на нём с отступами,
+#   поэтому градиент виден по краям и в зазоре между колонками;
+#   сверху карточки — градиентная шапка с заголовком и бейджем статуса.
+#
+# Раскладка делается через place(), потому что pack не умеет «парящие»
+# карточки на градиенте. Размеры пересчитываются в _layout().
 # =========================================================
 
 import threading
+import tkinter as tk
 
 import customtkinter as ctk
 
@@ -27,13 +32,14 @@ from controllers.dispatcher import Dispatcher
 from controllers.recording_controller import RecordingController
 from controllers.server_monitor import ServerMonitor
 from llm_client import LLMClient
+from ui import gradient
 from ui.panels.settings_panel import SettingsPanel
 from ui.widgets.chat_view import ChatView
 from ui.widgets.control_bar import ControlBar
 from ui.widgets.input_bar import InputBar
 from ui.widgets.visualizer import AudioVisualizer
 
-# Состояние сервера → текст и цвет бейджа
+# --- состояние сервера → текст и цвет бейджа ---
 STATUS_TEXT = {
     "ready": "● Готов",
     "loading": "● Модель загружается…",
@@ -41,9 +47,16 @@ STATUS_TEXT = {
 }
 STATUS_COLOR = {"ready": "ok", "loading": "warn", "offline": "err"}
 
+GREETING = ("Джейн",
+            "Привет! Я твой преподаватель английского.\n"
+            "Я буду запоминать твои ошибки и подстраивать уроки под тебя.")
 NEW_PROFILE_NOTE = "📊 Создан новый профиль ученика. Я буду запоминать твой прогресс!"
 NOT_READY_LOADING = "⏳ Модель ещё загружается — подожди несколько секунд и попробуй снова."
 NOT_READY_OFFLINE = "❌ LLM-сервер не отвечает. Подробности в logs\\llama-server.log"
+
+HERO_HEIGHT = 92
+PANEL_WIDTH = 288
+REDRAW_DELAY_MS = 90
 
 
 class EnglishTeacherApp:
@@ -63,12 +76,24 @@ class EnglishTeacherApp:
         # ---------- окно ----------
         self.window = ctk.CTk()
         self.window.title("English Teacher — Jane")
-        self.window.geometry("1100x750")
-        self.window.minsize(900, 650)
+        self.window.geometry("1160x780")
+        self.window.minsize(940, 660)
         self.window.configure(fg_color=self.palette["window"])
 
+        # шрифты подбираем, когда окно уже есть (нужен список семейств системы)
+        theme.resolve_fonts(self.window)
+
+        # ---------- фон: градиент на Canvas ----------
+        self._bg_job = None
+        self._hero_cache = (None, None)
+        self.base = tk.Canvas(self.window, highlightthickness=0, bd=0,
+                              bg=self.palette["grad_top"])
+        self.base.pack(fill="both", expand=True)
+        self.base.bind("<Configure>", self._on_base_resize)
+
         # ---------- передача вызовов в главный поток ----------
-        self.dispatcher = Dispatcher(schedule=self.window.after, cancel=self.window.after_cancel)
+        self.dispatcher = Dispatcher(schedule=self.window.after,
+                                    cancel=self.window.after_cancel)
         self.dispatcher.start()
 
         # ---------- железо и сеть ----------
@@ -106,6 +131,7 @@ class EnglishTeacherApp:
             self.add_message("Джейн", NEW_PROFILE_NOTE)
         self.check_server()
         self.monitor.start()
+        self.window.after(60, self._redraw)     # первая отрисовка после раскладки
 
     # =====================================================
     # Сборка интерфейса
@@ -113,53 +139,132 @@ class EnglishTeacherApp:
     def _build_ui(self):
         p = self.palette
 
-        self.main_container = ctk.CTkFrame(self.window, fg_color=p["window"], corner_radius=0)
-        self.main_container.pack(fill="both", expand=True, padx=15, pady=15)
-
-        # ---------- левая колонка ----------
-        self.left_frame = ctk.CTkFrame(self.main_container, fg_color=p["surface"], corner_radius=16)
-        self.left_frame.pack(side="left", fill="both", expand=True, padx=(0, 10))
-
-        self.title_frame = ctk.CTkFrame(self.left_frame, fg_color="transparent")
-        self.title_frame.pack(fill="x", pady=(15, 5))
-
-        self.title_label = ctk.CTkLabel(self.title_frame, text="🎙️ ИИ-ПРЕПОДАВАТЕЛЬ",
-                                        font=theme.FONT_TITLE, text_color=p["text_strong"])
-        self.title_label.pack(side="left", padx=15)
-
-        self.status_badge = ctk.CTkLabel(self.title_frame, text="● Проверяю сервер…",
-                                         font=theme.FONT_SMALL, text_color=p["muted"])
-        self.status_badge.pack(side="right", padx=15)
-
-        self.visualizer = AudioVisualizer(self.left_frame, p, width=400, height=40)
-        self.visualizer.pack(pady=(0, 10), padx=15, fill="x")
-
-        self.chat_view = ChatView(self.left_frame, p, height=400)
-        self.chat_view.pack(fill="x", padx=15, pady=(0, 10))
-
+        # ---------- карточка «чат» ----------
+        self.left_frame = ctk.CTkFrame(self.base, fg_color=p["surface"],
+                                       corner_radius=theme.R["card"],
+                                       border_width=1, border_color=p["border"])
+        self.visualizer = AudioVisualizer(self.left_frame, p, height=30, bars=30)
+        self.chat_view = ChatView(self.left_frame, p, greeting=GREETING)
         self.input_bar = InputBar(self.left_frame, p, on_send=self.send_text)
-        self.input_bar.pack(fill="both", padx=15, pady=(0, 10))
-
         self.control_bar = ControlBar(self.left_frame, p,
                                       on_record=self.toggle_recording,
                                       on_settings=self.open_panel,
                                       on_clear=self.clear_chat)
-        self.control_bar.pack(fill="x", padx=15, pady=(0, 15))
 
-        # ---------- правая колонка (изначально скрыта) ----------
-        self.right_panel = SettingsPanel(self.main_container, p,
+        self._build_hero()
+
+        # порядок упаковки = порядок сверху вниз
+        self.hero.pack(fill="x", padx=theme.CARD_PAD, pady=(theme.CARD_PAD, 8))
+        self.visualizer.pack(fill="x", padx=theme.CARD_PAD + 4, pady=(0, 6))
+        self.chat_view.pack(fill="both", expand=True, padx=theme.CARD_PAD, pady=(0, 10))
+        self.input_bar.pack(fill="x", padx=theme.CARD_PAD, pady=(0, 8))
+        self.control_bar.pack(fill="x", padx=theme.CARD_PAD, pady=(0, theme.CARD_PAD))
+
+        # ---------- карточка «настройки» (появляется по кнопке) ----------
+        self.right_panel = SettingsPanel(self.base, p,
                                          mode=self.mode, theme_name=self.current_theme,
                                          on_save=self.save_settings, on_close=self.close_panel)
+
+    def _build_hero(self):
+        """Градиентная шапка: картинка-фон + тексты поверх неё."""
+        p = self.palette
+        self.hero = ctk.CTkFrame(self.left_frame, fg_color=p["surface"],
+                                 corner_radius=theme.R["card"], height=HERO_HEIGHT)
+        self.hero.pack_propagate(False)
+
+        # фон-градиент шапки (создаём первым → он под текстами)
+        self.hero_bg = ctk.CTkLabel(self.hero, text="", fg_color="transparent")
+        self.hero_bg.place(x=0, y=0, relwidth=1, relheight=1)
+
+        self.title_label = ctk.CTkLabel(self.hero, text="🎙️  ИИ-ПРЕПОДАВАТЕЛЬ",
+                                        font=theme.FONT_TITLE, text_color="#FFFFFF")
+        self.title_label.place(x=22, y=16)
+
+        self.subtitle_label = ctk.CTkLabel(self.hero,
+                                          text="Джейн · локальный преподаватель английского",
+                                          font=theme.FONT_SUBTITLE, text_color="#DAD3FF")
+        self.subtitle_label.place(x=24, y=50)
+
+        self.status_badge = ctk.CTkLabel(self.hero, text="● Проверяю сервер…",
+                                         font=theme.FONT_SMALL,
+                                         text_color=p["muted"],
+                                         fg_color=p["muted_soft"],
+                                         corner_radius=theme.R["pill"],
+                                         padx=12, pady=5)
+        self.status_badge.place(relx=1.0, rely=0.5, x=-18, anchor="e")
+
+    # =====================================================
+    # Фон-градиент и раскладка
+    # =====================================================
+    def _on_base_resize(self, _event=None):
+        """При изменении окна перерисовываем фон (с небольшой задержкой)."""
+        if self._bg_job is not None:
+            try:
+                self.window.after_cancel(self._bg_job)
+            except Exception:
+                pass
+        self._bg_job = self.window.after(REDRAW_DELAY_MS, self._redraw)
+
+    def _redraw(self):
+        self._bg_job = None
+        w = self.base.winfo_width()
+        h = self.base.winfo_height()
+        if w < 50 or h < 50:
+            return
+        try:
+            gradient.draw_vertical(self.base, w, h,
+                                   self.palette["grad_top"], self.palette["grad_bottom"])
+        except Exception as exc:
+            print(f"⚠️ Не удалось нарисовать фон: {exc}")
+        self._layout(w, h)
+
+    def _layout(self, w=None, h=None):
+        """Расставляет карточки: слева чат, справа настройки (если открыты)."""
+        w = w or self.base.winfo_width()
+        h = h or self.base.winfo_height()
+        if w < 50 or h < 50:
+            return
+
+        pad, gap = theme.PAGE_PAD, theme.GAP
+        inner_h = max(260, h - 2 * pad)
+        right_w = (PANEL_WIDTH + gap) if self.panel_visible else 0
+        left_w = max(320, w - 2 * pad - right_w)
+
+        # customtkinter запрещает передавать width/height в place(),
+        # поэтому размеры задаём относительными долями (это он разрешает).
+        self.left_frame.place(x=pad, y=pad,
+                              relwidth=left_w / float(w), relheight=inner_h / float(h))
+        if self.panel_visible:
+            self.right_panel.place(x=w - pad - PANEL_WIDTH, y=pad,
+                                   relwidth=PANEL_WIDTH / float(w),
+                                   relheight=inner_h / float(h))
+
+        self._update_hero(max(160, left_w - 2 * theme.CARD_PAD))
+
+    def _update_hero(self, width):
+        """Градиент шапки пересобираем только при смене ширины или темы."""
+        key = (int(width), self.current_theme)
+        if self._hero_cache[0] == key:
+            return
+        try:
+            p = self.palette
+            img = gradient.hero(width, HERO_HEIGHT, p["hero_a"], p["hero_b"],
+                                radius=theme.R["card"], bg=p["surface"])
+            cimg = ctk.CTkImage(light_image=img, dark_image=img, size=(width, HERO_HEIGHT))
+        except Exception as exc:
+            print(f"⚠️ Не удалось собрать шапку: {exc}")
+            return
+        self._hero_cache = (key, cimg)          # держим ссылку, иначе картинка пропадёт
+        try:
+            self.hero_bg.configure(image=cimg)
+        except Exception as exc:
+            print(f"⚠️ Шапка не обновилась: {exc}")
 
     # =====================================================
     # Мостик «фон → главный поток»
     # =====================================================
     def _dispatch(self, fn):
-        """Выполнить fn в главном потоке Tk (виджеты из чужих потоков трогать нельзя).
-
-        Просто кладём вызов в очередь: window.after() напрямую из чужого
-        потока падает, если mainloop ещё не запущен.
-        """
+        """Выполнить fn в главном потоке Tk (виджеты из чужих потоков трогать нельзя)."""
         self.dispatcher.dispatch(fn)
 
     # =====================================================
@@ -169,14 +274,20 @@ class EnglishTeacherApp:
         self.chat_view.add_message(sender, text)
 
     def _set_status(self, text, color_key="ok"):
-        self.status_badge.configure(text=text, text_color=self.palette.get(color_key, self.palette["ok"]))
+        """Бейдж-«пилюля»: цвет текста и мягкая подложка по состоянию."""
+        p = self.palette
+        self.status_badge.configure(
+            text=text,
+            text_color=p.get(color_key, p["ok"]),
+            fg_color=p.get(color_key + "_soft", p["muted_soft"]),
+        )
 
     def _set_busy(self, busy):
         self.busy = busy
         self.input_bar.set_busy(busy)
 
     def _on_response(self, user_text, response):
-        """Ответ получен: озвучиваем и гасим визуализатор."""
+        """Ответ получен: озвучиваем и гасим эквалайзер."""
         self._say(response)
         self.visualizer.reset()
 
@@ -187,7 +298,6 @@ class EnglishTeacherApp:
             threading.Thread(target=tts.speak, args=(text,), daemon=True).start()
 
     def _on_recording_changed(self, recording):
-        """Кнопка записи: красная во время записи, обычная после."""
         self.control_bar.set_recording(recording)
 
     def _on_recognized(self, text, lang):
@@ -251,13 +361,14 @@ class EnglishTeacherApp:
 
     def open_panel(self):
         if not self.panel_visible:
-            self.right_panel.pack(side="right", fill="y", padx=(0, 0))
             self.panel_visible = True
+            self._layout()
 
     def close_panel(self):
         if self.panel_visible:
-            self.right_panel.pack_forget()
             self.panel_visible = False
+            self.right_panel.place_forget()
+            self._layout()
 
     def save_settings(self):
         self._switch_mode(self.right_panel.get_mode())
@@ -289,18 +400,19 @@ class EnglishTeacherApp:
         """Одна точка смены темы вместо двух копий if/else с configure()."""
         p = self.palette
         self.window.configure(fg_color=p["window"])
-        self.main_container.configure(fg_color=p["window"])
-        self.left_frame.configure(fg_color=p["surface"])
-        self.title_label.configure(text_color=p["text_strong"])
+        self.base.configure(bg=p["grad_top"])
+        self.left_frame.configure(fg_color=p["surface"], border_color=p["border"])
+        self.hero.configure(fg_color=p["surface"])
 
+        self._hero_cache = (None, None)          # шапку пересобрать под новую палитру
         self.visualizer.apply_theme(p)
         self.chat_view.apply_theme(p)
         self.input_bar.apply_theme(p)
         self.control_bar.apply_theme(p)
         self.right_panel.apply_theme(p)
 
-        # бейдж перекрашиваем по текущему состоянию сервера
         self._on_server_state(self.server_state, "")
+        self._redraw()                            # фон + шапка + раскладка
 
     # =====================================================
     # Сервер и жизненный цикл
@@ -313,14 +425,11 @@ class EnglishTeacherApp:
         self.window.mainloop()
 
     def on_closing(self):
-        try:
-            self.monitor.stop()
-        except Exception:
-            pass
-        try:
-            self.dispatcher.stop()
-        except Exception:
-            pass
+        for stopper in (self.monitor.stop, self.dispatcher.stop):
+            try:
+                stopper()
+            except Exception:
+                pass
         if self.recorder.is_recording:
             self.recorder.stop()
         self.window.destroy()
