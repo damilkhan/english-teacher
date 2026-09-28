@@ -56,6 +56,13 @@ NOT_READY_OFFLINE = "❌ LLM-сервер не отвечает. Подробн�
 
 HERO_HEIGHT = 92
 PANEL_WIDTH = 288
+TITLE_POS = (22, 17)        # заголовок шапки (x, y) внутри шапки
+SUBTITLE_POS = (24, 50)     # подпись под заголовком
+BADGE_MARGIN = 18           # отступ пилюли от правого края шапки
+TITLE_EMOJI = "🎙️"
+TITLE_TEXT = "ИИ-ПРЕПОДАВАТЕЛЬ"
+SUBTITLE_TEXT = "Джейн · локальный преподаватель английского"
+INITIAL_STATUS = ("● Проверяю сервер…", "muted")
 REDRAW_DELAY_MS = 90
 
 
@@ -72,6 +79,8 @@ class EnglishTeacherApp:
         self.busy = False
         self.server_state = "offline"
         self.server_ready = False
+        self._status_text, self._status_color = INITIAL_STATUS
+        self._hero_fonts = {}      # заполним ниже, после создания окна
 
         # ---------- окно ----------
         self.window = ctk.CTk()
@@ -84,6 +93,7 @@ class EnglishTeacherApp:
 
         # шрифты подбираем, когда окно уже есть (нужен список семейств системы)
         theme.resolve_fonts(self.window)
+        self._hero_fonts = theme.pillow_fonts()   # и файлы для отрисовки шапки
 
         # ---------- фон: градиент на Canvas ----------
         self._bg_job = None
@@ -177,32 +187,22 @@ class EnglishTeacherApp:
                                          on_save=self.save_settings, on_close=self.close_panel)
 
     def _build_hero(self):
-        """Градиентная шапка: картинка-фон + тексты поверх неё."""
+        """Шапка — ОДНА картинка: градиент, заголовок, подпись и пилюля статуса.
+
+        Раньше здесь лежали обычные CTkLabel поверх градиента. Customtkinter
+        для bg_color="transparent" берёт цвет РОДИТЕЛЯ (цвет карточки), поэтому
+        под каждой строкой заголовка рисовался тёмный прямоугольник вплотную
+        к буквам, а под круглой пилюлей «Готов» — тёмный квадрат. Теперь
+        текстов-виджетов на градиенте нет вообще: всё вписано в изображение.
+        """
         p = self.palette
         self.hero = ctk.CTkFrame(self.left_frame, fg_color=p["surface"],
                                  corner_radius=theme.R["card"], height=HERO_HEIGHT)
         self.hero.pack_propagate(False)
 
-        # фон-градиент шапки (создаём первым → он под текстами)
-        self.hero_bg = ctk.CTkLabel(self.hero, text="", fg_color="transparent")
+        self.hero_bg = ctk.CTkLabel(self.hero, text="", fg_color="transparent",
+                                    bg_color=p["hero_a"])
         self.hero_bg.place(x=0, y=0, relwidth=1, relheight=1)
-
-        self.title_label = ctk.CTkLabel(self.hero, text="🎙️  ИИ-ПРЕПОДАВАТЕЛЬ",
-                                        font=theme.FONT_TITLE, text_color="#FFFFFF")
-        self.title_label.place(x=22, y=16)
-
-        self.subtitle_label = ctk.CTkLabel(self.hero,
-                                          text="Джейн · локальный преподаватель английского",
-                                          font=theme.FONT_SUBTITLE, text_color="#DAD3FF")
-        self.subtitle_label.place(x=24, y=50)
-
-        self.status_badge = ctk.CTkLabel(self.hero, text="● Проверяю сервер…",
-                                         font=theme.FONT_SMALL,
-                                         text_color=p["muted"],
-                                         fg_color=p["muted_soft"],
-                                         corner_radius=theme.R["pill"],
-                                         padx=12, pady=5)
-        self.status_badge.place(relx=1.0, rely=0.5, x=-18, anchor="e")
 
     # =====================================================
     # Фон-градиент и раскладка
@@ -252,19 +252,39 @@ class EnglishTeacherApp:
 
         self._update_hero(max(160, left_w - 2 * theme.CARD_PAD))
 
-    def _update_hero(self, width):
-        """Градиент шапки пересобираем только при смене ширины или темы."""
-        key = (int(width), self.current_theme)
+    def _update_hero(self, width=None):
+        """Собирает шапку картинкой: градиент + тексты + пилюля статуса.
+
+        Пересобираем только при смене ширины, темы или текста статуса —
+        иначе картинка генерировалась бы каждые 3 секунды (опрос сервера).
+        """
+        if width is None:
+            width = self.hero.winfo_width()
+        width = int(width)
+        if width < 50:
+            return
+        key = (width, self.current_theme, self._status_text, self._status_color)
         if self._hero_cache[0] == key:
             return
+
+        p = self.palette
         try:
-            p = self.palette
-            img = gradient.hero(width, HERO_HEIGHT, p["hero_a"], p["hero_b"],
-                                radius=theme.R["card"], bg=p["surface"])
-            cimg = ctk.CTkImage(light_image=img, dark_image=img, size=(width, HERO_HEIGHT))
+            img = gradient.hero_full(
+                (width, HERO_HEIGHT), p,
+                emoji=TITLE_EMOJI, title=TITLE_TEXT, subtitle=SUBTITLE_TEXT,
+                badge=self._status_text,
+                badge_text_color=p.get(self._status_color, p["ok"]),
+                badge_bg=p.get(self._status_color + "_soft", p["muted_soft"]),
+                fonts=self._hero_fonts,
+                title_pos=TITLE_POS, subtitle_pos=SUBTITLE_POS,
+                badge_margin=BADGE_MARGIN, radius=theme.R["card"],
+            )
+            cimg = ctk.CTkImage(light_image=img, dark_image=img,
+                                size=(width, HERO_HEIGHT))
         except Exception as exc:
             print(f"⚠️ Не удалось собрать шапку: {exc}")
             return
+
         self._hero_cache = (key, cimg)          # держим ссылку, иначе картинка пропадёт
         try:
             self.hero_bg.configure(image=cimg)
@@ -285,13 +305,16 @@ class EnglishTeacherApp:
         self.chat_view.add_message(sender, text)
 
     def _set_status(self, text, color_key="ok"):
-        """Бейдж-«пилюля»: цвет текста и мягкая подложка по состоянию."""
-        p = self.palette
-        self.status_badge.configure(
-            text=text,
-            text_color=p.get(color_key, p["ok"]),
-            fg_color=p.get(color_key + "_soft", p["muted_soft"]),
-        )
+        """Пилюля статуса в шапке.
+
+        Текст вписан в картинку шапки, поэтому здесь только запоминаем
+        состояние и просим перерисовать — но лишь если оно изменилось
+        (иначе шапка пересобиралась бы на каждом опросе сервера).
+        """
+        if (text, color_key) == (self._status_text, self._status_color):
+            return
+        self._status_text, self._status_color = text, color_key
+        self._update_hero()
 
     def _set_busy(self, busy):
         self.busy = busy
@@ -414,6 +437,7 @@ class EnglishTeacherApp:
         self.base.configure(bg=p["grad_top"])
         self.left_frame.configure(fg_color=p["surface"], border_color=p["border"])
         self.hero.configure(fg_color=p["surface"])
+        self.hero_bg.configure(bg_color=p["hero_a"])
 
         self._hero_cache = (None, None)          # шапку пересобрать под новую палитру
         self.visualizer.apply_theme(p)

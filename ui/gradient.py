@@ -88,16 +88,59 @@ def rounded(img, radius, bg):
     return base
 
 
-def hero(width, height, c1, c2, radius, bg, angle=35):
-    """Шапка: диагональный градиент со скруглёнными углами."""
-    w = max(2, int(width))
-    h = max(2, int(height))
-    return rounded(diagonal((w, h), c1, c2, angle=angle), radius, bg)
+# ---------------------------------------------------------
+# Шапка целиком
+# ---------------------------------------------------------
+def hero_full(size, pal, emoji="", title="", subtitle="", badge=None,
+              badge_text_color=None, badge_bg=None, fonts=None,
+              title_pos=(22, 17), subtitle_pos=(24, 50), badge_margin=18,
+              radius=16, title_color="#FFFFFF", subtitle_color="#DAD3FF",
+              badge_pad_x=14, badge_pill_h=30, emoji_gap=10):
+    """Собирает шапку полностью: градиент, скругление, эмодзи, заголовок,
+    подпись и пилюлю статуса.
 
+    Текст вписывается ПРЯМО в картинку, потому что виджеты поверх градиента
+    красят под собой прямоугольник цвета родителя: у строк заголовка получался
+    тёмный фон вплотную к буквам, а у круглой пилюли «Готов» — тёмный квадрат.
+    """
+    w, h = max(2, int(size[0])), max(2, int(size[1]))
+    img = rounded(diagonal((w, h), pal["hero_a"], pal["hero_b"]), radius, pal["surface"])
+    draw = ImageDraw.Draw(img)
+    fonts = fonts or {}
 
-def strip(size, c1, c2):
-    """Тонкая градиентная полоска (акцентная линия)."""
-    return vertical((max(1, int(size[0])), max(1, int(size[1]))), c1, c2)
+    # заголовок (эмодзи рисуем цветным — через seguiemj + embedded_color)
+    x, y = title_pos
+    e_font = fonts.get("emoji")
+    if emoji and e_font is not None:
+        try:
+            draw.text((x, y), emoji, font=e_font, fill=title_color, embedded_color=True)
+            x += int(draw.textlength(emoji, font=e_font)) + emoji_gap
+        except Exception:
+            pass
+    t_font = fonts.get("title")
+    if title and t_font is not None:
+        draw.text((x, y), title, font=t_font, fill=title_color)
+
+    # подпись
+    s_font = fonts.get("subtitle")
+    if subtitle and s_font is not None:
+        draw.text(subtitle_pos, subtitle, font=s_font, fill=subtitle_color)
+
+    # пилюля статуса у правого края
+    b_font = fonts.get("badge")
+    if badge and b_font is not None and badge_bg:
+        try:
+            tw = draw.textlength(badge, font=b_font)
+        except Exception:
+            tw = len(badge) * 7
+        x1 = w - badge_margin
+        x0 = max(badge_margin, x1 - tw - 2 * badge_pad_x)
+        y0 = max(0, (h - badge_pill_h) // 2)
+        y1 = y0 + badge_pill_h
+        draw.rounded_rectangle([x0, y0, x1, y1], radius=badge_pill_h // 2, fill=badge_bg)
+        draw.text(((x0 + x1) / 2.0, (y0 + y1) / 2.0), badge, font=b_font,
+                  fill=badge_text_color or "#FFFFFF", anchor="mm")
+    return img
 
 
 # ---------------------------------------------------------

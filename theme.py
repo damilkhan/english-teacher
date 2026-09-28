@@ -2,7 +2,9 @@
 # =========================================================
 # THEME.PY — единственный источник цветов, шрифтов и радиусов
 # =========================================================
-# Дизайн переделан: «полупрозрачные карточки на градиенте».
+# Дизайн: «парящие карточки на градиенте». Тексты шапки рисуются прямо
+# в изображении (см. ui/gradient.hero_full) — виджеты поверх градиента
+# в customtkinter подкрашиваются цветом родителя и дают тёмные прямоугольники.
 #   * фон окна — мягкий вертикальный градиент (тёмная тема: почти
 #     чёрный с уходом в фиолетовый, светлая: белый в лаванду);
 #   * карточки — плотные, скруглённые, с тонкой рамкой;
@@ -92,7 +94,6 @@ R = {                      # радиусы скругления
     "block": 12,
     "button": 10,
     "input": 10,
-    "pill": 12,
     "strip": 2,
 }
 
@@ -107,29 +108,24 @@ GAP = 14                   # зазор между колонками
 # подобрать шрифт можно только зная, что установлено в системе.
 _TITLE_FAMILY = "Segoe UI"
 _UI_FAMILY = "Segoe UI"
-_MONO_FAMILY = "Consolas"
 
-FONT_TITLE = (_TITLE_FAMILY, 20, "bold")       # заголовок шапки
-FONT_SUBTITLE = (_UI_FAMILY, 12)               # подпись под заголовком
 FONT_PANEL_TITLE = (_TITLE_FAMILY, 15, "bold") # «Настройки»
 FONT_SECTION = (_UI_FAMILY, 11, "bold")        # подписи секций (РЕЖИМ, ТЕМА)
 FONT_UI = (_UI_FAMILY, 13)                     # кнопки, обычные подписи
 FONT_BODY = ("Segoe UI Emoji", 14)             # текст в чате (умеет эмодзи)
 FONT_HEAD = (_UI_FAMILY, 11, "bold")           # ники и время в чате
-FONT_SMALL = (_UI_FAMILY, 11)                  # бейдж статуса
-FONT_MONO = (_MONO_FAMILY, 11)
+FONT_SMALL = (_UI_FAMILY, 11)                  # подписи-секции
 
 # Кандидаты: берём первый установленный
 _TITLE_CANDIDATES = ("Segoe UI Variable Display", "Segoe UI Semibold", "Segoe UI", "Arial")
 _UI_CANDIDATES = ("Segoe UI Variable Text", "Segoe UI", "Arial")
-_MONO_CANDIDATES = ("Cascadia Code", "Consolas", "Courier New")
 
 
 def resolve_fonts(root):
     """Подбирает шрифты по факту (вызывать после создания окна Tk)."""
-    global _TITLE_FAMILY, _UI_FAMILY, _MONO_FAMILY
-    global FONT_TITLE, FONT_SUBTITLE, FONT_PANEL_TITLE, FONT_SECTION
-    global FONT_UI, FONT_HEAD, FONT_SMALL, FONT_MONO
+    global _TITLE_FAMILY, _UI_FAMILY
+    global FONT_PANEL_TITLE, FONT_SECTION
+    global FONT_UI, FONT_HEAD, FONT_SMALL
 
     try:
         from tkinter import font as tkfont
@@ -145,16 +141,59 @@ def resolve_fonts(root):
 
     _TITLE_FAMILY = pick(_TITLE_CANDIDATES, "Segoe UI")
     _UI_FAMILY = pick(_UI_CANDIDATES, "Segoe UI")
-    _MONO_FAMILY = pick(_MONO_CANDIDATES, "Consolas")
 
-    FONT_TITLE = (_TITLE_FAMILY, 20, "bold")
-    FONT_SUBTITLE = (_UI_FAMILY, 12)
     FONT_PANEL_TITLE = (_TITLE_FAMILY, 15, "bold")
     FONT_SECTION = (_UI_FAMILY, 11, "bold")
     FONT_UI = (_UI_FAMILY, 13)
     FONT_HEAD = (_UI_FAMILY, 11, "bold")
     FONT_SMALL = (_UI_FAMILY, 11)
-    FONT_MONO = (_MONO_FAMILY, 11)
+
+
+# ---------------------------------------------------------
+# Шрифты для Pillow (шапка рисуется прямо в картинке)
+# ---------------------------------------------------------
+# Виджеты поверх градиента не годятся: customtkinter красит под ними
+# прямоугольник цвета родителя. Поэтому текст шапки вписываем в изображение.
+HERO_FONT_SIZES = {"title": 21, "subtitle": 12, "badge": 11, "emoji": 21}
+
+_FONT_FILES = {
+    "title":    ("seguisb.ttf", "segoeuib.ttf", "segoeui.ttf"),
+    "subtitle": ("segoeui.ttf", "arial.ttf"),
+    "badge":    ("segoeui.ttf", "arial.ttf"),
+    "emoji":    ("seguiemj.ttf",),
+}
+
+
+def _fonts_dir():
+    import os
+    return os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
+
+
+def pillow_fonts(sizes=None):
+    """Загружает шрифты для Pillow. Если файла нет — берём встроенный."""
+    import os
+    try:
+        from PIL import ImageFont
+    except Exception:
+        return {}
+    sizes = sizes or HERO_FONT_SIZES
+    out = {}
+    for kind, size in sizes.items():
+        font = None
+        for name in _FONT_FILES.get(kind, ()):
+            try:
+                font = ImageFont.truetype(os.path.join(_fonts_dir(), name), size)
+                break
+            except Exception:
+                continue
+        if font is None:
+            try:
+                font = ImageFont.load_default(size)
+            except Exception:
+                font = None
+        if font is not None:
+            out[kind] = font
+    return out
 
 
 def palette(name):
