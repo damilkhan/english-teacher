@@ -89,13 +89,54 @@ def rounded(img, radius, bg):
 
 
 # ---------------------------------------------------------
+# Измерение «чернил» текста
+# ---------------------------------------------------------
+_PAD = 4      # отступ при измерении на временном холсте
+
+
+def _ink(text, font, embedded=False, fill=(255, 255, 255, 255)):
+    """Возвращает (картинка_чернил, bbox) для текста или эмодзи.
+
+    Нужно потому, что Pillow считает ширину по РАМКЕ глифа, а не по
+    видимым пикселям: у эмодзи 🎙️ textlength() даёт 58 px, тогда как
+    сами чернила занимают 15 px (слева пусто 7 px, справа 36 px).
+    Из-за этого между значком и заголовком возникал отступ 48 px.
+    """
+    if font is None or not text:
+        return None, None
+    side = max(24, getattr(font, "size", 16))
+    tmp = Image.new("RGBA", (side * (len(text) + 4), side * 4), (0, 0, 0, 0))
+    drawer = ImageDraw.Draw(tmp)
+    try:
+        drawer.text((_PAD, _PAD), text, font=font, fill=fill, embedded_color=embedded)
+    except TypeError:                      # старая Pillow без embedded_color
+        drawer.text((_PAD, _PAD), text, font=font, fill=fill)
+    bbox = tmp.getbbox()
+    if bbox is None:
+        return None, None
+    return tmp.crop(bbox), bbox
+
+
+def _ink_center_offset(text, font):
+    """На сколько центр чернил текста ниже точки отрисовки draw.text().
+
+    У эмодзи и у текста разные базовые линии, поэтому одинаковые координаты
+    дают сдвиг по вертикали (значок уезжал на 8.5 px вверх).
+    """
+    _, bbox = _ink(text, font)
+    if bbox is None:
+        return getattr(font, "size", 14) / 2.0
+    return (bbox[1] + bbox[3]) / 2.0 - _PAD
+
+
+# ---------------------------------------------------------
 # Шапка целиком
 # ---------------------------------------------------------
 def hero_full(size, pal, emoji="", title="", subtitle="", badge=None,
               badge_text_color=None, badge_bg=None, fonts=None,
               title_pos=(22, 17), subtitle_pos=(24, 50), badge_margin=18,
               radius=16, title_color="#FFFFFF", subtitle_color="#DAD3FF",
-              badge_pad_x=14, badge_pill_h=30, emoji_gap=10):
+              badge_pad_x=14, badge_pill_h=30, emoji_gap=8):
     """Собирает шапку полностью: градиент, скругление, эмодзи, заголовок,
     подпись и пилюлю статуса.
 
@@ -108,16 +149,24 @@ def hero_full(size, pal, emoji="", title="", subtitle="", badge=None,
     draw = ImageDraw.Draw(img)
     fonts = fonts or {}
 
-    # заголовок (эмодзи рисуем цветным — через seguiemj + embedded_color)
+    # --- заголовок: значок + текст ---
     x, y = title_pos
-    e_font = fonts.get("emoji")
-    if emoji and e_font is not None:
-        try:
-            draw.text((x, y), emoji, font=e_font, fill=title_color, embedded_color=True)
-            x += int(draw.textlength(emoji, font=e_font)) + emoji_gap
-        except Exception:
-            pass
     t_font = fonts.get("title")
+    e_font = fonts.get("emoji")
+
+    if emoji and e_font is not None:
+        # рисуем значок отдельной картинкой и вставляем по ЧЕРНИЛАМ, а не по
+        # рамке глифа: так отступ равен ровно emoji_gap, а не «emoji_gap + 36»
+        glyph, _ = _ink(emoji, e_font, embedded=True)
+        if glyph is not None:
+            # вертикаль: центруем чернила значка по чернилам заголовка
+            center = y + _ink_center_offset(title, t_font)
+            img.paste(glyph, (int(x), int(round(center - glyph.height / 2.0))),
+                      glyph.split()[3])
+            x += glyph.width + emoji_gap
+        else:
+            print("⚠️ Значок шапки не нарисовался — пропускаю")
+
     if title and t_font is not None:
         draw.text((x, y), title, font=t_font, fill=title_color)
 
