@@ -76,8 +76,10 @@ class EnglishTeacherApp:
         # ---------- окно ----------
         self.window = ctk.CTk()
         self.window.title("English Teacher — Jane")
-        self.window.geometry("1160x780")
-        self.window.minsize(940, 660)
+        self.window.geometry("1160x760")
+        # минимальная высота уменьшена: при 620 px всё помещается целиком
+        # (шапка + эквалайзер + чат + поле ввода + кнопки)
+        self.window.minsize(920, 620)
         self.window.configure(fg_color=self.palette["window"])
 
         # шрифты подбираем, когда окно уже есть (нужен список семейств системы)
@@ -153,12 +155,21 @@ class EnglishTeacherApp:
 
         self._build_hero()
 
-        # порядок упаковки = порядок сверху вниз
-        self.hero.pack(fill="x", padx=theme.CARD_PAD, pady=(theme.CARD_PAD, 8))
-        self.visualizer.pack(fill="x", padx=theme.CARD_PAD + 4, pady=(0, 6))
-        self.chat_view.pack(fill="both", expand=True, padx=theme.CARD_PAD, pady=(0, 10))
-        self.input_bar.pack(fill="x", padx=theme.CARD_PAD, pady=(0, 8))
-        self.control_bar.pack(fill="x", padx=theme.CARD_PAD, pady=(0, theme.CARD_PAD))
+        # Порядок упаковки важен! pack отдаёт место СНАЧАЛА упакованным,
+        # поэтому нижние элементы крепим к низу первыми — тогда они никогда
+        # не обрезаются, а чат забирает ровно то, что осталось (expand).
+        # Раньше чат упаковывался раньше кнопок: при недостатке высоты
+        # панель управления уходила за нижний край окна.
+        self.hero.pack(side="top", fill="x", padx=theme.CARD_PAD, pady=(theme.CARD_PAD, 8))
+        self.visualizer.pack(side="top", fill="x", padx=theme.CARD_PAD + 4, pady=(0, 6))
+
+        self.control_bar.pack(side="bottom", fill="x", padx=theme.CARD_PAD,
+                              pady=(0, theme.CARD_PAD))
+        self.input_bar.pack(side="bottom", fill="x", padx=theme.CARD_PAD, pady=(0, 8))
+
+        # чат — последним: он и только он растягивается
+        self.chat_view.pack(side="top", fill="both", expand=True,
+                            padx=theme.CARD_PAD, pady=(0, 10))
 
         # ---------- карточка «настройки» (появляется по кнопке) ----------
         self.right_panel = SettingsPanel(self.base, p,

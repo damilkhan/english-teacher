@@ -20,7 +20,8 @@ class ChatView(ctk.CTkFrame):
     def __init__(self, parent, palette, greeting=None, corner_radius=None):
         super().__init__(parent, fg_color=palette["chat_bg"],
                          corner_radius=corner_radius or theme.R["card"],
-                         border_width=1, border_color=palette["border"])
+                         border_width=1, border_color=palette["border"],
+                         height=140)   # запрос «минимум», растёт за счёт expand
         self.palette = palette
 
         # область текста внутри карточки
@@ -39,6 +40,7 @@ class ChatView(ctk.CTkFrame):
             selectbackground=palette["accent_soft"],
             selectforeground=palette["text_strong"],
             cursor="arrow",
+            height=6,          # 6 строк запроса; фактическую высоту даст expand
         )
         self.text.pack(side="left", fill="both", expand=True)
 

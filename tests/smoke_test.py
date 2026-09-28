@@ -279,6 +279,27 @@ def test_gui(e2e=False):
         app.window.update()
     check("возврат к тёмной теме", app.palette["window"] == theme.DARK["window"])
 
+    # --- раскладка: при минимальном размере окна ничего не обрезается ---
+    # Регрессия: раньше чат запрашивал 24 строки текста, из-за чего суммарный
+    # запрос детей превышал высоту карточки и последний упакованный виджет
+    # (панель кнопок) уезжал за нижний край при ЛЮБОМ размере окна.
+    for geo in ("920x620", "1160x760"):
+        app.window.geometry(geo)
+        for _ in range(30):
+            app.window.update()
+            time.sleep(0.02)
+        card_h = app.left_frame.winfo_height()
+        clipped = []
+        for name, widget in (("шапка", app.hero), ("эквалайзер", app.visualizer),
+                             ("чат", app.chat_view), ("поле ввода", app.input_bar),
+                             ("панель кнопок", app.control_bar)):
+            bottom = widget.winfo_y() + widget.winfo_height()
+            if not (widget.winfo_ismapped() and widget.winfo_height() > 0 and bottom <= card_h + 1):
+                clipped.append(f"{name} (низ {bottom} > {card_h})")
+        check(f"при окне {geo} все элементы помещаются", not clipped, "; ".join(clipped))
+        check(f"при окне {geo} чат не схлопнулся",
+              app.chat_view.winfo_height() > 120, app.chat_view.winfo_height())
+
     # команда смены режима должна работать локально, без сервера
     app.input_bar.set_text("перерыв")
     app.input_bar.on_send()
