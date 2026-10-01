@@ -3,6 +3,10 @@
 
 Редизайн: сообщения получили отступы (lmargin), воздух между репликами
 (spacing1/spacing3), ник окрашен по роли — Джейн акцентом, «Вы» цианом.
+
+Эмодзи теперь рисуются картинками (ui/emoji_render.py): Tk выводит цветной
+глиф Segoe UI Emoji чёрным контуром, поэтому в чате вместо 😊 был плоский
+значок, а на тёмной теме он почти не читался.
 """
 
 import tkinter as tk
@@ -11,9 +15,11 @@ from datetime import datetime
 import customtkinter as ctk
 
 import theme
+from ui import emoji_render
 
 USER_SENDERS = ("Вы", "Вы (голос)")
 DOT = "·"
+EMOJI_PAD = 1          # px воздуха вокруг картинки-эмодзи, чтобы не липла к буквам
 
 
 class ChatView(ctk.CTkFrame):
@@ -53,6 +59,18 @@ class ChatView(ctk.CTkFrame):
         self.scrollbar.pack(side="right", fill="y", padx=(0, 4), pady=6)
         self.text.configure(yscrollcommand=self.scrollbar.set)
 
+        # --- цветные эмодзи ---
+        # Tk не умеет цветные шрифты, поэтому эмодзи подменяются картинками.
+        # _image_tokens помнит, какой символ стоит за каждой картинкой, —
+        # иначе get_text() вернул бы текст без эмодзи.
+        self._emoji = emoji_render.EmojiImages(size=self._emoji_size(),
+                                               master=self.text)
+        self._image_tokens = {}
+        self._image_seq = 0
+        if not emoji_render.available():
+            print("ℹ️ Цветные эмодзи недоступны (нет Pillow или эмодзи-шрифта) — "
+                  "в чате будут обычные символы")
+
         self._configure_tags(palette)
         if greeting:
             sender, text = greeting
@@ -70,7 +88,8 @@ class ChatView(ctk.CTkFrame):
 
         self.text.configure(state="normal")
         self.text.insert("end", header + "\n", head_tag)
-        self.text.insert("end", f"{text}\n", body_tag)
+        self._insert_text(text, body_tag)
+        self.text.insert("end", "\n", body_tag)
         self.text.configure(state="disabled")
         self.text.see("end")
 
@@ -78,9 +97,63 @@ class ChatView(ctk.CTkFrame):
         self.text.configure(state="normal")
         self.text.delete("0.0", "end")
         self.text.configure(state="disabled")
+        # картинок в тексте больше нет — и имена их символов не нужны
+        self._image_tokens.clear()
+        self._emoji.clear()
 
     def get_text(self):
-        return self.text.get("0.0", "end")
+        """Весь текст чата. Эмодзи-картинки возвращаются своими символами.
+
+        Через Text.dump(), потому что картинка для Tk — не текст: обычный
+        get() её просто пропустил бы, и в «сыром» чате терялись бы эмодзи.
+        """
+        parts = []
+        for key, value, _index in self.text.dump("0.0", "end", text=True, image=True):
+            if key == "text":
+                parts.append(value)
+            elif key == "image":
+                parts.append(self._image_tokens.get(value, ""))
+        return "".join(parts)
+
+    # ---------- внутреннее ----------
+    def _insert_text(self, text, tag):
+        """Вставляет текст реплики, подменяя эмодзи цветными картинками.
+
+        Если картинку получить не удалось (нет Pillow, не нашёлся шрифт,
+        глиф оказался не цветным) — символ пишется текстом, как было до
+        ui/emoji_render.py.
+        """
+        if not text:
+            return
+        for is_emoji, chunk in emoji_render.split(text):
+            if not is_emoji:
+                self.text.insert("end", chunk, tag)
+                continue
+
+            photo = self._emoji.photo(chunk, master=self.text)
+            if photo is None:
+                self.text.insert("end", chunk, tag)
+                continue
+
+            self._image_seq += 1
+            name = f"emj{self._image_seq}"
+            self.text.image_create("end", image=photo, name=name,
+                                   align=emoji_render.ALIGN, padx=EMOJI_PAD)
+            # картинку тоже помечаем тегом реплики: если эмодзи стоит первым
+            # символом строки, отступ абзаца (lmargin1) Tk берёт именно с него
+            self.text.tag_add(tag, name)
+            self._image_tokens[name] = chunk
+
+    def _emoji_size(self):
+        """Размер картинок-эмодзи под шрифт чата (в пикселях, не «на глаз»)."""
+        try:
+            import tkinter.font as tkfont
+            font = tkfont.Font(root=self, font=theme.FONT_BODY)
+            points = abs(font.actual("size"))
+            scaling = float(self.tk.call("tk", "scaling"))
+            return emoji_render.size_from_font(points, scaling)
+        except Exception:
+            return emoji_render.DEFAULT_PX
 
     # ---------- оформление ----------
     def apply_theme(self, palette):
@@ -93,6 +166,8 @@ class ChatView(ctk.CTkFrame):
         self.scrollbar.configure(button_color=palette["btn"],
                                  button_hover_color=palette["btn_hover"])
         self._configure_tags(palette)
+        # картинки-эмодзи перерисовывать не нужно: фон у них прозрачный,
+        # поэтому они одинаково ложатся на светлую и тёмную палитру.
 
     def _configure_tags(self, palette):
         common = dict(lmargin1=14, lmargin2=14, rmargin=14)
