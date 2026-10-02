@@ -14,13 +14,20 @@
 # =========================================================
 
 import threading
+import time
 
 import level_test
 
+# Пауза ПОСЛЕ оценки ответа и ДО следующего вопроса. Без неё подсветка
+# «верно/неверно» мелькала мгновение и её нельзя было разглядеть: следующий
+# вопрос перерисовывал кнопки сразу за проверкой.
+FEEDBACK_PAUSE = 1.0
+
 
 class LevelTestController:
-    def __init__(self, dispatch=None):
+    def __init__(self, dispatch=None, feedback_pause=FEEDBACK_PAUSE):
         self._dispatch = dispatch or (lambda fn: fn())
+        self.feedback_pause = feedback_pause
         self.busy = False
 
     # -----------------------------------------------------
@@ -55,6 +62,12 @@ class LevelTestController:
             try:
                 check = level_test.check_answer(user_id, answer)
                 self._dispatch(lambda: self._emit(on_feedback, check))
+
+                # даём разглядеть подсветку ответа, прежде чем задать следующий
+                time.sleep(self.feedback_pause)
+                if not level_test.is_running(user_id):
+                    self.busy = False      # тест прервали, пока шла пауза
+                    return
 
                 nxt = level_test.get_next_question(user_id, answer)
                 if nxt.get("finished"):

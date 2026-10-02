@@ -81,10 +81,25 @@ QUESTION_PROMPT_TEMPLATE = (
     "- Exactly 4 options; exactly one is correct; three are plausible.\n"
     "- Vocabulary, grammar and sentence length MUST match level %(level)s.\n"
     "- Do NOT add explanations, comments, numbering or markdown.\n"
+    "%(avoid)s"
     "Return ONLY valid JSON in exactly this shape:\n"
     + QUESTION_JSON_SHAPE + "\n"
     "where \"correct\" is the 0-based index of the right option.\n"
 )
+
+# Модель НЕ помнит, что уже спрашивала: без этого на одной и той же
+# сложности она выдаёт один и тот же вопрос слово в слово (особенно на «полу»
+# A1, где неверный ответ не понижает сложность). Поэтому передаём уже
+# заданные вопросы и просим их не повторять.
+#
+# ВАЖНО: список идёт ОДНОЙ строкой-правилом ВНУТРИ «Rules», а инструкция
+# «Return ONLY valid JSON» остаётся ПОСЛЕДНЕЙ. Если поставить список из
+# дефисов после инструкции, модель «продолжает список» и возвращает не JSON,
+# а новый перечень вопросов — проверено на Gemma.
+MAX_AVOID_LIST = 8
+
+AVOID_RULE = ("- Do NOT repeat or reuse any of these already asked questions "
+              "(write a DIFFERENT one): %s\n")
 
 # Ожидаемая сложность в терминах CEFR — чтобы модель понимала задание.
 _LEVEL_INSTRUCTION = {
@@ -99,6 +114,9 @@ _LEVEL_INSTRUCTION = {
 # Резервный банк вопросов (на случай, если модель недоступна/вернула мусор).
 # Тест обязан работать всегда — даже без готового сервера.
 # ---------------------------------------------------------
+# Пул запасных вопросов. По несколько на уровень: если модель недоступна
+# или повторяется, вопросы берутся отсюда, и чем шире пул, тем меньше
+# повторов (особенно на «полу» A1, где неверный ответ не меняет сложность).
 _QUESTION_BANK = {
     1: [  # A1
         {"question": "Choose the correct sentence.",
@@ -106,24 +124,62 @@ _QUESTION_BANK = {
                      "She am a teacher.", "She be a teacher."], "correct": 0},
         {"question": "What ___ your name?",
          "options": ["is", "are", "am", "be"], "correct": 0},
+        {"question": "This is ___ apple.",
+         "options": ["an", "a", "the", "—"], "correct": 0},
+        {"question": "They ___ from Spain.",
+         "options": ["are", "is", "am", "be"], "correct": 0},
+        {"question": "I have two ___.",
+         "options": ["cats", "cat", "cates", "catz"], "correct": 0},
+        {"question": "How old ___ you?",
+         "options": ["are", "is", "am", "be"], "correct": 0},
+        {"question": "I ___ a student.",
+         "options": ["am", "is", "are", "be"], "correct": 0},
+        {"question": "We ___ TV every day.",
+         "options": ["watch", "watches", "watching", "is watch"], "correct": 0},
     ],
     2: [  # A2
         {"question": "I ___ to the cinema yesterday.",
          "options": ["went", "go", "goed", "going"], "correct": 0},
         {"question": "She is older ___ me.",
          "options": ["than", "then", "as", "that"], "correct": 0},
+        {"question": "We ___ to the park last Sunday.",
+         "options": ["went", "go", "gone", "going"], "correct": 0},
+        {"question": "This book is ___ than that one.",
+         "options": ["better", "gooder", "more good", "best"], "correct": 0},
+        {"question": "She ___ TV every evening.",
+         "options": ["watches", "watch", "watching", "is watch"], "correct": 0},
+        {"question": "She ___ her homework yesterday.",
+         "options": ["did", "does", "do", "doing"], "correct": 0},
+        {"question": "There ___ some milk in the fridge.",
+         "options": ["is", "are", "be", "am"], "correct": 0},
     ],
     3: [  # B1
         {"question": "If I ___ more time, I would travel more.",
          "options": ["had", "have", "will have", "having"], "correct": 0},
         {"question": "He's looking forward to ___ his new job.",
          "options": ["starting", "start", "started", "starts"], "correct": 0},
+        {"question": "I've lived here ___ 2015.",
+         "options": ["since", "for", "from", "during"], "correct": 0},
+        {"question": "He suggested ___ a taxi.",
+         "options": ["taking", "to take", "take", "took"], "correct": 0},
+        {"question": "You ___ smoke here — it's forbidden.",
+         "options": ["mustn't", "don't have to", "needn't", "couldn't"], "correct": 0},
+        {"question": "I'm used to ___ up early.",
+         "options": ["getting", "get", "got", "gets"], "correct": 0},
     ],
     4: [  # B2
         {"question": "Hardly ___ the meeting begun when the power went out.",
          "options": ["had", "has", "did", "was"], "correct": 0},
         {"question": "The proposal was turned ___ by the committee.",
          "options": ["down", "off", "up", "over"], "correct": 0},
+        {"question": "By the time we arrived, the film ___ already started.",
+         "options": ["had", "has", "was", "did"], "correct": 0},
+        {"question": "She's not used ___ so early.",
+         "options": ["to getting up", "to get up", "get up", "getting up"], "correct": 0},
+        {"question": "I'd rather you ___ tell anyone.",
+         "options": ["didn't", "don't", "won't", "not"], "correct": 0},
+        {"question": "She insisted ___ paying for dinner.",
+         "options": ["on", "in", "for", "to"], "correct": 0},
     ],
     5: [  # C1
         {"question": "___ the adverse weather, the expedition reached the summit.",
@@ -131,6 +187,15 @@ _QUESTION_BANK = {
          "correct": 0},
         {"question": "His argument, however ___ , failed to convince the panel.",
          "options": ["cogent", "cogently", "cogency", "cogency's"], "correct": 0},
+        {"question": "___ had she spoken than the crowd erupted.",
+         "options": ["No sooner", "Hardly", "Scarcely", "Only"], "correct": 0},
+        {"question": "The committee was ___ divided over the issue.",
+         "options": ["deeply", "deep", "deepness", "deepening"], "correct": 0},
+        {"question": "It's high time we ___ this matter seriously.",
+         "options": ["took", "take", "will take", "have taken"], "correct": 0},
+        {"question": "The results are ___ with our hypothesis.",
+         "options": ["consistent", "consist", "consistency", "consisting"],
+         "correct": 0},
     ],
 }
 
@@ -160,14 +225,21 @@ def _get_client():
 # Генерация вопроса через активную модель
 # ---------------------------------------------------------
 def _ask_llm(prompt):
-    """Возвращает текст ответа модели или None (оффлайн/ошибка)."""
+    """Возвращает текст ответа модели или None (оффлайн/ошибка).
+
+    Промпт оборачиваем в разметку Gemma (<start_of_turn>…): на «сыром» тексте
+    инструктованная модель часто отдаёт ПУСТОЙ ответ (и каждый вопрос уходил в
+    резервный банк), а в формате диалога стабильно возвращает JSON.
+    """
     client = _get_client()
     if client is None:
         return None
+    text = ("<start_of_turn>user\n" + prompt + "<end_of_turn>\n"
+            "<start_of_turn>model\n")
     try:
         ok, payload = client.complete(
-            prompt, max_tokens=300, temperature=0.5,
-            stop=["\n\n", "<end_of_turn>"], timeout=90)
+            text, max_tokens=300, temperature=0.5,
+            stop=["<end_of_turn>"], timeout=90)
     except Exception as exc:                       # клиент любого типа
         print("⚠️ level_test: LLM недоступна (%s)" % exc)
         return None
@@ -217,26 +289,72 @@ def _parse_question(raw, difficulty, topic):
             "source": "model"}
 
 
-def _bank_question(difficulty, topic, used_texts):
-    """Вопрос из резервного банка (без повторов, если возможно)."""
+def _bank_question(difficulty, topic, used_texts, last_text=None):
+    """Вопрос из резервного банка.
+
+    Не повторяет уже заданные вопросы. Если пул вычерпан (например, ученик
+    долго сидит на одной сложности), не повторяет хотя бы ПРЕДЫДУЩИЙ вопрос —
+    иначе подряд шёл один и тот же вопрос, что читается как подсказка.
+    """
     pool = _QUESTION_BANK.get(difficulty) or _QUESTION_BANK[START_DIFFICULTY]
     fresh = [q for q in pool if q["question"] not in used_texts]
+    if not fresh and last_text:
+        fresh = [q for q in pool if q["question"] != last_text]
     chosen = random.choice(fresh or pool)
     item = dict(chosen)
     item.update({"difficulty": difficulty, "topic": topic, "source": "bank"})
     return item
 
 
-def _generate_question(difficulty, topic, used_texts):
-    """Сначала — модель; при неудаче — резервный банк."""
+def _avoid_block(used_texts):
+    """Строка-правило «не повторяй эти вопросы».
+
+    Пустая строка, если вопросов ещё не было. Вопросы склеены через " | "
+    в ОДНУ строку: так модель не принимает их за начало нового списка.
+    """
+    items = [t.replace("\n", " ").strip() for t in used_texts if t]
+    if not items:
+        return ""
+    items = items[-MAX_AVOID_LIST:]
+    return AVOID_RULE % " | ".join(t[:120] for t in items)
+
+
+def _shuffle_options(question):
+    """Перемешивает варианты ответа.
+
+    Иначе правильный ответ всегда стоит на одном и том же месте (в резервном
+    банке — вообще всегда первый), и это читается как подсказка. Индекс
+    правильного ответа пересчитываем под новый порядок.
+    """
+    options = list(question["options"])
+    if len(options) < 2:
+        return question
+    order = list(range(len(options)))
+    random.shuffle(order)
+    question["options"] = [options[i] for i in order]
+    question["correct"] = order.index(question["correct"])
+    return question
+
+
+def _generate_question(difficulty, topic, used_texts, last_text=None):
+    """Сначала — модель; при повторе/неудаче — резервный банк.
+
+    Вопрос не повторяет уже заданные. Отдельно следим, чтобы он не совпал с
+    ПРЕДЫДУЩИМ: именно такие «один-в-один» повторы подряд выглядели как
+    подсказка.
+    """
     level = DIFFICULTY_TO_LEVEL[difficulty]
     prompt = QUESTION_PROMPT_TEMPLATE % {
         "level": _LEVEL_INSTRUCTION[level],
         "topic": topic,
+        "avoid": _avoid_block(used_texts),
     }
     question = _parse_question(_ask_llm(prompt), difficulty, topic)
-    if question is None:
-        question = _bank_question(difficulty, topic, used_texts)
+    if question is None or question["question"] in used_texts:
+        question = _bank_question(difficulty, topic, used_texts, last_text)
+    # жёсткая гарантия: не повторяем предыдущий вопрос, даже если так вышло
+    if last_text and question["question"] == last_text:
+        question = _bank_question(difficulty, topic, used_texts | {last_text}, last_text)
     return question
 
 
@@ -268,7 +386,9 @@ def _queue_question(session, difficulty):
     """Кладёт новый вопрос в сессию, возвращает его публичное представление."""
     topic = _pick_topic(session)
     used_texts = {h["question"] for h in session["history"]}
-    session["current"] = _generate_question(difficulty, topic, used_texts)
+    last_text = session["history"][-1]["question"] if session["history"] else None
+    session["current"] = _shuffle_options(
+        _generate_question(difficulty, topic, used_texts, last_text))
     session["index"] += 1
     session["evaluated"] = False
     session["last_check"] = None
