@@ -371,12 +371,20 @@ def test_users():
         check("get_user", user_manager.get_user(1)["level"] == "A2")
         check("update_user меняет поле",
               user_manager.update_user(1, {"level": "B1"}) and user_manager.get_user(1)["level"] == "B1")
+        check("update_user без уровня сохраняет его",
+              user_manager.update_user(1, {"goal": "цель"}) and
+              user_manager.get_user(1)["level"] == "B1")
         check("save_user сохраняет", user_manager.save_user(1, {"name": "Аня-2"})
               and user_manager.get_user(1)["name"] == "Аня-2")
 
         for i in range(2, 9):
             user_manager.create_user("U%d" % i)
         check("лимит 8 соблюдается", user_manager.count() == 8 and user_manager.is_full())
+        check("профиль без теста → уровень не определён",
+              user_manager.get_user(2)["level"] is None)
+        check("level_label: известный уровень", user_manager.level_label("B1") == "B1")
+        check("level_label: нет уровня",
+              user_manager.level_label(None) == user_manager.LEVEL_UNKNOWN_TEXT)
         check("9-й профиль не создаётся", user_manager.create_user("X") is None)
 
         user_manager.set_last_user(3)
@@ -411,6 +419,14 @@ def test_level_test():
     print("\n[4c] level_test: адаптивность и запись уровня")
     import level_test
 
+    # Варианты ответа теперь ПЕРЕМЕШИВАЮТСЯ, поэтому «отвечать нулём» нельзя.
+    # Тестовые помощники берут правильный индекс прямо из сессии.
+    def correct_index(u):
+        return level_test._SESSIONS[int(u)]["current"]["correct"]
+
+    def wrong_index(u):
+        return (correct_index(u) + 1) % 4
+
     class FakeLLM:
         def complete(self, prompt, max_tokens=None, temperature=None,
                      stop=None, timeout=None):
@@ -432,11 +448,15 @@ def test_level_test():
         q = level_test.start_test(uid)
         check("старт со сложности A2", q["difficulty_label"] == "A2" and len(q["options"]) == 4)
         check("правильный ответ наружу не отдаётся", "correct" not in q)
+        ci = correct_index(uid)
+        check("перемешивание вариантов сохраняет правильный ответ",
+              ci in range(4) and level_test.check_answer(uid, ci)["correct_answer"] == "a",
+              "correct=%d options=%s" % (ci, q["options"]))
 
         traj = [q["difficulty"]]
         total = 0
         while True:
-            nxt = level_test.get_next_question(uid, 0)      # всегда верно
+            nxt = level_test.get_next_question(uid, correct_index(uid))   # всегда верно
             if nxt.get("finished"):
                 total = nxt["result"]["total"]
                 break
@@ -464,7 +484,7 @@ def test_level_test():
         q = level_test.start_test(uid)
         down = [q["difficulty"]]
         while True:
-            nxt = level_test.get_next_question(uid, 1)      # всегда ошибка
+            nxt = level_test.get_next_question(uid, wrong_index(uid))     # всегда ошибка
             if nxt.get("finished"):
                 break
             down.append(nxt["difficulty"])
@@ -477,6 +497,25 @@ def test_level_test():
         q = level_test.start_test(uid)
         check("оффлайн: вопрос из резервного банка",
               bool(q["question"]) and len(q["options"]) == 4)
+
+        class StuckLLM:
+            # «Застрявшая» модель: всегда один и тот же вопрос (так ведёт себя
+            # реальная модель на одной сложности, т.к. не помнит, что спросила).
+            def complete(self, prompt, **k):
+                return True, ('{"question": "Same one?", "options": ["a","b","c","d"], '
+                              '"correct": 0}')
+
+        level_test.set_client(StuckLLM())
+        texts = [level_test.start_test(uid)["question"]]
+        for _ in range(8):      # держимся на полу A1 и жмём неверные ответы
+            nxt = level_test.get_next_question(uid, wrong_index(uid))
+            if nxt.get("finished"):
+                break
+            texts.append(nxt["question"])
+        check("повтор от модели не выдаётся дважды", texts[1] != texts[0],
+              "%r" % (texts[:2],))
+        check("подряд одинаковых вопросов нет (даже когда пул вычерпан)",
+              all(texts[i] != texts[i - 1] for i in range(1, len(texts))), texts)
 
         level_test.set_client(FakeLLM())
         level_test.start_test(uid)
