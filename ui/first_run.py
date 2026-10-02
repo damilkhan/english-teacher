@@ -2,7 +2,9 @@
 # =========================================================
 # UI/FIRST_RUN.PY — форма первого запуска / редактирования профиля
 # =========================================================
-# Модальное окно: имя, пол, возраст, уровень (A1–C1), цель, аватар (эмодзи).
+# Модальное окно: имя, пол, возраст, цель, аватар (эмодзи) и СТАТУС уровня.
+# Уровень здесь НЕ выбирается: до вводного теста он «не определён», а после
+# показывается по итогам теста (его пишет level_test.get_result в профиль).
 # Одна и та же форма работает в двух режимах:
 #   • создание  — при первом запуске (профилей ещё нет) либо по кнопке «+»;
 #   • редактирование — по кнопке ✏️ в меню «Пользователи» (user передан).
@@ -16,6 +18,12 @@ import customtkinter as ctk
 
 import theme
 import user_manager
+
+# Сетка аватаров. 16 эмодзи по 8 в ряд НЕ помещались в тело формы (правый
+# край кнопок уходил за границу), поэтому кнопки чуть уже и отступы меньше.
+AVATAR_COLS = 8
+AVATAR_BTN = 40
+AVATAR_PAD = 2
 
 
 class FirstRunForm(ctk.CTkToplevel):
@@ -31,7 +39,6 @@ class FirstRunForm(ctk.CTkToplevel):
         self.resizable(False, False)
         self.transient(parent)
         self.protocol("WM_DELETE_WINDOW", self._cancel)
-        self._center(parent, 470, 640)
 
         p = palette
         # ---------- шапка ----------
@@ -56,7 +63,6 @@ class FirstRunForm(ctk.CTkToplevel):
         self.age_var = ctk.StringVar(value=self._age_text((user or {}).get("age")))
         self.goal_var = ctk.StringVar(value=(user or {}).get("goal", ""))
         self.gender_var = ctk.StringVar(value=(user or {}).get("gender", "other"))
-        self.level_var = ctk.StringVar(value=(user or {}).get("level", "A1"))
         self.avatar_var = ctk.StringVar(value=(user or {}).get("avatar", user_manager.AVATARS[0]))
 
         self._section(body, "КАК ТЕБЯ ЗОВУТ?")
@@ -83,15 +89,14 @@ class FirstRunForm(ctk.CTkToplevel):
         self._section(left, "ВОЗРАСТ")
         self.age_entry = self._entry(left, self.age_var, "14", width=120)
 
+        # Уровень НЕ выбирается пользователем: до вводного теста он неизвестен,
+        # после — приходит из итогов теста (level_test). Здесь только статус.
         self._section(right, "УРОВЕНЬ")
-        self.level_widget = ctk.CTkSegmentedButton(
-            right, values=list(user_manager.LEVELS), command=lambda v: self.level_var.set(v),
-            font=theme.FONT_UI, height=34, corner_radius=theme.R["button"],
-            selected_color=p["accent"], selected_hover_color=p["accent_hover"],
-            unselected_color=p["btn"], unselected_hover_color=p["btn_hover"],
-            text_color=p["text"])
-        self.level_widget.set(self.level_var.get())
-        self.level_widget.pack(fill="x", pady=(6, 0))
+        self.level_info = ctk.CTkLabel(
+            right, text="", font=theme.FONT_SMALL, text_color=p["muted"],
+            justify="left", wraplength=190)
+        self.level_info.pack(anchor="w", pady=(8, 0))
+        self._update_level_info(user)
 
         self._section(body, "ЦЕЛЬ ОБУЧЕНИЯ")
         self.goal_entry = self._entry(body, self.goal_var, "Заговорить свободно / сдать экзамен")
@@ -115,6 +120,8 @@ class FirstRunForm(ctk.CTkToplevel):
         for var in (self.name_var, self.age_var, self.avatar_var):
             var.trace_add("write", lambda *_: self._refresh())
 
+        # размер окна подгоняем ПОСЛЕ сборки: иначе часть формы уезжала за край
+        self._center(parent, 470, 640)
         self.after(60, self._grab)
         self._refresh()
 
@@ -143,12 +150,14 @@ class FirstRunForm(ctk.CTkToplevel):
         grid.pack(fill="x", pady=(6, 0))
         for i, emoji in enumerate(user_manager.AVATARS):
             btn = ctk.CTkButton(
-                grid, text=emoji, width=44, height=40, corner_radius=theme.R["block"],
+                grid, text=emoji, width=AVATAR_BTN, height=AVATAR_BTN,
+                corner_radius=theme.R["block"],
                 font=("Segoe UI Emoji", 18), cursor="hand2",
                 fg_color=self.palette["btn"], hover_color=self.palette["btn_hover"],
                 text_color=self.palette["text"],
                 command=lambda e=emoji: self._pick_avatar(e))
-            btn.grid(row=i // 8, column=i % 8, padx=3, pady=3)
+            btn.grid(row=i // AVATAR_COLS, column=i % AVATAR_COLS,
+                     padx=AVATAR_PAD, pady=3)
             self._avatar_buttons[emoji] = btn
 
     # -----------------------------------------------------
@@ -166,6 +175,14 @@ class FirstRunForm(ctk.CTkToplevel):
 
     def _pick_avatar(self, emoji):
         self.avatar_var.set(emoji)
+
+    def _update_level_info(self, user):
+        """Статус уровня. Выбрать его в форме нельзя — только по тесту."""
+        level = (user or {}).get("level")
+        if level in user_manager.LEVELS:
+            self.level_info.configure(text="%s — по итогам вводного теста" % level)
+        else:
+            self.level_info.configure(text="Не определён — узнаем после вводного теста")
 
     def _refresh(self):
         """Подсветка выбранного аватара + доступность кнопки."""
@@ -209,12 +226,12 @@ class FirstRunForm(ctk.CTkToplevel):
             return
         # значения берём С ВИДЖЕТОВ: программный .set() не вызывает command
         self.gender_var.set(self._gender_value())
-        self.level_var.set(self.level_widget.get())
+        # «level» не отдаём: уровень ставит вводный тест, а не форма.
+        # При редактировании это ещё и сохраняет уже определённый уровень.
         self.result = {
             "name": self.name_var.get().strip(),
             "gender": self._gender_value(),
             "age": self.age_var.get().strip() or None,
-            "level": self.level_widget.get(),
             "goal": self.goal_var.get().strip(),
             "avatar": self.avatar_var.get().strip(),
         }
@@ -233,7 +250,19 @@ class FirstRunForm(ctk.CTkToplevel):
 
     # -----------------------------------------------------
     def _center(self, parent, w, h):
+        """Ставит окно по центру родителя, увеличивая его под содержимое.
+
+        Раньше размер был жёстко 470x640, а форма требует больше: кнопка
+        «Начать обучение» уезжала за нижний край. Теперь берём максимум из
+        желаемого и требуемого размера контента (с оглядкой на экран).
+        """
+        self.update_idletasks()
+        w = max(int(w), self.winfo_reqwidth())
+        h = max(int(h), self.winfo_reqheight())
         try:
+            sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
+            w = min(w, sw - 40)
+            h = min(h, sh - 80)
             parent.update_idletasks()
             x = parent.winfo_rootx() + (parent.winfo_width() - w) // 2
             y = parent.winfo_rooty() + max(0, (parent.winfo_height() - h) // 2)

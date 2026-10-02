@@ -123,7 +123,8 @@ class UsersPanel(ctk.CTkFrame):
                             font=(theme.FONT_UI[0], 13, "bold"),
                             text_color=p["text_strong"] if active else p["text"])
         name.pack(anchor="w")
-        meta = " · ".join(x for x in (user.get("level"), self._age(user)) if x)
+        meta = " · ".join(x for x in (user_manager.level_label(user.get("level")),
+                                      self._age(user)) if x)
         ctk.CTkLabel(info, text=meta, anchor="w", font=theme.FONT_SMALL,
                      text_color=p["muted"]).pack(anchor="w")
 

@@ -32,6 +32,16 @@ GENDER_LABELS = {"male": "Мужской", "female": "Женский", "other": 
 
 LEVELS = ("A1", "A2", "B1", "B2", "C1")
 
+# Уровень ставит ТОЛЬКО вводный тест (level_test). Пока тест не пройден,
+# уровня нет — поэтому в профиле он хранится как None, а в интерфейсе
+# показывается «не определён».
+LEVEL_UNKNOWN_TEXT = "не определён"
+
+
+def level_label(level):
+    """Человекочитаемый уровень: 'B1' или «не определён», если теста ещё не было."""
+    return level if level in LEVELS else LEVEL_UNKNOWN_TEXT
+
 # Аватары-эмодзи, предлагаемые в форме (пользователь может вписать свой).
 AVATARS = ["🦊", "🐼", "🐯", "🐨", "🐸", "🦁", "🐧", "🦉",
            "🐙", "🦄", "🐳", "🐝", "🌟", "🚀", "🎧", "📚"]
@@ -79,8 +89,11 @@ def _normalize(profile, user_id):
 
     profile["age"] = _to_age(profile.get("age"))
 
-    level = str(profile.get("level") or "A1").upper()
-    profile["level"] = level if level in LEVELS else "A1"
+    # None (или мусор) = «уровень не определён»: так профиль выглядит до теста,
+    # а уровень приходит из get_result() (level_test). Дефолт A1 НЕ подставляем —
+    # иначе можно решить, что ученик уже проверен.
+    level = str(profile.get("level") or "").strip().upper()
+    profile["level"] = level if level in LEVELS else None
 
     profile["goal"] = str(profile.get("goal") or "").strip()
     profile["avatar"] = str(profile.get("avatar") or AVATARS[0]).strip() or AVATARS[0]
@@ -174,10 +187,11 @@ def save_user(user_id, data):
         return False
 
 
-def create_user(name, gender="other", age=None, level="A1", goal="", avatar=AVATARS[0]):
+def create_user(name, gender="other", age=None, level=None, goal="", avatar=AVATARS[0]):
     """Создаёт новый профиль в первом свободном слоте 1..MAX_USERS.
 
     Возвращает профиль или None, если лимит исчерпан / имя пустое.
+    Уровень по умолчанию НЕ задан (None): его выставит вводный тест.
     """
     if not str(name or "").strip():
         return None
