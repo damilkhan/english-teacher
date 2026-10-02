@@ -24,9 +24,12 @@ EMOJI_PAD = 1          # px воздуха вокруг картинки-эмо�
 
 class ChatView(ctk.CTkFrame):
     def __init__(self, parent, palette, greeting=None, corner_radius=None):
+        # Свою рамку карточки НЕ рисуем: у левой карточки (left_frame) она уже
+        # есть, и две скруглённые рамки друг над другом читались как
+        # «раздвоенный border-right» и «лишние радиусы». Отделяем чат цветом.
         super().__init__(parent, fg_color=palette["chat_bg"],
                          corner_radius=corner_radius or theme.R["card"],
-                         border_width=1, border_color=palette["border"],
+                         border_width=0,
                          height=140)   # запрос «минимум», растёт за счёт expand
         self.palette = palette
 
@@ -40,8 +43,10 @@ class ChatView(ctk.CTkFrame):
             borderwidth=0,
             highlightthickness=0,
             relief="flat",
-            padx=10,
-            pady=10,
+            # отступы по краям: прямые углы tk.Text не упираются в скругление
+            # карточки, поэтому «второй радиус» у углов больше не виден
+            padx=16,
+            pady=12,
             insertbackground=palette["accent"],
             selectbackground=palette["accent_soft"],
             selectforeground=palette["text_strong"],
@@ -50,13 +55,15 @@ class ChatView(ctk.CTkFrame):
         )
         self.text.pack(side="left", fill="both", expand=True)
 
+        # Ползунок — узкий, скруглённый и приглушённый: широкий светлый «btn»
+        # вплотную к краю читался как вторая рамка справа.
         self.scrollbar = ctk.CTkScrollbar(
-            self, command=self.text.yview, width=8,
+            self, command=self.text.yview, width=6, corner_radius=3,
             fg_color="transparent",
-            button_color=palette["btn"],
+            button_color=palette["muted"],
             button_hover_color=palette["btn_hover"],
         )
-        self.scrollbar.pack(side="right", fill="y", padx=(0, 4), pady=6)
+        self.scrollbar.pack(side="right", fill="y", padx=(0, 8), pady=12)
         self.text.configure(yscrollcommand=self.scrollbar.set)
 
         # --- цветные эмодзи ---
@@ -158,12 +165,12 @@ class ChatView(ctk.CTkFrame):
     # ---------- оформление ----------
     def apply_theme(self, palette):
         self.palette = palette
-        self.configure(fg_color=palette["chat_bg"], border_color=palette["border"])
+        self.configure(fg_color=palette["chat_bg"])          # рамки у карточки нет
         self.text.configure(bg=palette["chat_bg"], fg=palette["text"],
                             insertbackground=palette["accent"],
                             selectbackground=palette["accent_soft"],
                             selectforeground=palette["text_strong"])
-        self.scrollbar.configure(button_color=palette["btn"],
+        self.scrollbar.configure(button_color=palette["muted"],
                                  button_hover_color=palette["btn_hover"])
         self._configure_tags(palette)
         # картинки-эмодзи перерисовывать не нужно: фон у них прозрачный,
