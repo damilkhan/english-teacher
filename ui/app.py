@@ -5,9 +5,15 @@
 # Здесь только «клей»: создать виджеты, связать их с контроллерами,
 # обновить интерфейс. Логика — в controllers/ и модулях верхнего уровня.
 #
+# Многопользовательский режим (вариант B):
+#   • при первом запуске (профилей нет) — форма FirstRunForm;
+#   • при повторном — сразу грузится последний активный профиль;
+#   • кнопка «👥 Пользователи» открывает правую панель UsersPanel;
+#   • прогресс обучения у каждого ученика свой (profile_store + user_id).
+#
 # Раскладка после редизайна:
 #   фон окна — вертикальный градиент (рисуется на tk.Canvas полосками);
-#   карточки («левая колонка» и «настройки») лежат на нём с отступами,
+#   карточки («левая колонка» и правая панель) лежат на нём с отступами,
 #   поэтому градиент виден по краям и в зазоре между колонками;
 #   сверху карточки — градиентная шапка с заголовком и бейджем статуса.
 #
@@ -27,13 +33,18 @@ import profile_store
 import stt_engine
 import theme
 import tts
+import user_manager
 from controllers.chat_controller import ChatController
 from controllers.dispatcher import Dispatcher
+from controllers.level_test_controller import LevelTestController
 from controllers.recording_controller import RecordingController
 from controllers.server_monitor import ServerMonitor
 from llm_client import LLMClient
 from ui import gradient
+from ui.first_run import FirstRunForm
+from ui.panels.level_test_panel import LevelTestPanel
 from ui.panels.settings_panel import SettingsPanel
+from ui.panels.users_panel import UsersPanel
 from ui.widgets.chat_view import ChatView
 from ui.widgets.control_bar import ControlBar
 from ui.widgets.input_bar import InputBar
@@ -47,10 +58,8 @@ STATUS_TEXT = {
 }
 STATUS_COLOR = {"ready": "ok", "loading": "warn", "offline": "err"}
 
-GREETING = ("Джейн",
-            "Привет! Я твой преподаватель английского.\n"
-            "Я буду запоминать твои ошибки и подстраивать уроки под тебя.")
-NEW_PROFILE_NOTE = "📊 Создан новый профиль ученика. Я буду запоминать твой прогресс!"
+NEW_PROFILE_NOTE = "📊 Создан профиль ученика. Я буду запоминать твой прогресс!"
+LEVEL_TEST_NOTE = "🎯 Уровень определён: %s. Подстрою уроки под него."
 NOT_READY_LOADING = "⏳ Модель ещё загружается — подожди несколько секунд и попробуй снова."
 NOT_READY_OFFLINE = "❌ LLM-сервер не отвечает. Подробности в logs\\llama-server.log"
 
@@ -76,6 +85,7 @@ class EnglishTeacherApp:
         self.mode = config.DEFAULT_MODE
         self.current_lang = "en"
         self.panel_visible = False
+        self.active_panel = None      # "settings" | "users" | None
         self.busy = False
         self.server_state = "offline"
         self.server_ready = False
@@ -108,6 +118,12 @@ class EnglishTeacherApp:
                                     cancel=self.window.after_cancel)
         self.dispatcher.start()
 
+        # ---------- активный пользователь (форма при первом запуске) ----------
+        self._pending_level_test = None        # id профиля для теста уровня
+        self.current_user = self._resolve_user()
+        profile_store.set_active_user(self.current_user["id"])
+        print("👤 Активный профиль: #%s %s" % (self.current_user["id"], self.current_user["name"]))
+
         # ---------- железо и сеть ----------
         self.vad = audio_vad.AudioVAD()
         self.stt = stt_engine.STTEngine()
@@ -115,11 +131,15 @@ class EnglishTeacherApp:
 
         # ---------- контроллеры ----------
         self.chat = ChatController(llm=self.llm, dispatch=self._dispatch,
-                                   mode=self.mode, lang=self.current_lang)
+                                   mode=self.mode, lang=self.current_lang,
+                                   user_id=self.current_user["id"])
         self.chat.on_message = self.add_message
         self.chat.on_status = self._set_status
         self.chat.on_busy = self._set_busy
         self.chat.on_response = self._on_response
+
+        # ---------- тест уровня (адаптивный, любой активной моделью) ----------
+        self.level_test = LevelTestController(dispatch=self._dispatch)
 
         self.recorder = RecordingController(
             vad=self.vad, stt=self.stt, dispatch=self._dispatch,
@@ -138,12 +158,141 @@ class EnglishTeacherApp:
         )
 
         # ---------- старт ----------
-        _, created = profile_store.ensure_profile()
+        _, created = profile_store.ensure_profile(self.current_user["id"])
         if created:
             self.add_message("Джейн", NEW_PROFILE_NOTE)
         self.check_server()
         self.monitor.start()
         self.window.after(60, self._redraw)     # первая отрисовка после раскладки
+
+        # новый профиль → сразу предлагаем определить уровень
+        if self._pending_level_test is not None:
+            uid = self._pending_level_test
+            self.window.after(900, lambda: self.run_level_test(uid))
+
+    # =====================================================
+    # Пользователи
+    # =====================================================
+    def _resolve_user(self):
+        """Активный профиль: последний из profiles/ либо форма первого запуска."""
+        users = user_manager.list_users()
+        if users:
+            return user_manager.get_last_user() or users[0]
+
+        self.window.withdraw()              # прячем пустое окно под формой
+        try:
+            data = FirstRunForm.ask(self.window, self.palette)
+        finally:
+            self.window.deiconify()
+
+        if data:
+            created = user_manager.create_user(
+                data["name"], data["gender"], data["age"],
+                data["level"], data["goal"], data["avatar"])
+            if created:
+                self._pending_level_test = created["id"]
+                return created
+
+        # форму закрыли — заводим профиль по умолчанию, чтобы приложение жило
+        fallback = user_manager.create_user("Ученик", "other", None, "A1",
+                                            "Учиться говорить по-английски", "🙂")
+        if fallback:
+            self._pending_level_test = fallback["id"]
+        return fallback or user_manager.get_last_user()
+
+    def _greeting(self):
+        u = self.current_user or {}
+        text = (f"{u.get('avatar', '🙂')} Привет, {u.get('name') or 'друг'}! "
+                f"Я Джейн, твой преподаватель английского.\n"
+                f"Я буду запоминать твои ошибки и подстраивать уроки под тебя.")
+        if u.get("level"):
+            text += f"\nУровень: {u['level']}."
+        return text
+
+    def select_user(self, user_id):
+        """Сделать профиль активным: контроллер, история и прогресс — его."""
+        if user_id == (self.current_user or {}).get("id"):
+            return
+        user = user_manager.get_user(user_id)
+        if not user:
+            return
+        self.current_user = user
+        user_manager.set_last_user(user_id)
+        profile_store.set_active_user(user_id)
+        profile_store.ensure_profile(user_id)
+        self.chat.set_user(user_id)         # сброс истории диалога
+        self.chat_view.clear()
+        self.add_message("Джейн", self._greeting())
+        if self.users_panel is not None:
+            self.users_panel.refresh(user_id)
+
+    def add_user(self):
+        if user_manager.is_full():
+            return
+        data = FirstRunForm.ask(self.window, self.palette)
+        if not data:
+            return
+        created = user_manager.create_user(
+            data["name"], data["gender"], data["age"],
+            data["level"], data["goal"], data["avatar"])
+        if created:
+            self.select_user(created["id"])
+            self.window.after(300, lambda: self.run_level_test(created["id"]))
+
+    def edit_user(self, user_id):
+        user = user_manager.get_user(user_id)
+        if not user:
+            return
+        data = FirstRunForm.ask(self.window, self.palette, user=user)
+        if not data:
+            return
+        user_manager.update_user(user_id, data)
+        if user_id == (self.current_user or {}).get("id"):
+            self.current_user = user_manager.get_user(user_id)
+            self.add_message("Джейн", "✅ Профиль обновлён.")
+        if self.users_panel is not None:
+            self.users_panel.refresh((self.current_user or {}).get("id"))
+
+    def delete_user(self, user_id):
+        created = None
+        was_active = (user_id == (self.current_user or {}).get("id"))
+        user_manager.delete_user(user_id)
+
+        remaining = user_manager.list_users()
+        if not remaining:
+            # профилей не осталось — просим создать нового (форма первого запуска)
+            data = FirstRunForm.ask(self.window, self.palette)
+            created = None
+            if data:
+                created = user_manager.create_user(
+                    data["name"], data["gender"], data["age"],
+                    data["level"], data["goal"], data["avatar"])
+            if created is None:
+                created = user_manager.create_user("Ученик", "other", None, "A1",
+                                                   "Учиться говорить по-английски", "🙂")
+            remaining = [created] if created else user_manager.list_users()
+
+        if was_active and remaining:
+            self.select_user(remaining[0]["id"])
+        elif self.users_panel is not None:
+            self.users_panel.refresh((self.current_user or {}).get("id"))
+
+        if created:
+            self.window.after(300, lambda: self.run_level_test(created["id"]))
+
+    def run_level_test(self, user_id):
+        """Адаптивный тест уровня: показать окно и сохранить уровень в профиль."""
+        try:
+            level = LevelTestPanel.ask(self.window, self.palette, self.level_test, user_id)
+        except Exception as exc:
+            print("⚠️ Тест уровня не открылся: %s" % exc)
+            return None
+        if level:
+            self.current_user = user_manager.get_user(user_id) or self.current_user
+            self.add_message("Джейн", LEVEL_TEST_NOTE % level)
+        if self.users_panel is not None:
+            self.users_panel.refresh((self.current_user or {}).get("id"))
+        return level
 
     # =====================================================
     # Сборка интерфейса
@@ -156,12 +305,14 @@ class EnglishTeacherApp:
                                        corner_radius=theme.R["card"],
                                        border_width=1, border_color=p["border"])
         self.visualizer = AudioVisualizer(self.left_frame, p, height=30, bars=30)
-        self.chat_view = ChatView(self.left_frame, p, greeting=GREETING)
+        self.chat_view = ChatView(self.left_frame, p,
+                                  greeting=("Джейн", self._greeting()))
         self.input_bar = InputBar(self.left_frame, p, on_send=self.send_text)
         self.control_bar = ControlBar(self.left_frame, p,
                                       on_record=self.toggle_recording,
                                       on_settings=self.open_panel,
-                                      on_clear=self.clear_chat)
+                                      on_clear=self.clear_chat,
+                                      on_users=self.open_users_panel)
 
         self._build_hero()
 
@@ -181,10 +332,20 @@ class EnglishTeacherApp:
         self.chat_view.pack(side="top", fill="both", expand=True,
                             padx=theme.CARD_PAD, pady=(0, 10))
 
-        # ---------- карточка «настройки» (появляется по кнопке) ----------
+        # ---------- правая панель «настройки» ----------
         self.right_panel = SettingsPanel(self.base, p,
                                          mode=self.mode, theme_name=self.current_theme,
                                          on_save=self.save_settings, on_close=self.close_panel)
+
+        # ---------- правая панель «пользователи» ----------
+        self.users_panel = UsersPanel(self.base, p,
+                                      active_id=self.current_user["id"],
+                                      on_add=self.add_user,
+                                      on_edit=self.edit_user,
+                                      on_delete=self.delete_user,
+                                      on_select=self.select_user,
+                                      on_close=self.close_panel,
+                                      on_test=self.run_level_test)
 
     def _build_hero(self):
         """Шапка — ОДНА картинка: градиент, заголовок, подпись и пилюля статуса.
@@ -230,7 +391,7 @@ class EnglishTeacherApp:
         self._layout(w, h)
 
     def _layout(self, w=None, h=None):
-        """Расставляет карточки: слева чат, справа настройки (если открыты)."""
+        """Расставляет карточки: слева чат, справа активная панель (если открыта)."""
         w = w or self.base.winfo_width()
         h = h or self.base.winfo_height()
         if w < 50 or h < 50:
@@ -246,9 +407,10 @@ class EnglishTeacherApp:
         self.left_frame.place(x=pad, y=pad,
                               relwidth=left_w / float(w), relheight=inner_h / float(h))
         if self.panel_visible:
-            self.right_panel.place(x=w - pad - PANEL_WIDTH, y=pad,
-                                   relwidth=PANEL_WIDTH / float(w),
-                                   relheight=inner_h / float(h))
+            panel = self.users_panel if self.active_panel == "users" else self.right_panel
+            panel.place(x=w - pad - PANEL_WIDTH, y=pad,
+                        relwidth=PANEL_WIDTH / float(w),
+                        relheight=inner_h / float(h))
 
         self._update_hero(max(160, left_w - 2 * theme.CARD_PAD))
 
@@ -393,16 +555,36 @@ class EnglishTeacherApp:
         self.chat_view.clear()
         self.chat.clear_history()
 
+    def _show_panel(self, name):
+        """Показать правую панель: только одну из двух."""
+        for panel in (self.right_panel, self.users_panel):
+            try:
+                panel.place_forget()
+            except Exception:
+                pass
+        self.active_panel = name
+        self.panel_visible = True
+        self._layout()
+
     def open_panel(self):
-        if not self.panel_visible:
-            self.panel_visible = True
-            self._layout()
+        self._show_panel("settings")
+
+    def open_users_panel(self):
+        if self.users_panel is not None:
+            self.users_panel.refresh((self.current_user or {}).get("id"))
+        self._show_panel("users")
 
     def close_panel(self):
-        if self.panel_visible:
-            self.panel_visible = False
-            self.right_panel.place_forget()
-            self._layout()
+        if not self.panel_visible:
+            return
+        self.panel_visible = False
+        self.active_panel = None
+        for panel in (self.right_panel, self.users_panel):
+            try:
+                panel.place_forget()
+            except Exception:
+                pass
+        self._layout()
 
     def save_settings(self):
         self._switch_mode(self.right_panel.get_mode())
@@ -445,6 +627,7 @@ class EnglishTeacherApp:
         self.input_bar.apply_theme(p)
         self.control_bar.apply_theme(p)
         self.right_panel.apply_theme(p)
+        self.users_panel.apply_theme(p)
 
         self._on_server_state(self.server_state, "")
         self._redraw()                            # фон + шапка + раскладка

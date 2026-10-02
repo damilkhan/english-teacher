@@ -27,6 +27,33 @@ FALLBACK_RU = "Извините, я не могу ответить на это."
 FALLBACK_EN = "Sorry, I can't respond."
 
 
+# ---------- учёт уровня ученика (CEFR) ----------
+# Добавлено для адаптивного теста уровня (level_test.py).
+# ВАЖНО: при level=None ничего не добавляется, поэтому старый вывод
+# build_system_prompt не меняется (см. tests/smoke_test.test_prompt_unchanged).
+CEFR_GUIDANCE = {
+    "A1": "use only the most basic words and Present Simple; very short sentences (3-6 words).",
+    "A2": "use everyday vocabulary and basic past/future; short, simple sentences.",
+    "B1": "use intermediate vocabulary, common phrasal verbs and mixed tenses.",
+    "B2": "use upper-intermediate vocabulary, complex sentences and nuanced grammar.",
+    "C1": "use advanced vocabulary, idioms and sophisticated structures.",
+}
+
+LEVEL_BLOCK_TEMPLATE = """
+\n\U0001F4C8 STUDENT ENGLISH LEVEL: {level}
+Match your English to this CEFR level: {guidance}
+Keep your Russian (if you use it) simple and clear too.
+"""
+
+
+def _level_block(profile, level):
+    """Блок про уровень. Пусто, если уровень не задан (обратная совместимость)."""
+    level = str(level or (profile or {}).get("level") or "").strip().upper()
+    if level not in CEFR_GUIDANCE:
+        return ""
+    return LEVEL_BLOCK_TEMPLATE.format(level=level, guidance=CEFR_GUIDANCE[level])
+
+
 def detect_language(text):
     """Есть кириллица → 'ru', иначе 'en'."""
     return "ru" if any(c in _RUSSIAN_CHARS for c in (text or "").lower()) else "en"
@@ -38,7 +65,7 @@ def language_instruction(lang):
     return "Answer in English, keep responses short."
 
 
-def build_system_prompt(mode, profile, lang="en"):
+def build_system_prompt(mode, profile, lang="en", level=None):
     """Собирает system-промпт (персона + профиль ученика).
 
     mode:    'lesson' | 'free'
@@ -86,7 +113,7 @@ def build_system_prompt(mode, profile, lang="en"):
     The student has completed {total_lessons} lessons.
     Be supportive and helpful. Use emojis freely: {EMOJIS}
     """
-    return prompt
+    return prompt + _level_block(profile, level)
 
 
 def build_conversation_prompt(system_prompt, history, user_text, lang):

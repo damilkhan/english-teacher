@@ -6,7 +6,13 @@
 #   ask_jane, _process_input, _get_response, _display_response,
 #   сборка промпта, чистка тегов, история диалога, запись в профиль.
 #
+# Вариант B: контроллер знает user_id активного ученика и все обращения
+# к прогрессу (load / record_from_dialogue) делает С ЯВНЫМ user_id.
+# Так прогресс каждого ученика лежит в своём файле, а контроллер не
+# зависит от «глобального» активного пользователя.
+#
 # GUI теперь знает только это:
+#   chat.set_user(user_id)
 #   chat.send("текст")  →  колбэки on_message / on_status / on_busy / on_response
 #
 # Все колбэки вызываются в ГЛАВНОМ потоке (dispatch = window.after),
@@ -17,14 +23,16 @@ import threading
 
 import profile_store
 import prompt_builder
+import user_manager
 
 
 class ChatController:
-    def __init__(self, llm, dispatch=None, mode="lesson", lang="en"):
+    def __init__(self, llm, dispatch=None, mode="lesson", lang="en", user_id=None):
         self.llm = llm
         self._dispatch = dispatch or (lambda fn: fn())
         self.mode = mode
         self.current_lang = lang
+        self.user_id = user_id
         self.history = []
         self.busy = False
 
@@ -37,6 +45,12 @@ class ChatController:
     # -----------------------------------------------------
     # Публичный интерфейс
     # -----------------------------------------------------
+    def set_user(self, user_id):
+        """Переключить ученика: история диалога у каждого своя, поэтому чистим."""
+        self.user_id = user_id
+        self.history = []
+        profile_store.set_active_user(user_id)
+
     def set_mode(self, mode):
         self.mode = mode
 
@@ -71,7 +85,11 @@ class ChatController:
             self.current_lang = "ru"
         lang = self.current_lang
 
-        system_prompt = prompt_builder.build_system_prompt(self.mode, profile_store.load(), lang)
+        # прогресс ИМЕННО этого ученика
+        # уровень ученика учитывается при сборке промпта (A1..C1)
+        level = (user_manager.get_user(self.user_id) or {}).get("level")
+        system_prompt = prompt_builder.build_system_prompt(
+            self.mode, profile_store.load(self.user_id), lang, level=level)
         prompt = prompt_builder.build_conversation_prompt(system_prompt, self.history, user_text, lang)
 
         print(f"📤 Язык ответа: {'РУССКИЙ' if lang == 'ru' else 'ENGLISH'}")
@@ -103,8 +121,8 @@ class ChatController:
         response = payload
         self._emit(self.on_message, "Джейн", response)
 
-        # профиль ученика — бизнес-логика, не дело GUI
-        for note in profile_store.record_from_dialogue(user_text, response):
+        # прогресс ученика — бизнес-логика, не дело GUI
+        for note in profile_store.record_from_dialogue(user_text, response, self.user_id):
             self._emit(self.on_message, "Джейн", note)
 
         self.history.append(f"Student: {user_text}")

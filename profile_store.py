@@ -1,11 +1,15 @@
 # -*- coding: utf-8 -*-
 # =========================================================
-# PROFILE_STORE.PY — единственный владелец student_profile.json
+# PROFILE_STORE.PY — владелец ПРОГРЕССА обучения (ошибки/успехи/занятия)
 # =========================================================
-# Раньше этим файлом управляли сразу из gui.py (4 метода:
-# init_profile / get_student_profile / save_student_profile /
-# update_profile_from_dialogue). Любой второй потребитель означал бы
-# третью копию логики. Теперь чтение и запись — только здесь.
+# Вариант B: прогресс привязан к пользователю.
+#   profiles/user_N_progress.json — прогресс активного пользователя;
+#   student_profile.json          — запасной «общий» путь (legacy), он же
+#                                   используется тестами и режимом без входа.
+#
+# Личностью (name/gender/age/level/goal/avatar) владеет user_manager.py.
+# Имя файла прогресса задаётся ТАМ (user_manager.progress_path), чтобы оно
+# было в одном месте и delete_user мог заодно подчистить прогресс.
 #
 # Никакого Tk/GUI тут нет: модуль можно тестировать напрямую.
 # =========================================================
@@ -15,12 +19,16 @@ import os
 from datetime import datetime
 
 import config
+import user_manager
 
 PROFILE_FILENAME = "student_profile.json"
 
-# Путь к файлу. Вынесен в переменную модуля, чтобы тесты могли подменить
-# его на временную папку и не трогать реальный профиль ученика.
+# Запасной путь (legacy / тесты). Если активного пользователя нет —
+# работаем с ним, чтобы модуль оставался тестируемым без профилей.
 PROFILE_PATH = os.path.join(config.BASE_DIR, PROFILE_FILENAME)
+
+# id активного пользователя (устанавливается при входе в приложение).
+_active_user_id = None
 
 MISTAKE_INDICATORS = ["mistake", "error", "incorrect", "wrong", "неправильно", "ошибка"]
 GRAMMAR_KEYWORDS = ["grammar", "tense", "verb", "noun", "adjective", "past", "future", "present"]
@@ -39,6 +47,34 @@ EMPTY_PROFILE = {
 }
 
 
+# ---------------------------------------------------------
+# Активный пользователь и путь
+# ---------------------------------------------------------
+def set_active_user(user_id):
+    """Задаёт активного пользователя. None → запасной общий профиль."""
+    global _active_user_id
+    try:
+        _active_user_id = int(user_id) if user_id is not None else None
+    except (TypeError, ValueError):
+        _active_user_id = None
+    return _active_user_id
+
+
+def get_active_user_id():
+    return _active_user_id
+
+
+def progress_path(user_id=None):
+    """Путь к файлу прогресса.
+
+    user_id явно > активный пользователь > запасной PROFILE_PATH.
+    """
+    uid = _active_user_id if user_id is None else user_id
+    if uid is None:
+        return PROFILE_PATH
+    return user_manager.progress_path(uid)
+
+
 def default_profile():
     return {
         "student_name": "Student",
@@ -52,23 +88,24 @@ def default_profile():
     }
 
 
-def ensure_profile():
-    """Создаёт файл профиля, если его нет.
+def ensure_profile(user_id=None):
+    """Создаёт файл прогресса, если его нет.
 
     Возвращает (profile, created): created=True, если профиль только что создан
     (тогда GUI показывает приветственное сообщение).
     """
-    if os.path.exists(PROFILE_PATH):
-        return load(), False
+    path = progress_path(user_id)
+    if os.path.exists(path):
+        return load(user_id), False
     profile = default_profile()
-    _write(profile)
+    _write(profile, path)
     return profile, True
 
 
-def load():
-    """Читает профиль. Битый/отсутствующий файл → безопасная пустышка."""
+def load(user_id=None):
+    """Читает прогресс. Битый/отсутствующий файл → безопасная пустышка."""
     try:
-        with open(PROFILE_PATH, "r", encoding="utf-8") as fh:
+        with open(progress_path(user_id), "r", encoding="utf-8") as fh:
             data = json.load(fh)
         if not isinstance(data, dict):
             raise ValueError("профиль не является объектом JSON")
@@ -80,22 +117,22 @@ def load():
         return dict(EMPTY_PROFILE)
 
 
-def save(profile):
-    """Сохраняет профиль, отмечая конец занятия и +1 к числу занятий."""
+def save(profile, user_id=None):
+    """Сохраняет прогресс, отмечая конец занятия и +1 к числу занятий."""
     profile["last_lesson"] = datetime.now().isoformat()
     profile["total_lessons"] = profile.get("total_lessons", 0) + 1
-    _write(profile)
+    _write(profile, progress_path(user_id))
     return profile
 
 
-def record_from_dialogue(user_text, jane_response):
-    """Разбирает реплику Джейн и записывает ошибки/успехи в профиль.
+def record_from_dialogue(user_text, jane_response, user_id=None):
+    """Разбирает реплику Джейн и записывает ошибки/успехи в прогресс.
 
     Возвращает список заметок для чата (строки) — сам ничего не рисует,
     поэтому остаётся тестируемым без GUI.
     """
     notes = []
-    profile = load()
+    profile = load(user_id)
     # гарантируем структуру: старые профили могли не иметь ключей
     profile.setdefault("mistakes", {"grammar": [], "vocabulary": [], "pronunciation": []})
     for key in ("grammar", "vocabulary", "pronunciation"):
@@ -137,10 +174,12 @@ def record_from_dialogue(user_text, jane_response):
         })
         profile["strengths"] = profile["strengths"][-MAX_STRENGTHS:]
 
-    save(profile)
+    save(profile, user_id)
     return notes
 
 
-def _write(profile):
-    with open(PROFILE_PATH, "w", encoding="utf-8") as fh:
+def _write(profile, path=None):
+    path = path or progress_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
         json.dump(profile, fh, indent=4, ensure_ascii=False)

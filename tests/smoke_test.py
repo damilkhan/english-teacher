@@ -34,6 +34,7 @@ for _stream in (sys.stdout, sys.stderr):
 
 import prompt_builder          # noqa: E402
 import profile_store           # noqa: E402
+import user_manager          # noqa: E402
 
 FAILED = []
 
@@ -339,6 +340,137 @@ def test_gui(e2e=False):
 
     app.on_closing()
 
+# =========================================================
+# 4b. user_manager — многопользовательская система
+# =========================================================
+def test_users():
+    print("\n[4b] user_manager во временной папке")
+    real_dir, real_last = user_manager.PROFILES_DIR, user_manager.LAST_USER_FILE
+    tmp = tempfile.mkdtemp(prefix="et_users_")
+    try:
+        user_manager.PROFILES_DIR = tmp
+        user_manager.LAST_USER_FILE = os.path.join(tmp, "last_user.txt")
+
+        check("вначале пусто", user_manager.count() == 0 and user_manager.list_users() == [])
+
+        u = user_manager.create_user("Аня", "female", 14, "A2", "Говорить свободно", "🦊")
+        check("профиль создан (id=1)", bool(u) and u["id"] == 1 and u["name"] == "Аня")
+        check("файл профиля на месте", os.path.exists(user_manager.identity_path(1)))
+        check("get_last_user", user_manager.get_last_user()["id"] == 1)
+        check("get_user", user_manager.get_user(1)["level"] == "A2")
+        check("update_user меняет поле",
+              user_manager.update_user(1, {"level": "B1"}) and user_manager.get_user(1)["level"] == "B1")
+        check("save_user сохраняет", user_manager.save_user(1, {"name": "Аня-2"})
+              and user_manager.get_user(1)["name"] == "Аня-2")
+
+        for i in range(2, 9):
+            user_manager.create_user("U%d" % i)
+        check("лимит 8 соблюдается", user_manager.count() == 8 and user_manager.is_full())
+        check("9-й профиль не создаётся", user_manager.create_user("X") is None)
+
+        user_manager.set_last_user(3)
+        check("delete_user удаляет", user_manager.delete_user(3) and user_manager.get_user(3) is None)
+        check("активный переключён на живой", user_manager.get_last_user_id() != 3)
+
+        # прогресс привязан к пользователю
+        profile_store.set_active_user(1)
+        prof, created = profile_store.ensure_profile(1)
+        check("файл прогресса создан", created and os.path.exists(user_manager.progress_path(1)))
+        profile_store.save(dict(prof), 1)
+        check("прогресс сохранён у #1", profile_store.load(1).get("total_lessons", 0) >= 1)
+        check("у другого ученика прогресс пуст",
+              profile_store.load(5).get("total_lessons", 0) == 0)
+        check("пути прогресса разные",
+              user_manager.progress_path(1) != user_manager.progress_path(5))
+
+        with open(user_manager.identity_path(6), "w", encoding="utf-8") as fh:
+            fh.write("{ битый json")
+        check("битый профиль не роняет список",
+              all(x["id"] != 6 for x in user_manager.list_users()))
+    finally:
+        user_manager.PROFILES_DIR = real_dir
+        user_manager.LAST_USER_FILE = real_last
+        profile_store.set_active_user(None)
+
+
+# =========================================================
+# 4c. level_test — адаптивный тест уровня (без живой модели)
+# =========================================================
+def test_level_test():
+    print("\n[4c] level_test: адаптивность и запись уровня")
+    import level_test
+
+    class FakeLLM:
+        def complete(self, prompt, max_tokens=None, temperature=None,
+                     stop=None, timeout=None):
+            return True, ('{"question": "Pick one?", "options": ["a","b","c","d"], '
+                          '"correct": 0}')
+
+    class DeadLLM:
+        def complete(self, *a, **k):
+            return False, "offline"
+
+    real_dir, real_last = user_manager.PROFILES_DIR, user_manager.LAST_USER_FILE
+    tmp = tempfile.mkdtemp(prefix="et_level_")
+    try:
+        user_manager.PROFILES_DIR = tmp
+        user_manager.LAST_USER_FILE = os.path.join(tmp, "last_user.txt")
+        uid = user_manager.create_user("Тест", "other", None, "A1", "", "🙂")["id"]
+
+        level_test.set_client(FakeLLM())
+        q = level_test.start_test(uid)
+        check("старт со сложности A2", q["difficulty_label"] == "A2" and len(q["options"]) == 4)
+        check("правильный ответ наружу не отдаётся", "correct" not in q)
+
+        traj = [q["difficulty"]]
+        total = 0
+        while True:
+            nxt = level_test.get_next_question(uid, 0)      # всегда верно
+            if nxt.get("finished"):
+                total = nxt["result"]["total"]
+                break
+            traj.append(nxt["difficulty"])
+        check("верные ответы повышают сложность до C1", traj[-1] == 5, "траектория %s" % traj)
+        check("вопросов в пределах 10–15", 10 <= total <= 15, "их %d" % total)
+
+        res = level_test.get_result(uid)
+        check("уровень из A1–C1", res["level"] in level_test.LEVELS, res["level"])
+        text = open(user_manager.identity_path(uid), encoding="utf-8").read()
+        check("уровень записан в профиль",
+              user_manager.get_user(uid)["level"] == res["level"] and '"level_test"' in text)
+
+        level_test.set_client(FakeLLM())
+        q = level_test.start_test(uid)
+        down = [q["difficulty"]]
+        while True:
+            nxt = level_test.get_next_question(uid, 1)      # всегда ошибка
+            if nxt.get("finished"):
+                break
+            down.append(nxt["difficulty"])
+        check("ошибки понижают сложность до A1", down[-1] == 1, "траектория %s" % down)
+
+        level_test.set_client(DeadLLM())
+        q = level_test.start_test(uid)
+        check("оффлайн: вопрос из резервного банка",
+              bool(q["question"]) and len(q["options"]) == 4)
+
+        level_test.set_client(FakeLLM())
+        level_test.start_test(uid)
+        check("check_answer понимает буквы", level_test.check_answer(uid, "B")["chosen_index"] == 1)
+        level_test.start_test(uid)
+        check("повторный check_answer — из кэша",
+              level_test.check_answer(uid, "d") == level_test.check_answer(uid, "A"))
+
+        before = user_manager.get_user(uid)["level"]
+        level_test.start_test(uid)
+        level_test.get_next_question(uid, 0)
+        level_test.cancel_test(uid)
+        check("прерывание не меняет профиль", user_manager.get_user(uid)["level"] == before)
+    finally:
+        level_test.set_client(None)
+        user_manager.PROFILES_DIR = real_dir
+        user_manager.LAST_USER_FILE = real_last
+
 
 def main():
     e2e = "--gui" in sys.argv
@@ -350,6 +482,8 @@ def main():
     test_clean_response()
     test_profile_store()
     test_commands()
+    test_users()
+    test_level_test()
 
     if e2e:
         # во время теста не трогаем реальный профиль ученика
@@ -360,10 +494,18 @@ def main():
             with open(real, "r", encoding="utf-8") as src, \
                  open(profile_store.PROFILE_PATH, "w", encoding="utf-8") as dst:
                 dst.write(src.read())
+        # многопользовательский режим: тоже уводим на временную папку
+        um_dir, um_last = user_manager.PROFILES_DIR, user_manager.LAST_USER_FILE
+        user_manager.PROFILES_DIR = tmp
+        user_manager.LAST_USER_FILE = os.path.join(tmp, "last_user.txt")
+        user_manager.create_user("Тест", "other", 20, "A1", "прогон", "🙂")
         try:
             test_gui(e2e=True)
         finally:
             profile_store.PROFILE_PATH = real
+            user_manager.PROFILES_DIR = um_dir
+            user_manager.LAST_USER_FILE = um_last
+            profile_store.set_active_user(None)
     else:
         print("\n(GUI-проверки пропущены: запустите с флагом --gui)")
 

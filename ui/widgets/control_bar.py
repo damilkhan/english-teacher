@@ -3,6 +3,7 @@
 
 Редизайн: «стеклянные» кнопки (полупрозрачный вид за счёт тона кнопки
 и тонкой рамки), запись — акцентная при включении, заметный отступ.
+Кнопка «Пользователи» открывает правую панель со списком профилей.
 """
 
 import customtkinter as ctk
@@ -11,11 +12,13 @@ import theme
 
 RECORD_IDLE = "🎤  Запись"
 RECORD_ACTIVE = "🔴  Идёт запись"
-BTN_W, BTN_H = 132, 42
+BTN_W, BTN_H = 120, 42
+USERS_W = 152
 
 
 class ControlBar(ctk.CTkFrame):
-    def __init__(self, parent, palette, on_record=None, on_settings=None, on_clear=None):
+    def __init__(self, parent, palette, on_record=None, on_settings=None,
+                 on_clear=None, on_users=None):
         super().__init__(parent, fg_color="transparent")
         self.palette = palette
 
@@ -24,6 +27,9 @@ class ControlBar(ctk.CTkFrame):
 
         self.settings_btn = self._button("⚙️  Настройки", on_settings)
         self.settings_btn.pack(side="right")
+
+        self.users_btn = self._button("👥  Пользователи", on_users, width=USERS_W)
+        self.users_btn.pack(side="right", padx=(0, 10))
 
         self.clear_btn = self._button("🗑️  Очистить", on_clear)
         self.clear_btn.pack(side="right", padx=(0, 10))
@@ -58,7 +64,7 @@ class ControlBar(ctk.CTkFrame):
     # ---------- оформление ----------
     def apply_theme(self, palette):
         self.palette = palette
-        for btn in (self.settings_btn, self.clear_btn):
+        for btn in (self.settings_btn, self.clear_btn, self.users_btn):
             btn.configure(fg_color=palette["btn"], hover_color=palette["btn_hover"],
                           text_color=palette["text"], border_color=palette["border"])
         self.set_recording(False)
