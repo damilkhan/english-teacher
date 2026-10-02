@@ -80,29 +80,118 @@ def _log(msg):
     print("[%s] %s" % (datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), msg))
 
 
+MB_TOPMOST = 0x40000      # сообщение поверх всех окон (иначе его не видно)
+
+
 def _msgbox(title, text, flags=0x10):
-    """Окно с ошибкой (0x10 = иконка ошибки). Работает даже без tkinter."""
+    """Окно с сообщением (0x10 = иконка ошибки, 0x40 = инфо).
+
+    Всегда поверх остальных окон: раньше диалог мог уйти за другие окна, и
+    казалось, что приложение «зависло».
+    """
     try:
         import ctypes
-        ctypes.windll.user32.MessageBoxW(None, str(text), str(title), flags)
+        ctypes.windll.user32.MessageBoxW(None, str(text), str(title),
+                                         flags | MB_TOPMOST)
     except Exception:
         _log("MessageBox недоступен: %s" % traceback.format_exc())
 
 
-def _single_instance():
-    """Не даём запустить вторую копию. Возвращает handle или None."""
+MUTEX_NAME = "EnglishTeacherApp_SingleInstance_v2"
+ERROR_ALREADY_EXISTS = 183
+SW_RESTORE = 9
+
+
+def _find_app_window():
+    """Ищет верхнее окно, в заголовке которого есть «English Teacher».
+
+    Возвращает (hwnd, pid) или (None, None). Нужно, чтобы отличать РАБОТАЮЩЕЕ
+    приложение от зависшего процесса: у живого приложения окно есть, а у
+    «застрявшего» (процесс остался, окно закрыто) — нет.
+    """
+    try:
+        import ctypes
+        from ctypes import wintypes
+        user32 = ctypes.windll.user32
+        found = {}
+
+        WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND,
+                                         wintypes.LPARAM)
+
+        def _cb(hwnd, _lparam):
+            length = user32.GetWindowTextLengthW(hwnd)
+            if not length:
+                return True
+            buf = ctypes.create_unicode_buffer(length + 1)
+            user32.GetWindowTextW(hwnd, buf, length + 1)
+            if "English Teacher" in buf.value:
+                pid = wintypes.DWORD()
+                user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                found["hwnd"], found["pid"] = hwnd, pid.value
+                return False        # дальше искать не нужно
+            return True
+
+        user32.EnumWindows(WNDENUMPROC(_cb), 0)
+        return found.get("hwnd"), found.get("pid")
+    except Exception:
+        _log("Поиск окна приложения не удался: %s" % traceback.format_exc())
+        return None, None
+
+
+def _raise_window(hwnd):
+    """Разворачивает окно и выводит его на передний план."""
+    try:
+        import ctypes
+        user32 = ctypes.windll.user32
+        user32.ShowWindow(hwnd, SW_RESTORE)
+        user32.SetForegroundWindow(hwnd)
+    except Exception:
+        pass
+
+
+def _acquire_instance():
+    """Можно ли стартовать? Возвращает (can_start: bool, handle).
+
+    * мьютекс занят ДРУГИМ процессом, у которого ЕСТЬ окно «English Teacher» —
+      окно поднимаем наверх и стартовать нельзя;
+    * мьютекс занят, но окна нет: процесс завис/остался без окна — считаем
+      прошлый запуск мёртвым и стартуем, чтобы не блокировать запуск навсегда
+      (лечение «залипшего» мьютекса — именно из-за него писало «уже запущено»,
+      когда приложения фактически не было).
+    """
+    handle = None
     try:
         import ctypes
         from ctypes import wintypes
         kernel32 = ctypes.windll.kernel32
         kernel32.CreateMutexW.restype = wintypes.HANDLE
-        handle = kernel32.CreateMutexW(None, False, "EnglishTeacherApp_SingleInstance_v2")
-        if kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
-            return None
-        return handle
+        handle = kernel32.CreateMutexW(None, False, MUTEX_NAME)
+        already = (kernel32.GetLastError() == ERROR_ALREADY_EXISTS)
     except Exception:
         _log("Проверка единственного экземпляра не удалась: %s" % traceback.format_exc())
-        return "no-check"
+        return True, "no-check"
+
+    if not already:
+        return True, handle
+
+    hwnd, pid = _find_app_window()
+    if hwnd and pid != os.getpid():
+        _log("Уже работает другое окно «English Teacher» (pid %s) — поднимаю наверх" % pid)
+        _raise_window(hwnd)
+        return False, handle
+
+    _log("Мьютекс занят, но окна «English Teacher» нет — прошлый запуск завис, "
+         "продолжаю запуск заново")
+    return True, handle
+
+
+def _force_exit(code=0):
+    """Мгновенно завершает процесс, не дожидаясь «висящих» потоков."""
+    try:
+        _log_fh.flush()
+    except Exception:
+        pass
+    os._exit(code)
 
 
 def main():
@@ -110,12 +199,12 @@ def main():
     _log("Python %s | %s" % (sys.version.split()[0], sys.executable))
     _log("Рабочая папка: %s" % APP_DIR)
 
-    mutex = _single_instance()
-    if mutex is None:
+    can_start, mutex = _acquire_instance()
+    if not can_start:
         _msgbox("English Teacher",
                 "Приложение уже запущено.\n\n"
-                "Найдите окно «English Teacher — Jane»\n"
-                "на панели задач.", 0x30)
+                "Окно «English Teacher — Jane» выведено\n"
+                "на передний план.", 0x40)      # 0x40 = иконка информации
         return
 
     # ---------- 1. Проверка файлов моделей ----------
@@ -214,6 +303,10 @@ def main():
             server_manager.stop_server()
         except Exception:
             pass
+        # Жёсткий выход: если какой-то поток (SDL/порт-аудио и т.п.) остался
+        # жив, обычный выход затягивался, процесс висел без окна и держал
+        # мьютекс — из-за этого следующий запуск писал «уже запущено».
+        _force_exit()
 
 
 if __name__ == "__main__":
@@ -223,7 +316,10 @@ if __name__ == "__main__":
         _log(traceback.format_exc())
         _msgbox("English Teacher", "Критическая ошибка:\n\n%s" % traceback.format_exc(limit=3))
     finally:
+        _log("Процесс завершён")
         try:
+            _log_fh.flush()
             _log_fh.close()
         except Exception:
             pass
+        os._exit(0)
