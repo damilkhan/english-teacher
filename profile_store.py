@@ -38,12 +38,16 @@ PRAISE_INDICATORS = ["good", "excellent", "great", "perfect", "well done", "corr
 MAX_ERRORS_PER_TYPE = 20
 MAX_STRENGTHS = 20
 MAX_WEEK_MISTAKES = 50
+MAX_LEVEL_TESTS = 20          # сколько последних тестов уровня храним в истории
+MAX_WEAK_TOPICS = 5           # сколько «слабых тем» выносим в промпт
 
 EMPTY_PROFILE = {
     "mistakes": {"grammar": [], "vocabulary": [], "pronunciation": []},
     "topics_passed": [],
     "strengths": [],
     "total_lessons": 0,
+    "level_tests": [],
+    "weak_topics": [],
 }
 
 
@@ -85,6 +89,8 @@ def default_profile():
         "strengths": [],
         "total_lessons": 0,
         "last_week_mistakes": [],
+        "level_tests": [],       # итоги тестов уровня + разбор ответов
+        "weak_topics": [],       # темы, где ученик чаще ошибался (для промпта)
     }
 
 
@@ -176,6 +182,53 @@ def record_from_dialogue(user_text, jane_response, user_id=None):
 
     save(profile, user_id)
     return notes
+
+
+def record_level_test(result, answers, user_id=None):
+    """Пишет итог теста уровня и разбор ответов в прогресс ученика.
+
+    Уровень как «краткий итог» живёт в profiles/user_N.json (user_manager),
+    а детальная история — ЗДЕСЬ, в profiles/user_N_progress.json: так её
+    видит prompt_builder и может опираться на «слабые темы».
+
+    result:  словарь из level_test.get_result();
+    answers: список [{"date","topic","level","correct","question"}].
+    Возвращает список слабых тем (для справки/тестов).
+    """
+    profile = load(user_id)
+    profile.setdefault("level_tests", [])
+    if isinstance(result, dict):
+        profile["level_tests"].append({
+            "date": result.get("date"),
+            "level": result.get("level"),
+            "difficulty": result.get("difficulty"),
+            "correct": result.get("correct"),
+            "total": result.get("total"),
+            "breakdown": result.get("breakdown", {}),
+            "answers": [dict(a) for a in (answers or []) if isinstance(a, dict)],
+        })
+        profile["level_tests"] = profile["level_tests"][-MAX_LEVEL_TESTS:]
+    profile["weak_topics"] = _weak_topics(profile["level_tests"])
+    _write(profile, progress_path(user_id))
+    return profile["weak_topics"]
+
+
+def _weak_topics(level_tests):
+    """Слабые темы по всей истории тестов: где доля ошибок выше — выше в списке."""
+    stats = {}
+    for test in (level_tests or []):
+        for ans in (test.get("answers") or []):
+            topic = str(ans.get("topic") or "").strip()
+            if not topic:
+                continue
+            cell = stats.setdefault(topic, {"topic": topic, "correct": 0, "total": 0})
+            cell["total"] += 1
+            if ans.get("correct"):
+                cell["correct"] += 1
+    weak = [c for c in stats.values() if c["correct"] < c["total"]]
+    # сначала темы с наибольшим числом ошибок, при равенстве — где больше вопросов
+    weak.sort(key=lambda c: (c["correct"] - c["total"], -c["total"]))
+    return weak[:MAX_WEAK_TOPICS]
 
 
 def _write(profile, path=None):

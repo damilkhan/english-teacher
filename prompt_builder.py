@@ -54,6 +54,30 @@ def _level_block(profile, level):
     return LEVEL_BLOCK_TEMPLATE.format(level=level, guidance=CEFR_GUIDANCE[level])
 
 
+# ---------- «слабые темы» из теста уровня ----------
+# Пишет их profile_store.record_level_test (profiles/user_N_progress.json).
+# ВАЖНО: пусто, если данных нет — тогда вывод build_system_prompt не меняется
+# (см. tests/smoke_test.test_prompt_unchanged).
+WEAK_TOPICS_TEMPLATE = """
+\U0001F3AF WEAK TOPICS (from the placement test): {topics}
+Weave these weak topics into the lesson when it feels natural.
+"""
+
+
+def _weak_topics_block(profile):
+    """Блок про слабые темы. Пусто, если их нет (обратная совместимость)."""
+    topics = (profile or {}).get("weak_topics") or []
+    names = []
+    for item in topics[:3]:
+        name = item.get("topic") if isinstance(item, dict) else item
+        name = str(name or "").strip()
+        if name:
+            names.append(name)
+    if not names:
+        return ""
+    return WEAK_TOPICS_TEMPLATE.format(topics=", ".join(names))
+
+
 def detect_language(text):
     """Есть кириллица → 'ru', иначе 'en'."""
     return "ru" if any(c in _RUSSIAN_CHARS for c in (text or "").lower()) else "en"
@@ -113,7 +137,7 @@ def build_system_prompt(mode, profile, lang="en", level=None):
     The student has completed {total_lessons} lessons.
     Be supportive and helpful. Use emojis freely: {EMOJIS}
     """
-    return prompt + _level_block(profile, level)
+    return prompt + _level_block(profile, level) + _weak_topics_block(profile)
 
 
 def build_conversation_prompt(system_prompt, history, user_text, lang):

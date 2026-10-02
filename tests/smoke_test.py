@@ -148,6 +148,17 @@ def test_prompt_unchanged():
               norm(old_full) == norm(new_full),
               f"было {len(old_full)} симв., стало {len(new_full)}")
 
+    # «слабые темы» из теста уровня: блок появляется ТОЛЬКО когда данные есть
+    # (иначе вывод промпта обязан остаться байт-в-байт прежним — см. выше)
+    base = {"mistakes": {}, "strengths": [], "topics_passed": [], "total_lessons": 0}
+    with_weak = dict(base, weak_topics=[{"topic": "travel and transport",
+                                         "correct": 0, "total": 3}])
+    p_with = prompt_builder.build_system_prompt("lesson", with_weak, "en")
+    p_without = prompt_builder.build_system_prompt("lesson", base, "en")
+    check("слабые темы добавляются в промпт",
+          "WEAK TOPICS" in p_with and "travel and transport" in p_with)
+    check("без слабых тем промпт не меняется", "WEAK TOPICS" not in p_without)
+
 
 def test_clean_response():
     print("\n[2] Чистка ответа модели")
@@ -438,6 +449,16 @@ def test_level_test():
         text = open(user_manager.identity_path(uid), encoding="utf-8").read()
         check("уровень записан в профиль",
               user_manager.get_user(uid)["level"] == res["level"] and '"level_test"' in text)
+        prog = profile_store.load(uid)
+        check("история теста записана в прогресс",
+              len(prog.get("level_tests", [])) == 1
+              and len(prog["level_tests"][-1]["answers"]) == res["total"],
+              "тестов: %d" % len(prog.get("level_tests", [])))
+        ans0 = prog["level_tests"][-1]["answers"][0]
+        check("в истории есть дата/тема/уровень/верно-неверно",
+              bool(ans0.get("date")) and bool(ans0.get("topic"))
+              and ans0.get("level") in level_test.LEVELS
+              and isinstance(ans0.get("correct"), bool), ans0)
 
         level_test.set_client(FakeLLM())
         q = level_test.start_test(uid)
@@ -448,6 +469,9 @@ def test_level_test():
                 break
             down.append(nxt["difficulty"])
         check("ошибки понижают сложность до A1", down[-1] == 1, "траектория %s" % down)
+        level_test.get_result(uid)        # контроллер зовёт его в финале — и мы тоже
+        weak = profile_store.load(uid).get("weak_topics", [])
+        check("слабые темы появились после ошибок", len(weak) >= 1, weak)
 
         level_test.set_client(DeadLLM())
         q = level_test.start_test(uid)

@@ -206,8 +206,27 @@ class EnglishTeacherApp:
                 f"Я Джейн, твой преподаватель английского.\n"
                 f"Я буду запоминать твои ошибки и подстраивать уроки под тебя.")
         if u.get("level"):
-            text += f"\nУровень: {u['level']}."
+            text += f"\n🎯 Твой уровень: {u['level']} — буду подбирать задания под него."
         return text
+
+    def _hero_subtitle(self):
+        """Подпись шапки: аватар + имя + уровень активного ученика."""
+        u = self.current_user or {}
+        name = str(u.get("name") or "").strip()
+        if not name:
+            return SUBTITLE_TEXT
+        sub = "%s %s" % (u.get("avatar") or "🙂", name)
+        if u.get("level"):
+            sub += " · уровень %s" % u["level"]
+        return sub
+
+    def _refresh_hero(self):
+        """Шапка — КАРТИНКА (кэш _hero_cache): после смены данных сбрасываем кэш."""
+        self._hero_cache = (None, None)
+        try:
+            self._redraw()
+        except Exception as exc:
+            print(f"⚠️ Шапка не обновилась: {exc}")
 
     def select_user(self, user_id):
         """Сделать профиль активным: контроллер, история и прогресс — его."""
@@ -223,6 +242,7 @@ class EnglishTeacherApp:
         self.chat.set_user(user_id)         # сброс истории диалога
         self.chat_view.clear()
         self.add_message("Джейн", self._greeting())
+        self._refresh_hero()
         if self.users_panel is not None:
             self.users_panel.refresh(user_id)
 
@@ -250,6 +270,7 @@ class EnglishTeacherApp:
         if user_id == (self.current_user or {}).get("id"):
             self.current_user = user_manager.get_user(user_id)
             self.add_message("Джейн", "✅ Профиль обновлён.")
+            self._refresh_hero()
         if self.users_panel is not None:
             self.users_panel.refresh((self.current_user or {}).get("id"))
 
@@ -281,15 +302,23 @@ class EnglishTeacherApp:
             self.window.after(300, lambda: self.run_level_test(created["id"]))
 
     def run_level_test(self, user_id):
-        """Адаптивный тест уровня: показать окно и сохранить уровень в профиль."""
+        """Адаптивный тест уровня: показать окно и сохранить уровень в профиль.
+
+        Панели передаём пробу готовности сервера (решение B): пока модель
+        грузится, окно теста показывает «Модель загружается…» и стартует само,
+        когда сервер ответит ready. Иначе первые вопросы тихо уходили бы в
+        резервный банк и уровень получался бы неточным.
+        """
         try:
-            level = LevelTestPanel.ask(self.window, self.palette, self.level_test, user_id)
+            level = LevelTestPanel.ask(self.window, self.palette, self.level_test,
+                                       user_id, ready_probe=self.check_server)
         except Exception as exc:
             print("⚠️ Тест уровня не открылся: %s" % exc)
             return None
         if level:
             self.current_user = user_manager.get_user(user_id) or self.current_user
             self.add_message("Джейн", LEVEL_TEST_NOTE % level)
+            self._refresh_hero()          # уровень — в шапку (это картинка)
         if self.users_panel is not None:
             self.users_panel.refresh((self.current_user or {}).get("id"))
         return level
@@ -425,7 +454,9 @@ class EnglishTeacherApp:
         width = int(width)
         if width < 50:
             return
-        key = (width, self.current_theme, self._status_text, self._status_color)
+        subtitle = self._hero_subtitle()
+        key = (width, self.current_theme, self._status_text,
+               self._status_color, subtitle)
         if self._hero_cache[0] == key:
             return
 
@@ -433,7 +464,7 @@ class EnglishTeacherApp:
         try:
             img = gradient.hero_full(
                 (width, HERO_HEIGHT), p,
-                emoji=TITLE_EMOJI, title=TITLE_TEXT, subtitle=SUBTITLE_TEXT,
+                emoji=TITLE_EMOJI, title=TITLE_TEXT, subtitle=subtitle,
                 badge=self._status_text,
                 badge_text_color=p.get(self._status_color, p["ok"]),
                 badge_bg=p.get(self._status_color + "_soft", p["muted_soft"]),

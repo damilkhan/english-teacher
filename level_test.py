@@ -29,6 +29,7 @@ import random
 import re
 from datetime import datetime
 
+import profile_store
 import user_manager
 
 # ---------------------------------------------------------
@@ -291,6 +292,7 @@ def start_test(user_id):
         "last_check": None,
         "finished": False,
         "result": None,
+        "history_saved": False,
     }
     _SESSIONS[user_id] = session
     return _queue_question(session, session["difficulty"])
@@ -350,6 +352,7 @@ def get_result(user_id):
         session["result"] = _build_result(session)
     session["finished"] = True
     session["result"]["saved"] = _save_result(session["user_id"], session["result"])
+    _save_history(session)
     return session["result"]
 
 
@@ -416,6 +419,7 @@ def _evaluate(session, answer):
         "correct": correct,
         "topic": question["topic"],
         "question": question["question"],
+        "date": datetime.now().isoformat(timespec="seconds"),
     })
     session["evaluated"] = True
     session["last_check"] = {
@@ -495,3 +499,33 @@ def _save_result(user_id, result):
         },
     }
     return bool(user_manager.update_user(user_id, payload))
+
+
+def _save_history(session):
+    """Пишет детальную историю ответов теста в profiles/user_N_progress.json.
+
+    Уровень (краткий итог) уже ушёл в profiles/user_N.json через _save_result,
+    а здесь — разбор по вопросам (дата/тема/верно-неверно/уровень вопроса),
+    чтобы prompt_builder мог опираться на «слабые темы». Идемпотентно: если
+    get_result() вызван повторно, история не дублируется.
+    """
+    if session.get("history_saved"):
+        return None
+    session["history_saved"] = True
+    history = session.get("history") or []
+    if not history:
+        return None
+    answers = [{
+        "date": h.get("date"),
+        "topic": h.get("topic"),
+        "level": DIFFICULTY_TO_LEVEL.get(h["difficulty"]),
+        "difficulty": h["difficulty"],
+        "correct": bool(h["correct"]),
+        "question": h.get("question"),
+    } for h in history]
+    try:
+        return profile_store.record_level_test(session["result"], answers,
+                                               session["user_id"])
+    except Exception as exc:
+        print("⚠️ level_test: история не записана (%s)" % exc)
+        return None
