@@ -58,6 +58,10 @@ STATUS_TEXT = {
 }
 STATUS_COLOR = {"ready": "ok", "loading": "warn", "offline": "err"}
 
+# Пока в фоне грузится модель распознавания (Whisper) — отдельный статус,
+# иначе бейдж показывал «Готов», хотя микрофон ещё не готов работать.
+STT_LOADING_TEXT = "● Готовлю распознавание…"
+
 NEW_PROFILE_NOTE = "📊 Создан профиль ученика. Я буду запоминать твой прогресс!"
 LEVEL_TEST_NOTE = "🎯 Уровень определён: %s. Подстрою уроки под него."
 NOT_READY_LOADING = "⏳ Модель ещё загружается — подожди несколько секунд и попробуй снова."
@@ -89,6 +93,8 @@ class EnglishTeacherApp:
         self.busy = False
         self.server_state = "offline"
         self.server_ready = False
+        self.stt_state = "loading"      # loading | ready | error
+        self.stt_ready = False
         self._status_text, self._status_color = INITIAL_STATUS
         self._hero_fonts = {}      # заполним ниже, после создания окна
 
@@ -126,7 +132,9 @@ class EnglishTeacherApp:
 
         # ---------- железо и сеть ----------
         self.vad = audio_vad.AudioVAD()
-        self.stt = stt_engine.STTEngine()
+        # Модель грузится В ФОНЕ (preload ниже): иначе старт окна «замирал»
+        # на десятки секунд, пока Whisper читается с диска.
+        self.stt = stt_engine.STTEngine(on_state=self._on_stt_state)
         self.llm = LLMClient()
 
         # ---------- контроллеры ----------
@@ -163,6 +171,7 @@ class EnglishTeacherApp:
             self.add_message("Джейн", NEW_PROFILE_NOTE)
         self.check_server()
         self.monitor.start()
+        self.stt.preload()                      # Whisper — в фоне, окно не ждёт
         self.window.after(60, self._redraw)     # первая отрисовка после раскладки
 
         # новый профиль → сразу предлагаем определить уровень
@@ -186,27 +195,39 @@ class EnglishTeacherApp:
             self.window.deiconify()
 
         if data:
-            created = user_manager.create_user(
-                data["name"], data["gender"], data["age"],
-                data["level"], data["goal"], data["avatar"])
+            created = user_manager.create_user(**self._form_profile(data))
             if created:
                 self._pending_level_test = created["id"]
                 return created
 
         # форму закрыли — заводим профиль по умолчанию, чтобы приложение жило
-        fallback = user_manager.create_user("Ученик", "other", None, "A1",
+        # (уровень не задаём: его определит вводный тест)
+        fallback = user_manager.create_user("Ученик", "other", None, None,
                                             "Учиться говорить по-английски", "🙂")
         if fallback:
             self._pending_level_test = fallback["id"]
         return fallback or user_manager.get_last_user()
+
+    @staticmethod
+    def _form_profile(data):
+        """Поля профиля из формы. Уровень НЕ берём: его ставит вводный тест,
+        поэтому у нового профиля уровень остаётся «не определён»."""
+        return {
+            "name": data["name"], "gender": data["gender"], "age": data["age"],
+            "goal": data.get("goal", ""), "avatar": data.get("avatar"),
+        }
 
     def _greeting(self):
         u = self.current_user or {}
         text = (f"{u.get('avatar', '🙂')} Привет, {u.get('name') or 'друг'}! "
                 f"Я Джейн, твой преподаватель английского.\n"
                 f"Я буду запоминать твои ошибки и подстраивать уроки под тебя.")
-        if u.get("level"):
-            text += f"\n🎯 Твой уровень: {u['level']} — буду подбирать задания под него."
+        level = u.get("level")
+        if level:
+            text += f"\n🎯 Твой уровень: {level} — буду подбирать задания под него."
+        else:
+            text += ("\n🎯 Уровень пока не определён — пройди вводный тест, "
+                     "и я подстроюсь под него.")
         return text
 
     def _hero_subtitle(self):
@@ -216,8 +237,7 @@ class EnglishTeacherApp:
         if not name:
             return SUBTITLE_TEXT
         sub = "%s %s" % (u.get("avatar") or "🙂", name)
-        if u.get("level"):
-            sub += " · уровень %s" % u["level"]
+        sub += " · уровень %s" % user_manager.level_label(u.get("level"))
         return sub
 
     def _refresh_hero(self):
@@ -252,9 +272,7 @@ class EnglishTeacherApp:
         data = FirstRunForm.ask(self.window, self.palette)
         if not data:
             return
-        created = user_manager.create_user(
-            data["name"], data["gender"], data["age"],
-            data["level"], data["goal"], data["avatar"])
+        created = user_manager.create_user(**self._form_profile(data))
         if created:
             self.select_user(created["id"])
             self.window.after(300, lambda: self.run_level_test(created["id"]))
@@ -285,11 +303,10 @@ class EnglishTeacherApp:
             data = FirstRunForm.ask(self.window, self.palette)
             created = None
             if data:
-                created = user_manager.create_user(
-                    data["name"], data["gender"], data["age"],
-                    data["level"], data["goal"], data["avatar"])
+                created = user_manager.create_user(**self._form_profile(data))
             if created is None:
-                created = user_manager.create_user("Ученик", "other", None, "A1",
+                # уровень не задаём: его определит вводный тест
+                created = user_manager.create_user("Ученик", "other", None, None,
                                                    "Учиться говорить по-английски", "🙂")
             remaining = [created] if created else user_manager.list_users()
 
@@ -536,11 +553,31 @@ class EnglishTeacherApp:
     def _on_server_state(self, state, message):
         self.server_state = state
         self.server_ready = (state == "ready")
-        if self.busy:                       # не сбиваем «Думает…»/«Распознаю…»
-            return state
-        self._set_status(STATUS_TEXT.get(state, STATUS_TEXT["offline"]),
-                         STATUS_COLOR.get(state, "err"))
+        self._refresh_status()
         return state
+
+    def _on_stt_state(self, state, message):
+        """Колбэк STTEngine (из фонового потока) → в главный поток."""
+        self._dispatch(lambda: self._apply_stt_state(state, message))
+
+    def _apply_stt_state(self, state, message):
+        self.stt_state = state
+        self.stt_ready = (state == "ready")
+        self._refresh_status()
+
+    def _refresh_status(self):
+        """Единая точка выбора текста бейджа: сервер + распознавание.
+
+        Приоритет: если доступна модель, но ещё грузится Whisper — говорим об
+        этом; во всех остальных случаях показываем состояние LLM-сервера.
+        """
+        if self.busy:                       # не сбиваем «Думает…»/«Распознаю…»
+            return
+        if self.server_ready and self.stt_state == "loading":
+            self._set_status(STT_LOADING_TEXT, "warn")
+            return
+        self._set_status(STATUS_TEXT.get(self.server_state, STATUS_TEXT["offline"]),
+                         STATUS_COLOR.get(self.server_state, "err"))
 
     # =====================================================
     # Действия пользователя
