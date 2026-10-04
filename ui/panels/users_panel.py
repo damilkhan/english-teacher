@@ -32,8 +32,9 @@ class UsersPanel(ctk.CTkFrame):
     # Высоту задаём явно: иначе блок текста занимает всю высоту карточки и
     # его подложка перекрывает 1 px рамку активной строки — рамка рвётся.
     ROW_HEIGHT = 46        # высота строки профиля
-    ICON_SIZE = 27         # квадрат под кнопку-иконку
-    ICON_PX = 17           # размер значка-картинки внутри кнопки
+    ICON_SIZE = 30         # квадрат под кнопку-иконку
+    ICON_RADIUS = 4        # радиус: крайние колонки CTkButton = corner_radius
+    ICON_PX = 16           # размер значка-картинки внутри кнопки
     AVATAR_W = 26          # место под аватар
     AVATAR_PX = 24         # размер цветной картинки-аватара
     NAME_SIZE = 15         # кегль имени — главный акцент строки
@@ -202,7 +203,7 @@ class UsersPanel(ctk.CTkFrame):
             holder, text=(text if image is None else ""), command=command,
             font=("Segoe UI Emoji", 13), cursor="hand2",
             fg_color=p["btn"], hover_color=p["btn_hover"],
-            text_color=p["text"], corner_radius=theme.R["button"],
+            text_color=p["text"], corner_radius=self.ICON_RADIUS,
         )
         if image is not None:
             button.configure(image=image, compound="left")
