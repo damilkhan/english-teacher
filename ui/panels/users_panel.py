@@ -2,9 +2,9 @@
 # =========================================================
 # UI/PANELS/USERS_PANEL.PY — правая панель «Пользователи»
 # =========================================================
-# Список профилей: аватар + имя + уровень, у каждого строки — кнопки
-# ✏️ (редактировать) и 🗑️ (удалить). Клик по строке делает профиль
-# активным. Внизу — «+ Добавить пользователя» (неактивна, если 8 профилей).
+# Одна строка на профиль:  [цветной аватар] Имя · Уровень .... [🎯][✏️][🗑️]
+# 🎯 — перепройти тест уровня, ✏️ — редактировать, 🗑️ — удалить.
+# Клик по строке делает профиль активным. Внизу — «+ Добавить пользователя».
 #
 # Данные берёт из user_manager по запросу через refresh(), поэтому после
 # любого добавления/удаления достаточно вызвать refresh() — список
@@ -17,18 +17,25 @@ import customtkinter as ctk
 import theme
 import user_manager
 
+try:
+    # Цветной аватар: Tk рисует эмодзи однотонным контуром, а через Pillow
+    # глиф из Segoe UI Emoji выходит цветным. Пакет нужен только для этого.
+    from ui import emoji_render
+except Exception:
+    emoji_render = None
+
 
 class UsersPanel(ctk.CTkFrame):
-    # --- геометрия строки списка ---------------------------------------
-    # Имя живёт на СВОЕЙ строке во всю ширину карточки, а уровень/возраст и
-    # кнопки делят вторую строку. Так даже длинное имя («Александра Петрова»)
-    # не упирается в кнопки и не сжимается до «Алекс…». Высота фиксирована —
-    # карточка не «прыгает» от длины подписи.
-    ROW_HEIGHT = 60        # высота строки профиля
-    ROW_PAD_Y = 2          # вертикальный зазор текстового блока
+    # --- геометрия строки списка (ОДНА строка) -------------------------
+    # Раскладка:  [цветной аватар]  Имя · Уровень  .....  [🎯][✏️][🗑️]
+    # Высоту задаём явно: иначе блок текста занимает всю высоту карточки и
+    # его подложка перекрывает 1 px рамку активной строки — рамка рвётся.
+    ROW_HEIGHT = 46        # высота строки профиля
     ICON_SIZE = 27         # квадрат под кнопку-иконку
-    AVATAR_SIZE = 27       # квадрат под аватар
+    AVATAR_W = 26          # место под аватар
+    AVATAR_PX = 24         # размер цветной картинки-аватара
     NAME_SIZE = 15         # кегль имени — главный акцент строки
+    MIN_NAME_PX = 48       # столько минимум оставляем имени
 
     def __init__(self, parent, palette, active_id=None,
                  on_add=None, on_edit=None, on_delete=None,
@@ -125,45 +132,54 @@ class UsersPanel(ctk.CTkFrame):
             border_width=1 if active else 0,
             border_color=p["accent"] if active else p["surface"])
         row.pack(fill="x", padx=2, pady=3)
-        # Высоту задаём сами: иначе блок текста растягивается на всю строку и
-        # его подложка перекрывает 1 px рамку активной карточки — рамка рвётся.
         row.pack_propagate(False)
 
-        # аватар — слева, по центру строки
-        avatar = ctk.CTkLabel(row, text=user.get("avatar", "🙂"),
-                              font=("Segoe UI Emoji", 18), width=self.AVATAR_SIZE)
-        avatar.pack(side="left", padx=(8, 6))
+        # действия — прижаты вправо: [🎯][✏️][🗑️]
+        for emoji, command, pad in (
+                ("🗑️", lambda u=user: self._delete(u), (1, 0)),
+                ("✏️", lambda u=user: self._edit(u), (1, 1)),
+                ("🎯", lambda u=user: self._test(u), (1, 1))):
+            self._icon_button(row, emoji, command).pack(side="right", padx=pad)
 
-        # правая часть: имя (строка 1) и уровень + действия (строка 2)
+        # аватар — слева. Эмодзи рисуем Pillow-ом (embedded_color): Tk показал
+        # бы его однотонным контуром, а нужен цветной.
+        avatar_token = str(user.get("avatar") or "🙂")
+        avatar = ctk.CTkLabel(row, text="", width=self.AVATAR_W)
+        avatar_image = self._avatar_image(avatar_token)
+        if avatar_image is not None:
+            avatar.configure(image=avatar_image)
+        else:
+            avatar.configure(text=avatar_token, font=("Segoe UI Emoji", 17))
+        avatar.pack(side="left", padx=(6, 0))
+
+        # «Имя · Уровень» — занимает весь остаток строки
         info = ctk.CTkFrame(row, fg_color="transparent")
-        info.pack(side="left", fill="both", expand=True, padx=(0, 8),
-                  pady=self.ROW_PAD_Y)
+        info.pack(side="left", fill="x", expand=True, padx=(2, 0))
 
         full_name = user.get("name") or "Ученик"
         name = ctk.CTkLabel(info, text=full_name, anchor="w",
                             font=(theme.FONT_UI[0], self.NAME_SIZE, "bold"),
                             text_color=p["text_strong"])
-        name.pack(fill="x")
-        # если имя всё же длиннее строки — аккуратно усекаем «…» (см. _fit_name)
-        info.bind("<Configure>",
-                  lambda _e, box=info, lbl=name, txt=full_name: self._fit_name(box, lbl, txt))
+        name.pack(side="left")
+        # в одну строку «не определён» не помещается — показываем «—»
+        level_text = user_manager.level_label(user.get("level"))
+        if level_text not in user_manager.LEVELS:
+            level_text = "—"
+        meta_text = "· " + level_text
+        meta = ctk.CTkLabel(info, text=meta_text, anchor="w",
+                            font=theme.FONT_SMALL, text_color=p["muted"])
+        meta.pack(side="left", padx=(3, 0))
 
-        bottom = ctk.CTkFrame(info, fg_color="transparent")
-        bottom.pack(fill="x")
-        for emoji, command, pad in (
-                ("🗑️", lambda u=user: self._delete(u), (2, 0)),
-                ("✏️", lambda u=user: self._edit(u), (2, 2)),
-                ("🎯", lambda u=user: self._test(u), (2, 2))):
-            self._icon_button(bottom, emoji, command).pack(side="right", padx=pad)
-        meta = " · ".join(x for x in (user_manager.level_label(user.get("level")),
-                                      self._age(user)) if x)
-        ctk.CTkLabel(bottom, text=meta, anchor="w", font=theme.FONT_SMALL,
-                     text_color=p["muted"]).pack(side="left")
+        # длинное имя (и «не определён») аккуратно вписываем в строку
+        info.bind("<Configure>",
+                  lambda _e, box=info, n=name, m=meta:
+                  self._fit_row_text(box, n, m, full_name, meta_text))
 
         # клик по строке (и по аватар/имя) — сделать активным
         for widget in (row, avatar, info, name):
             widget.bind("<Button-1>", lambda _e, uid=user["id"]: self._select(uid))
         return row
+
     def _icon_button(self, parent, text, command):
         """Кнопка-иконка ФИКСИРОВАННОГО размера.
 
@@ -184,40 +200,102 @@ class UsersPanel(ctk.CTkFrame):
         ).pack(fill="both", expand=True)
         return holder
 
+    # -----------------------------------------------------
+    # Аватар и подписи
+    # -----------------------------------------------------
+    def _avatar_image(self, token):
+        """Цветная картинка аватара (Pillow, embedded_color) или None.
+
+        Tk рисует эмодзи одним цветом, поэтому аватар выходил бледным
+        контуром. ui.emoji_render отдаёт цветной глиф из Segoe UI Emoji;
+        результат кэшируем — Tk сам ссылку на картинку не держит.
+        """
+        if emoji_render is None:
+            return None
+        cache = getattr(self, "_avatar_cache", None)
+        if cache is None:
+            cache = {}
+            self._avatar_cache = cache
+        if token in cache:
+            return cache[token]
+        image = None
+        if emoji_render.available():
+            ink = emoji_render.render(token, self.AVATAR_PX)
+            if ink is not None:
+                try:
+                    image = ctk.CTkImage(light_image=ink, dark_image=ink,
+                                         size=(ink.width, ink.height))
+                except Exception:
+                    image = None
+        cache[token] = image
+        return image
+
     def _name_font(self):
         """Шрифт имени (один объект на панель — его дёшево мерить)."""
         font = getattr(self, "_name_font_obj", None)
         if font is None:
             try:
                 import tkinter.font as tkfont
-                font = tkfont.Font(font=(theme.FONT_UI[0], self.NAME_SIZE, "bold"))
+                # CTk переводит кегль в ПИКСЕЛИ (отрицательный размер).
+                # Меряем так же — иначе ширина выходит завышенной и имя
+                # обрезается раньше времени.
+                font = tkfont.Font(family=theme.FONT_UI[0],
+                                   size=-self.NAME_SIZE, weight="bold")
             except Exception:
                 font = False
             self._name_font_obj = font
         return font or None
 
-    def _fit_name(self, box, label, text):
-        """Вписывает имя в ширину блока, обрезая хвост с «…».
-
-        Меряем по ФАКТИЧЕСКОЙ ширине контейнера: у длинных имён («Александра»)
-        хвост не должен наезжать на кнопки-иконки справа.
-        """
-        text = str(text or "")
-        font = self._name_font()
-        avail = max(30, box.winfo_width() - 2)
-        if font is None or font.measure(text) <= avail:
-            label.configure(text=text)
-            return
-        cut = text
-        while cut and font.measure(cut + "…") > avail:
-            cut = cut[:-1]
-        label.configure(text=(cut + "…") if cut else "…")
+    def _meta_font(self):
+        """Шрифт уровня (нужен, чтобы измерить ширину подписи)."""
+        font = getattr(self, "_meta_font_obj", None)
+        if font is None:
+            try:
+                import tkinter.font as tkfont
+                font = tkfont.Font(family=theme.FONT_SMALL[0],
+                                   size=-theme.FONT_SMALL[1])
+            except Exception:
+                font = False
+            self._meta_font_obj = font
+        return font or None
 
     @staticmethod
-    def _age(user):
-        age = user.get("age")
-        return "%d лет" % age if isinstance(age, int) else ""
+    def _ellipsize(text, font, max_px):
+        """Обрезает строку по ширине, добавляя «…».
 
+        Обрезка нужна только для очень длинных имён и для «не определён»:
+        обычные имена помещаются целиком.
+        """
+        text = str(text or "")
+        if font is None or max_px <= 0:
+            return text
+        if font.measure(text) <= max_px:
+            return text
+        cut = text
+        while cut and font.measure(cut + "…") > max_px:
+            cut = cut[:-1]
+        return (cut + "…") if cut else "…"
+
+    def _fit_row_text(self, box, name_label, meta_label, name_text, meta_text):
+        """Вписывает «Имя · Уровень» в строку: имя приоритетнее уровня."""
+        font = self._name_font()
+        if font is None:
+            return
+        total = max(40, box.winfo_width() - 6)
+        meta_font = self._meta_font()
+
+        meta_shown = meta_text
+        meta_w = meta_font.measure(meta_text) if meta_font else 0
+        if total - meta_w < self.MIN_NAME_PX:
+            meta_shown = self._ellipsize(meta_text, meta_font,
+                                         max(18, total - self.MIN_NAME_PX))
+            meta_w = meta_font.measure(meta_shown) if meta_font else 0
+
+        name_shown = self._ellipsize(name_text, font, max(24, total - meta_w - 8))
+        if name_label.cget("text") != name_shown:
+            name_label.configure(text=name_shown)
+        if meta_label.cget("text") != meta_shown:
+            meta_label.configure(text=meta_shown)
     # -----------------------------------------------------
     # Действия
     # -----------------------------------------------------
