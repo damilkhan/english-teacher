@@ -19,6 +19,15 @@ import user_manager
 
 
 class UsersPanel(ctk.CTkFrame):
+    # --- геометрия строки списка ---------------------------------------
+    # Высота фиксирована: имя и уровень — два CTkLabel по 28 px минимум.
+    # Так карточка не «прыгает» от длины подписи и ничего не вылезает наружу.
+    ROW_HEIGHT = 58        # высота строки профиля
+    ROW_PAD_Y = 1          # зазор блока «имя+уровень» до рамки строки
+    ICON_SIZE = 27         # квадрат под кнопку-иконку
+    AVATAR_SIZE = 27       # квадрат под аватар
+    NAME_SIZE = 15         # кегль имени — главный акцент строки
+
     def __init__(self, parent, palette, active_id=None,
                  on_add=None, on_edit=None, on_delete=None,
                  on_select=None, on_close=None, on_test=None):
@@ -101,6 +110,7 @@ class UsersPanel(ctk.CTkFrame):
             text_color=self.palette["muted"] if full else "#FFFFFF",
             text="Лимит 8 профилей" if full else "+  Добавить пользователя")
 
+
     def _build_row(self, user):
         p = self.palette
         active = (user["id"] == self.active_id)
@@ -109,31 +119,42 @@ class UsersPanel(ctk.CTkFrame):
             self.list_frame,
             fg_color=p["accent_soft"] if active else p["surface"],
             corner_radius=theme.R["block"],
+            height=self.ROW_HEIGHT,
             border_width=1 if active else 0,
             border_color=p["accent"] if active else p["surface"])
         row.pack(fill="x", padx=2, pady=3)
+        # Высоту задаём сами. Иначе блок «имя + уровень» растягивается на всю
+        # строку и своей непрозрачной подложкой перекрывает 1 px рамку активной
+        # карточки — рамка «рвалась» сверху и снизу ровно по ширине подписи.
+        row.pack_propagate(False)
 
+        # действия (справа): в строке порядок 🎯 ✏️ 🗑️ слева направо
+        for emoji, command, pad in (
+                ("🗑️", lambda u=user: self._delete(u), (2, 6)),
+                ("✏️", lambda u=user: self._edit(u), (2, 2)),
+                ("🎯", lambda u=user: self._test(u), (2, 2))):
+            self._icon_button(row, emoji, command).pack(side="right", padx=pad)
+
+        # аватар
         avatar = ctk.CTkLabel(row, text=user.get("avatar", "🙂"),
-                              font=("Segoe UI Emoji", 20), width=34)
-        avatar.pack(side="left", padx=(10, 4), pady=8)
+                              font=("Segoe UI Emoji", 18), width=self.AVATAR_SIZE)
+        avatar.pack(side="left", padx=(8, 4))
 
+        # имя (главный акцент) + уровень и возраст под ним
         info = ctk.CTkFrame(row, fg_color="transparent")
-        info.pack(side="left", fill="x", expand=True)
-        name = ctk.CTkLabel(info, text=user.get("name", "Ученик"), anchor="w",
-                            font=(theme.FONT_UI[0], 13, "bold"),
-                            text_color=p["text_strong"] if active else p["text"])
+        info.pack(side="left", fill="both", expand=True, pady=self.ROW_PAD_Y)
+        full_name = user.get("name") or "Ученик"
+        name = ctk.CTkLabel(info, text=full_name, anchor="w",
+                            font=(theme.FONT_UI[0], self.NAME_SIZE, "bold"),
+                            text_color=p["text_strong"])
         name.pack(anchor="w")
+        # длинное имя усекаем «…» по фактической ширине блока (см. _fit_name)
+        info.bind("<Configure>",
+                  lambda _e, box=info, lbl=name, txt=full_name: self._fit_name(box, lbl, txt))
         meta = " · ".join(x for x in (user_manager.level_label(user.get("level")),
                                       self._age(user)) if x)
         ctk.CTkLabel(info, text=meta, anchor="w", font=theme.FONT_SMALL,
                      text_color=p["muted"]).pack(anchor="w")
-
-        trash = self._icon_button(row, "🗑️", lambda: self._delete(user))
-        trash.pack(side="right", padx=(2, 8))
-        pencil = self._icon_button(row, "✏️", lambda: self._edit(user))
-        pencil.pack(side="right", padx=2)
-        target = self._icon_button(row, "🎯", lambda: self._test(user))
-        target.pack(side="right", padx=2)
 
         # клик по строке (и по аватар/имя) — сделать активным
         for widget in (row, avatar, info, name):
@@ -141,12 +162,53 @@ class UsersPanel(ctk.CTkFrame):
         return row
 
     def _icon_button(self, parent, text, command):
+        """Кнопка-иконка ФИКСИРОВАННОГО размера.
+
+        CTkButton сам подгоняет ширину под глиф эмодзи, а 🗑️/✏️/🎯 в Segoe UI
+        Emoji шире заявленных 34 px — кнопки вылезали за границы строки.
+        Оборачиваем кнопку в квадрат-контейнер: размер задаёт он, а кнопка
+        лишь заполняет его.
+        """
         p = self.palette
-        return ctk.CTkButton(
-            parent, text=text, width=34, height=32, command=command,
-            font=("Segoe UI Emoji", 14), cursor="hand2",
+        holder = ctk.CTkFrame(parent, fg_color="transparent",
+                              width=self.ICON_SIZE, height=self.ICON_SIZE)
+        holder.pack_propagate(False)
+        ctk.CTkButton(
+            holder, text=text, command=command,
+            font=("Segoe UI Emoji", 13), cursor="hand2",
             fg_color=p["btn"], hover_color=p["btn_hover"],
-            text_color=p["text"], corner_radius=theme.R["button"])
+            text_color=p["text"], corner_radius=theme.R["button"],
+        ).pack(fill="both", expand=True)
+        return holder
+
+    def _name_font(self):
+        """Шрифт имени (один объект на панель — его дёшево мерить)."""
+        font = getattr(self, "_name_font_obj", None)
+        if font is None:
+            try:
+                import tkinter.font as tkfont
+                font = tkfont.Font(font=(theme.FONT_UI[0], self.NAME_SIZE, "bold"))
+            except Exception:
+                font = False
+            self._name_font_obj = font
+        return font or None
+
+    def _fit_name(self, box, label, text):
+        """Вписывает имя в ширину блока, обрезая хвост с «…».
+
+        Меряем по ФАКТИЧЕСКОЙ ширине контейнера: у длинных имён («Александра»)
+        хвост не должен наезжать на кнопки-иконки справа.
+        """
+        text = str(text or "")
+        font = self._name_font()
+        avail = max(30, box.winfo_width() - 2)
+        if font is None or font.measure(text) <= avail:
+            label.configure(text=text)
+            return
+        cut = text
+        while cut and font.measure(cut + "…") > avail:
+            cut = cut[:-1]
+        label.configure(text=(cut + "…") if cut else "…")
 
     @staticmethod
     def _age(user):
