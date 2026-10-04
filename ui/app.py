@@ -460,6 +460,34 @@ class EnglishTeacherApp:
 
         self._update_hero(max(160, left_w - 2 * theme.CARD_PAD))
 
+        # Углы карточек на градиенте: CTk закрашивает скруглённый угол
+        # фоном родителя (canvas → grad_top), а не самим градиентом, и в
+        # углах проступали тёмные квадраты. Подставляем настоящий цвет
+        # градиента на верхнем и нижнем краю карточки.
+        corners = self._card_corners(h, pad, pad + inner_h)
+        for card in (self.left_frame, self.right_panel, self.users_panel):
+            try:
+                card.configure(background_corner_colors=corners)
+            except Exception:
+                pass
+
+    def _card_corners(self, height, top_y, bottom_y):
+        """Цвета градиента для углов карточки: (TL, TR, BR, BL).
+
+        Градиент вертикальный, поэтому верхние углы берут цвет на верхнем
+        краю карточки, нижние — на нижнем (низ заметнее: там градиент уже
+        уходит в фиолетовый).
+        """
+        p = self.palette
+        span = max(1, int(height) - 1)
+
+        def color(y):
+            t = max(0.0, min(1.0, float(y) / span))
+            return gradient.lerp_hex(p["grad_top"], p["grad_bottom"], t)
+
+        top, bottom = color(top_y), color(bottom_y)
+        return (top, top, bottom, bottom)
+
     def _update_hero(self, width=None):
         """Собирает шапку картинкой: градиент + тексты + пилюля статуса.
 

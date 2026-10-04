@@ -150,7 +150,7 @@ class UsersPanel(ctk.CTkFrame):
             avatar.configure(image=avatar_image)
         else:
             avatar.configure(text=avatar_token, font=("Segoe UI Emoji", 17))
-        avatar.pack(side="left", padx=(6, 0))
+        avatar.pack(side="left", padx=(8, 10))
 
         # «Имя · Уровень» — занимает весь остаток строки
         info = ctk.CTkFrame(row, fg_color="transparent")
