@@ -20,10 +20,12 @@ import user_manager
 
 class UsersPanel(ctk.CTkFrame):
     # --- геометрия строки списка ---------------------------------------
-    # Высота фиксирована: имя и уровень — два CTkLabel по 28 px минимум.
-    # Так карточка не «прыгает» от длины подписи и ничего не вылезает наружу.
-    ROW_HEIGHT = 58        # высота строки профиля
-    ROW_PAD_Y = 1          # зазор блока «имя+уровень» до рамки строки
+    # Имя живёт на СВОЕЙ строке во всю ширину карточки, а уровень/возраст и
+    # кнопки делят вторую строку. Так даже длинное имя («Александра Петрова»)
+    # не упирается в кнопки и не сжимается до «Алекс…». Высота фиксирована —
+    # карточка не «прыгает» от длины подписи.
+    ROW_HEIGHT = 60        # высота строки профиля
+    ROW_PAD_Y = 2          # вертикальный зазор текстового блока
     ICON_SIZE = 27         # квадрат под кнопку-иконку
     AVATAR_SIZE = 27       # квадрат под аватар
     NAME_SIZE = 15         # кегль имени — главный акцент строки
@@ -123,44 +125,45 @@ class UsersPanel(ctk.CTkFrame):
             border_width=1 if active else 0,
             border_color=p["accent"] if active else p["surface"])
         row.pack(fill="x", padx=2, pady=3)
-        # Высоту задаём сами. Иначе блок «имя + уровень» растягивается на всю
-        # строку и своей непрозрачной подложкой перекрывает 1 px рамку активной
-        # карточки — рамка «рвалась» сверху и снизу ровно по ширине подписи.
+        # Высоту задаём сами: иначе блок текста растягивается на всю строку и
+        # его подложка перекрывает 1 px рамку активной карточки — рамка рвётся.
         row.pack_propagate(False)
 
-        # действия (справа): в строке порядок 🎯 ✏️ 🗑️ слева направо
-        for emoji, command, pad in (
-                ("🗑️", lambda u=user: self._delete(u), (2, 6)),
-                ("✏️", lambda u=user: self._edit(u), (2, 2)),
-                ("🎯", lambda u=user: self._test(u), (2, 2))):
-            self._icon_button(row, emoji, command).pack(side="right", padx=pad)
-
-        # аватар
+        # аватар — слева, по центру строки
         avatar = ctk.CTkLabel(row, text=user.get("avatar", "🙂"),
                               font=("Segoe UI Emoji", 18), width=self.AVATAR_SIZE)
-        avatar.pack(side="left", padx=(8, 4))
+        avatar.pack(side="left", padx=(8, 6))
 
-        # имя (главный акцент) + уровень и возраст под ним
+        # правая часть: имя (строка 1) и уровень + действия (строка 2)
         info = ctk.CTkFrame(row, fg_color="transparent")
-        info.pack(side="left", fill="both", expand=True, pady=self.ROW_PAD_Y)
+        info.pack(side="left", fill="both", expand=True, padx=(0, 8),
+                  pady=self.ROW_PAD_Y)
+
         full_name = user.get("name") or "Ученик"
         name = ctk.CTkLabel(info, text=full_name, anchor="w",
                             font=(theme.FONT_UI[0], self.NAME_SIZE, "bold"),
                             text_color=p["text_strong"])
-        name.pack(anchor="w")
-        # длинное имя усекаем «…» по фактической ширине блока (см. _fit_name)
+        name.pack(fill="x")
+        # если имя всё же длиннее строки — аккуратно усекаем «…» (см. _fit_name)
         info.bind("<Configure>",
                   lambda _e, box=info, lbl=name, txt=full_name: self._fit_name(box, lbl, txt))
+
+        bottom = ctk.CTkFrame(info, fg_color="transparent")
+        bottom.pack(fill="x")
+        for emoji, command, pad in (
+                ("🗑️", lambda u=user: self._delete(u), (2, 0)),
+                ("✏️", lambda u=user: self._edit(u), (2, 2)),
+                ("🎯", lambda u=user: self._test(u), (2, 2))):
+            self._icon_button(bottom, emoji, command).pack(side="right", padx=pad)
         meta = " · ".join(x for x in (user_manager.level_label(user.get("level")),
                                       self._age(user)) if x)
-        ctk.CTkLabel(info, text=meta, anchor="w", font=theme.FONT_SMALL,
-                     text_color=p["muted"]).pack(anchor="w")
+        ctk.CTkLabel(bottom, text=meta, anchor="w", font=theme.FONT_SMALL,
+                     text_color=p["muted"]).pack(side="left")
 
         # клик по строке (и по аватар/имя) — сделать активным
         for widget in (row, avatar, info, name):
             widget.bind("<Button-1>", lambda _e, uid=user["id"]: self._select(uid))
         return row
-
     def _icon_button(self, parent, text, command):
         """Кнопка-иконка ФИКСИРОВАННОГО размера.
 
