@@ -16,6 +16,7 @@ import customtkinter as ctk
 
 import theme
 import user_manager
+from ui.widgets import tooltip
 
 try:
     # Цветной аватар: Tk рисует эмодзи однотонным контуром, а через Pillow
@@ -32,6 +33,7 @@ class UsersPanel(ctk.CTkFrame):
     # его подложка перекрывает 1 px рамку активной строки — рамка рвётся.
     ROW_HEIGHT = 46        # высота строки профиля
     ICON_SIZE = 27         # квадрат под кнопку-иконку
+    ICON_PX = 17           # размер значка-картинки внутри кнопки
     AVATAR_W = 26          # место под аватар
     AVATAR_PX = 24         # размер цветной картинки-аватара
     NAME_SIZE = 15         # кегль имени — главный акцент строки
@@ -135,11 +137,13 @@ class UsersPanel(ctk.CTkFrame):
         row.pack_propagate(False)
 
         # действия — прижаты вправо: [🎯][✏️][🗑️]
-        for emoji, command, pad in (
-                ("🗑️", lambda u=user: self._delete(u), (1, 0)),
-                ("✏️", lambda u=user: self._edit(u), (1, 1)),
-                ("🎯", lambda u=user: self._test(u), (1, 1))):
-            self._icon_button(row, emoji, command).pack(side="right", padx=pad)
+        # Правый отступ у крайней кнопки больше: без него кнопка упиралась в
+        # самый край строки и накрывала её 1px рамку — правый бордер пропадал.
+        for emoji, command, pad, tip in (
+                ("🗑️", lambda u=user: self._delete(u), (1, 7), "Удалить профиль"),
+                ("✏️", lambda u=user: self._edit(u), (1, 1), "Редактировать профиль"),
+                ("🎯", lambda u=user: self._test(u), (1, 1), "Пройти тест уровня")):
+            self._icon_button(row, emoji, command, tip=tip).pack(side="right", padx=pad)
 
         # аватар — слева. Эмодзи рисуем Pillow-ом (embedded_color): Tk показал
         # бы его однотонным контуром, а нужен цветной.
@@ -180,25 +184,61 @@ class UsersPanel(ctk.CTkFrame):
             widget.bind("<Button-1>", lambda _e, uid=user["id"]: self._select(uid))
         return row
 
-    def _icon_button(self, parent, text, command):
+    def _icon_button(self, parent, text, command, tip=None):
         """Кнопка-иконка ФИКСИРОВАННОГО размера.
 
-        CTkButton сам подгоняет ширину под глиф эмодзи, а 🗑️/✏️/🎯 в Segoe UI
-        Emoji шире заявленных 34 px — кнопки вылезали за границы строки.
-        Оборачиваем кнопку в квадрат-контейнер: размер задаёт он, а кнопка
-        лишь заполняет его.
+        CTkButton сам подгоняет ширину под глиф эмодзи (🗑️/✏️/🎯 в Segoe UI
+        Emoji шире заявленных 34 px), поэтому оборачиваем кнопку в
+        квадрат-контейнер: размер задаёт он, а кнопка заполняет его.
+        Значок — КАРТИНКОЙ (Tk рисует эмодзи одним тоном и выглядит сломанным),
+        подсказка появляется при наведении. Если картинки нет — текст.
         """
         p = self.palette
         holder = ctk.CTkFrame(parent, fg_color="transparent",
                               width=self.ICON_SIZE, height=self.ICON_SIZE)
         holder.pack_propagate(False)
-        ctk.CTkButton(
-            holder, text=text, command=command,
+        image = self._icon_image(text)
+        button = ctk.CTkButton(
+            holder, text=(text if image is None else ""), command=command,
             font=("Segoe UI Emoji", 13), cursor="hand2",
             fg_color=p["btn"], hover_color=p["btn_hover"],
             text_color=p["text"], corner_radius=theme.R["button"],
-        ).pack(fill="both", expand=True)
+        )
+        if image is not None:
+            button.configure(image=image, compound="left")
+        button.pack(fill="both", expand=True)
+        if tip:
+            tooltip.ToolTip(holder, tip, self.palette)
         return holder
+
+    def _icon_image(self, token, mono_color=None):
+        """Картинка-значок (цветная либо однотонная) или None.
+
+        Tk рисует эмодзи одним тоном, поэтому берём цветной глиф из Segoe UI
+        Emoji (ui.emoji_render.render). Для однотонных значков (🗑️) — чистый
+        контур mono-цветом. Кэш обязателен: Tk ссылку на картинку не держит.
+        """
+        if emoji_render is None or not emoji_render.available():
+            return None
+        cache = getattr(self, "_icon_cache", None)
+        if cache is None:
+            cache = {}
+            self._icon_cache = cache
+        if token in cache:
+            return cache[token]
+        ink = emoji_render.render(token, self.ICON_PX)
+        if ink is None:
+            ink = emoji_render.render_mono(token, self.ICON_PX,
+                                           mono_color or (0xE7, 0xE9, 0xF0, 255))
+        image = None
+        if ink is not None:
+            try:
+                image = ctk.CTkImage(light_image=ink, dark_image=ink,
+                                     size=(ink.width, ink.height))
+            except Exception:
+                image = None
+        cache[token] = image
+        return image
 
     # -----------------------------------------------------
     # Аватар и подписи

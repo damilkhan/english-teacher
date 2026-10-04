@@ -360,6 +360,33 @@ def render(token, size, fonts=None):
 
 
 # ---------------------------------------------------------
+# Однотонные иконки
+# ---------------------------------------------------------
+def render_mono(token, size, color=(0xE7, 0xE9, 0xF0, 255), fonts=None):
+    """Монохромная иконка: глиф ОДНИМ цветом. Возвращает RGBA или None.
+
+    Нужна для значков, которые Segoe UI Emoji отдаёт однотонными (🗑️):
+    render() такие отбрасывает (в них нет цвета), а серый глиф Tk с каймой
+    ClearType выглядит «сломанным». Чистый контур в цвете темы читается.
+    """
+    if not _PIL_READY or not token:
+        return None
+    font = load_font(size, fonts)
+    if font is None:
+        return None
+    size = max(MIN_PX, int(size))
+    pad = max(2, size // 4)
+    canvas = Image.new("RGBA", ((len(token) + 2) * size * 2, size * 3), (0, 0, 0, 0))
+    try:
+        ImageDraw.Draw(canvas).text((pad, pad), _simplify(token), font=font, fill=color)
+    except Exception:
+        return None
+    box = canvas.getbbox()
+    if box is None:
+        return None
+    return canvas.crop(box)
+
+# ---------------------------------------------------------
 # Кэш картинок для tk.Text
 # ---------------------------------------------------------
 class EmojiImages:

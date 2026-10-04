@@ -19,6 +19,8 @@ try:
 except Exception:
     emoji_render = None
 
+from ui.widgets import tooltip
+
 RECORD_LABEL = "Запись"
 RECORD_ACTIVE_LABEL = "Идёт запись"
 
@@ -39,6 +41,13 @@ FALLBACK = {
 }
 
 ICON_PX = 18
+
+TIPS = {
+    "record": "Запись с микрофона (распознавание речи)",
+    "clear": "Очистить историю чата",
+    "users": "Профили учеников: выбор, правка, тест уровня",
+    "settings": "Настройки: режим и тема оформления",
+}
 BTN_W, BTN_H = 124, 42
 USERS_W = 158
 
@@ -97,6 +106,9 @@ class ControlBar(ctk.CTkFrame):
         )
         if image is not None:
             button.configure(image=image, compound="left")
+        tip = TIPS.get(key)
+        if tip:
+            tooltip.ToolTip(button, tip, self.palette)
         return button
 
     # ---------- API ----------
