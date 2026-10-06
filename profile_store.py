@@ -14,6 +14,7 @@
 # Никакого Tk/GUI тут нет: модуль можно тестировать напрямую.
 # =========================================================
 
+import copy
 import json
 import os
 from datetime import datetime
@@ -49,6 +50,16 @@ EMPTY_PROFILE = {
     "level_tests": [],
     "weak_topics": [],
 }
+
+
+def _empty_profile():
+    """Глубокая копия пустышки.
+
+    ВАЖНО: dict(EMPTY_PROFILE) — ПОВЕРХНОСТНАЯ копия: вложенные списки
+    mistakes/strengths общие для всех вызовов, и запись в них «протекала»
+    между учениками. Поэтому возвращаем глубокую копию.
+    """
+    return copy.deepcopy(EMPTY_PROFILE)
 
 
 # ---------------------------------------------------------
@@ -117,10 +128,10 @@ def load(user_id=None):
             raise ValueError("профиль не является объектом JSON")
         return data
     except FileNotFoundError:
-        return dict(EMPTY_PROFILE)
+        return _empty_profile()
     except Exception as exc:
         print(f"⚠️ Профиль не прочитан ({exc}) — беру пустой")
-        return dict(EMPTY_PROFILE)
+        return _empty_profile()
 
 
 def save(profile, user_id=None):
