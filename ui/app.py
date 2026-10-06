@@ -630,6 +630,9 @@ class EnglishTeacherApp:
         Сначала проверяем команду смены режима («урок», «перерыв»…):
         её выполняем локально, к модели не ходим и сервер не требуем.
         """
+        # пользователь что-то делает — гасим текущую речь Джейн
+        tts.stop()
+
         mode = commands.parse_mode_command(text)
         if mode is not None:
             changed = (mode != self.mode)
@@ -651,6 +654,8 @@ class EnglishTeacherApp:
         return False
 
     def toggle_recording(self):
+        if not self.recorder.is_recording:
+            tts.stop()          # начинаем запись — гасим речь Джейн
         self.recorder.toggle()
 
     def clear_chat(self):
