@@ -1,0 +1,268 @@
+{
+  "version": 1,
+  "files": [
+    {
+      "file": "methodology/tblt_willis_1996.md",
+      "title": "TBLT: каркас Willis (1996) и его импликации",
+      "tags": ["TBLT", "Willis", "methodology"],
+      "chunks": [
+        {
+          "id": "tblt_tldr",
+          "heading": "0. Зачем это читать (TL;DR для Джейн)",
+          "keywords": ["tblt", "willis", "exposure", "use", "motivation", "instruction", "ppp", "task cycle"],
+          "priority": 10
+        },
+        {
+          "id": "tblt_task_definition",
+          "heading": "1. Что такое «task» (задача)",
+          "keywords": ["task", "definition", "willis", "communication task", "enabling task", "exercise"],
+          "priority": 8
+        },
+        {
+          "id": "tblt_exposure",
+          "heading": "2.1 Exposure (контакт с языком)",
+          "keywords": ["exposure", "input", "reading", "listening", "authentic materials", "grading"],
+          "priority": 7
+        },
+        {
+          "id": "tblt_use",
+          "heading": "2.2 Use (использование)",
+          "keywords": ["use", "output", "speaking", "writing", "interaction", "negotiation meaning", "silent period"],
+          "priority": 7
+        },
+        {
+          "id": "tblt_motivation",
+          "heading": "2.3 Motivation (мотивация)",
+          "keywords": ["motivation", "integrative", "instrumental", "gardner", "success", "facilitator"],
+          "priority": 9
+        },
+        {
+          "id": "tblt_instruction",
+          "heading": "3. Четвёртое условие: Instruction (обучение)",
+          "keywords": ["instruction", "noticing", "explicit knowledge", "implicit knowledge", "sla"],
+          "priority": 6
+        },
+        {
+          "id": "tblt_vs_ppp",
+          "heading": "4. TBL vs PPP",
+          "keywords": ["ppp", "presentation practice production", "pre-task", "task cycle", "language focus"],
+          "priority": 8
+        },
+        {
+          "id": "tblt_critique",
+          "heading": "5. Ограничения и критика TBL",
+          "keywords": ["criticism", "limitations", "swan", "tomlinson", "large class"],
+          "priority": 5
+        },
+        {
+          "id": "tblt_for_jane",
+          "heading": "6. Что из этого следует для Джейн",
+          "keywords": ["practical", "lesson design", "jane", "recommendations"],
+          "priority": 10
+        },
+        {
+          "id": "tblt_glossary",
+          "heading": "7. Ключевые термины (глоссарий для RAG)",
+          "keywords": ["glossary", "terms", "definitions"],
+          "priority": 6
+        },
+        {
+          "id": "tblt_quotes",
+          "heading": "8. Ключевые цитаты (для промптов Джейн)",
+          "keywords": ["quotes", "citations", "willis", "prabhu", "swan"],
+          "priority": 7
+        }
+      ]
+    },
+    {
+      "file": "methodology/clt_tblt_integration.md",
+      "title": "Интеграция CLT и TBLT",
+      "tags": ["CLT", "TBLT", "integration"],
+      "chunks": [
+        {
+          "id": "clt_tldr",
+          "heading": "0. TL;DR для Джейн",
+          "keywords": ["clt", "tblt", "integration", "synergy"],
+          "priority": 10
+        },
+        {
+          "id": "clt_why",
+          "heading": "1. Почему CLT и TBLT работают вместе",
+          "keywords": ["clt", "tblt", "communicative", "task", "synergy"],
+          "priority": 9
+        },
+        {
+          "id": "clt_postmethod",
+          "heading": "2. Post-method flexibility (ключевой принцип)",
+          "keywords": ["post-method", "flexibility", "adaptation"],
+          "priority": 8
+        },
+        {
+          "id": "clt_outcomes",
+          "heading": "3. Что даёт интеграция (outcomes)",
+          "keywords": ["outcomes", "skills", "engagement", "collaboration"],
+          "priority": 7
+        },
+        {
+          "id": "clt_task_cycle",
+          "heading": "4. Структура урока: task cycle",
+          "keywords": ["task cycle", "pre-task", "task", "post-task", "language focus"],
+          "priority": 10
+        },
+        {
+          "id": "clt_for_jane",
+          "heading": "5. Что из этого следует для Джейн",
+          "keywords": ["practical", "lesson design", "jane", "recommendations"],
+          "priority": 10
+        },
+        {
+          "id": "clt_glossary",
+          "heading": "6. Глоссарий",
+          "keywords": ["glossary", "terms", "definitions"],
+          "priority": 5
+        }
+      ]
+    },
+    {
+      "file": "methodology/tact_bench_rubric.md",
+      "title": "Рубрика оценки ответа тьютора (TACTBench)",
+      "tags": ["rubric", "self-evaluation", "TACT"],
+      "chunks": [
+        {
+          "id": "tact_rubric_tldr",
+          "heading": "0. TL;DR для Джейн",
+          "keywords": ["rubric", "self-check", "quality"],
+          "priority": 9
+        },
+        {
+          "id": "tact_rubric_dimensions",
+          "heading": "1. Пять измерений",
+          "keywords": ["rubric", "dimensions", "move appropriateness", "leakage", "accuracy", "tone", "conciseness"],
+          "priority": 10
+        },
+        {
+          "id": "tact_rubric_selfcheck",
+          "heading": "2. Как использовать для self-check",
+          "keywords": ["self-check", "checklist", "before sending"],
+          "priority": 9
+        },
+        {
+          "id": "tact_rubric_flags",
+          "heading": "3. Три бинарных флага (guardrails)",
+          "keywords": ["guardrails", "acceptable", "leak", "off-task"],
+          "priority": 8
+        },
+        {
+          "id": "tact_rubric_for_jane",
+          "heading": "4. Что из этого следует для Джейн",
+          "keywords": ["practical", "jane", "recommendations"],
+          "priority": 9
+        },
+        {
+          "id": "tact_rubric_glossary",
+          "heading": "5. Глоссарий",
+          "keywords": ["glossary", "terms", "definitions"],
+          "priority": 5
+        }
+      ]
+    },
+    {
+      "file": "feedback/tutor_strategy_taxonomy.md",
+      "title": "13 стратегий тьютора (TACT)",
+      "tags": ["tutor-strategy", "corrective-feedback", "scaffolding"],
+      "chunks": [
+        {
+          "id": "tutor_tldr",
+          "heading": "0. TL;DR для Джейн",
+          "keywords": ["tutor strategy", "pedagogical decision", "learner agency"],
+          "priority": 10
+        },
+        {
+          "id": "tutor_ladder",
+          "heading": "1. Шкала вмешательства (intervention ladder)",
+          "keywords": ["intervention", "ladder", "assistance level", "minimal"],
+          "priority": 10
+        },
+        {
+          "id": "tutor_all_strategies",
+          "heading": "2. Все 13 стратегий с определениями и примерами",
+          "keywords": ["verification", "correct response", "topic contingent", "response contingent", "prompt", "backchannel", "social", "bugs", "error flagging", "hint", "guided revision", "try again", "clarification check"],
+          "priority": 10
+        },
+        {
+          "id": "tutor_assistance",
+          "heading": "3. Уровни поддержки (assistance level)",
+          "keywords": ["assistance", "learner agency", "support level"],
+          "priority": 8
+        },
+        {
+          "id": "tutor_mapping",
+          "heading": "4. Маппинг: student move → tutor strategy",
+          "keywords": ["mapping", "student move", "strategy selection"],
+          "priority": 9
+        },
+        {
+          "id": "tutor_for_jane",
+          "heading": "5. Что из этого следует для Джейн",
+          "keywords": ["practical", "jane", "recommendations"],
+          "priority": 10
+        },
+        {
+          "id": "tutor_glossary",
+          "heading": "6. Глоссарий",
+          "keywords": ["glossary", "terms", "definitions"],
+          "priority": 5
+        }
+      ]
+    },
+    {
+      "file": "feedback/student_move_taxonomy.md",
+      "title": "Таксономия реплик ученика (Student-Move)",
+      "tags": ["student-move", "learner-state"],
+      "chunks": [
+        {
+          "id": "student_tldr",
+          "heading": "0. TL;DR для Джейн",
+          "keywords": ["student move", "move type", "move status"],
+          "priority": 10
+        },
+        {
+          "id": "student_move_types",
+          "heading": "1. Move type — 5 типов",
+          "keywords": ["question", "answer", "attempt", "statement", "feedback", "off-task", "move type"],
+          "priority": 10
+        },
+        {
+          "id": "student_move_status",
+          "heading": "2. Move status — 3 статуса",
+          "keywords": ["adequate", "problematic", "non-evaluable", "move status", "needs repair"],
+          "priority": 10
+        },
+        {
+          "id": "student_independence",
+          "heading": "3. Два измерения независимы",
+          "keywords": ["independent", "dimensions", "evaluability"],
+          "priority": 8
+        },
+        {
+          "id": "student_why",
+          "heading": "4. Почему это важно для Джейн",
+          "keywords": ["decision", "evaluate", "don't correct everything"],
+          "priority": 9
+        },
+        {
+          "id": "student_for_jane",
+          "heading": "5. Что из этого следует для Джейн",
+          "keywords": ["practical", "jane", "recommendations"],
+          "priority": 10
+        },
+        {
+          "id": "student_glossary",
+          "heading": "6. Глоссарий",
+          "keywords": ["glossary", "terms", "definitions"],
+          "priority": 5
+        }
+      ]
+    }
+  ]
+}
