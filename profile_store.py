@@ -41,6 +41,7 @@ MAX_STRENGTHS = 20
 MAX_WEEK_MISTAKES = 50
 MAX_LEVEL_TESTS = 20          # сколько последних тестов уровня храним в истории
 MAX_WEAK_TOPICS = 5           # сколько «слабых тем» выносим в промпт
+ANALYSIS_LOG_LIMIT = 30       # сколько последних разборов Аналитика храним
 
 EMPTY_PROFILE = {
     "mistakes": {"grammar": [], "vocabulary": [], "pronunciation": []},
@@ -102,6 +103,7 @@ def default_profile():
         "last_week_mistakes": [],
         "level_tests": [],       # итоги тестов уровня + разбор ответов
         "weak_topics": [],       # темы, где ученик чаще ошибался (для промпта)
+        "analysis_log": [],      # разборы реплик Аналитиком (roles/analyst)
     }
 
 
@@ -192,6 +194,85 @@ def record_from_dialogue(user_text, jane_response, user_id=None):
         profile["strengths"] = profile["strengths"][-MAX_STRENGTHS:]
 
     save(profile, user_id)
+    return notes
+
+
+def record_analysis(analysis, user_text, jane_response="", user_id=None):
+    """Записывает СТРУКТУРИРОВАННЫЙ разбор реплики (роль-Аналитик).
+
+    В отличие от record_from_dialogue (эвристика по ключевым словам в ответе
+    Джейн), здесь ошибки/темы берутся из готового JSON Аналитика. Возвращает
+    список заметок для чата (строки) — сам ничего не рисует.
+
+    analysis: словарь roles.analyst (move_type/move_status/errors/topics/note).
+    """
+    notes = []
+    profile = load(user_id)
+    profile.setdefault("mistakes", {"grammar": [], "vocabulary": [], "pronunciation": []})
+    for key in ("grammar", "vocabulary", "pronunciation"):
+        profile["mistakes"].setdefault(key, [])
+    profile.setdefault("strengths", [])
+    profile.setdefault("topics_passed", [])
+    profile.setdefault("analysis_log", [])
+
+    if not isinstance(analysis, dict):
+        analysis = {}
+
+    now = datetime.now().isoformat()
+    move_type = str(analysis.get("move_type") or "O")
+    move_status = str(analysis.get("move_status") or "N")
+    errors = analysis.get("errors") or []
+
+    recorded = 0
+    for err in errors:
+        if not isinstance(err, dict):
+            continue
+        etype = str(err.get("type") or "grammar").lower()
+        if etype == "spelling":
+            # в прогрессе нет отдельной «орфографии» — кладём к лексике
+            etype = "vocabulary"
+        if etype not in ("grammar", "vocabulary", "pronunciation"):
+            etype = "grammar"
+        profile["mistakes"][etype].append({
+            "date": now,
+            "user_text": (user_text or "")[:100],
+            "jane_response": (jane_response or "")[:200],
+            "type": etype,
+            "wrong": str(err.get("wrong") or "")[:80],
+            "correct": str(err.get("correct") or "")[:80],
+            "note": str(err.get("note") or "")[:80],
+        })
+        profile["mistakes"][etype] = profile["mistakes"][etype][-MAX_ERRORS_PER_TYPE:]
+        recorded += 1
+
+    # похвала: попытка ответа принята и ошибок нет
+    if move_type == "A" and move_status == "A" and not errors and len(str(user_text or "")) > 10:
+        profile["strengths"].append({
+            "date": now,
+            "user_text": (user_text or "")[:100],
+            "jane_response": (jane_response or "")[:100],
+        })
+        profile["strengths"] = profile["strengths"][-MAX_STRENGTHS:]
+
+    for topic in (analysis.get("topics") or []):
+        name = str(topic or "").strip()
+        if name and name not in profile["topics_passed"]:
+            profile["topics_passed"].append(name[:40])
+    profile["topics_passed"] = profile["topics_passed"][-20:]
+
+    profile["analysis_log"].append({
+        "date": now,
+        "move_type": move_type,
+        "move_status": move_status,
+        "errors": recorded,
+        "note": str(analysis.get("note") or "")[:120],
+    })
+    profile["analysis_log"] = profile["analysis_log"][-ANALYSIS_LOG_LIMIT:]
+
+    save(profile, user_id)          # отмечает конец занятия (+1), как и раньше
+
+    if recorded:
+        notes.append("📝 *Разбор: %s/%s · ошибок %d*" % (move_type, move_status, recorded))
     return notes
 
 

@@ -40,6 +40,7 @@ from controllers.level_test_controller import LevelTestController
 from controllers.recording_controller import RecordingController
 from controllers.server_monitor import ServerMonitor
 from llm_client import LLMClient
+from roles.analyst import Analyst
 from ui import gradient
 from ui.first_run import FirstRunForm
 from ui.panels.level_test_panel import LevelTestPanel
@@ -140,9 +141,12 @@ class EnglishTeacherApp:
         self.llm = LLMClient()
 
         # ---------- контроллеры ----------
+        # роль-Аналитик: разбирает реплики ученика в режиме урока
+        analyst = Analyst(self.llm) if config.ANALYST_ENABLED else None
         self.chat = ChatController(llm=self.llm, dispatch=self._dispatch,
                                    mode=self.mode, lang=self.current_lang,
-                                   user_id=self.current_user["id"])
+                                   user_id=self.current_user["id"],
+                                   analyst=analyst)
         self.chat.on_message = self.add_message
         self.chat.on_status = self._set_status
         self.chat.on_busy = self._set_busy

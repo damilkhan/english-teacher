@@ -27,7 +27,8 @@ import user_manager
 
 
 class ChatController:
-    def __init__(self, llm, dispatch=None, mode="lesson", lang="en", user_id=None):
+    def __init__(self, llm, dispatch=None, mode="lesson", lang="en", user_id=None,
+                 analyst=None):
         self.llm = llm
         self._dispatch = dispatch or (lambda fn: fn())
         self.mode = mode
@@ -35,12 +36,15 @@ class ChatController:
         self.user_id = user_id
         self.history = []
         self.busy = False
+        # роль-Аналитик (необязательна): разбирает реплики ПОСЛЕ ответа Учителя
+        self.analyst = analyst
 
         # --- колбэки, которые выставляет интерфейс ---
         self.on_message = None    # (sender, text)      — добавить сообщение в чат
         self.on_status = None     # (text, color_key)   — статус-бейдж
         self.on_busy = None       # (busy: bool)        — блокировка кнопки отправки
         self.on_response = None   # (user_text, reply)  — удачный ответ (TTS и пр.)
+        self.on_analysis = None   # (result: dict)      — разбор от Аналитика (или None)
 
     # -----------------------------------------------------
     # Публичный интерфейс
@@ -74,9 +78,20 @@ class ChatController:
     # Внутреннее
     # -----------------------------------------------------
     def _worker(self, user_text):
-        """Фоновый поток: сеть не должна морозить окно."""
+        """Фоновый поток: сеть не должна морозить окно.
+
+        Роли вызываются ПОСЛЕДОВАТЕЛЬНО, но независимо: сначала Учитель
+        (его ответ показываем сразу), затем Аналитик. Сбой Аналитика не
+        мешает ответу Учителя (см. _safe_analyze / _record).
+        """
         ok, payload = self._request(user_text)
-        self._dispatch(lambda: self._finish(user_text, ok, payload))
+        if not ok:
+            self._dispatch(lambda: self._finish_error(payload))
+            return
+        # ответ Учителя — в окно сразу, не ждём Аналитика
+        self._dispatch(lambda: self._show_reply(user_text, payload))
+        analysis = self._safe_analyze(user_text, payload)
+        self._dispatch(lambda: self._finish(user_text, payload, analysis))
 
     def _request(self, user_text):
         """Сборка промпта → запрос к модели → чистка ответа."""
@@ -108,22 +123,51 @@ class ChatController:
             cleaned = prompt_builder.fallback_response(lang)
         return True, cleaned
 
-    def _finish(self, user_text, ok, payload):
-        """Главный поток: показываем результат и обновляем состояние."""
+    def _show_reply(self, user_text, response):
+        """Главный поток: показать ответ Учителя как можно раньше."""
+        self._emit(self.on_message, "Джейн", response)
+        self._emit(self.on_response, user_text, response)
+
+    def _finish_error(self, payload):
+        """Главный поток: ошибка Учителя.
+
+        Учитель всегда «отвечает» ученику — пусть и сообщением об ошибке;
+        Аналитик в этом случае не запускается вовсе.
+        """
+        self.busy = False
+        self._emit(self.on_busy, False)
+        self._emit(self.on_message, "Джейн", f"[Ошибка] {payload}")
+        self._emit(self.on_status, "● Ошибка", "err")
+
+    def _safe_analyze(self, user_text, reply):
+        """Разбор реплики Аналитиком. Любая проблема → None (без исключений)."""
+        if self.analyst is None or self.mode != "lesson":
+            return None
+        try:
+            level = (user_manager.get_user(self.user_id) or {}).get("level")
+            return self.analyst.analyze(user_text, teacher_reply=reply,
+                                        mode=self.mode, level=level)
+        except Exception as exc:
+            print(f"⚠️ Аналитик недоступен: {exc}")
+            return None
+
+    def _record(self, user_text, response, analysis):
+        """Прогресс: есть разбор Аналитика → структурно, иначе — прежняя эвристика."""
+        if analysis and analysis.get("ok"):
+            try:
+                return profile_store.record_analysis(analysis, user_text, response, self.user_id)
+            except Exception as exc:
+                print(f"⚠️ Запись разбора не удалась: {exc}")
+        return profile_store.record_from_dialogue(user_text, response, self.user_id)
+
+    def _finish(self, user_text, response, analysis):
+        """Главный поток: запись прогресса, история, статус, снятие «занят»."""
         self.busy = False
         self._emit(self.on_busy, False)
 
-        if not ok:
-            self._emit(self.on_message, "Джейн", f"[Ошибка] {payload}")
-            self._emit(self.on_status, "● Ошибка", "err")
-            return
-
-        response = payload
-        self._emit(self.on_message, "Джейн", response)
-
-        # прогресс ученика — бизнес-логика, не дело GUI
-        for note in profile_store.record_from_dialogue(user_text, response, self.user_id):
+        for note in self._record(user_text, response, analysis):
             self._emit(self.on_message, "Джейн", note)
+        self._emit(self.on_analysis, analysis)
 
         self.history.append(f"Student: {user_text}")
         self.history.append(f"Assistant: {response}")
@@ -131,7 +175,6 @@ class ChatController:
             self.history = self.history[-8:]
 
         self._emit(self.on_status, "● Готов", "ok")
-        self._emit(self.on_response, user_text, response)
 
     @staticmethod
     def _emit(callback, *args):
