@@ -32,6 +32,11 @@ GENDER_LABELS = {"male": "Мужской", "female": "Женский", "other": 
 
 LEVELS = ("A1", "A2", "B1", "B2", "C1")
 
+# Имена-заглушки: профиль с таким именем (или пустым) считается НЕПОЛНЫМ —
+# его создала программа, а не ученик. Такой профиль обязан пройти форму,
+# иначе Джейн не знает, как обращаться к ученику (см. is_complete).
+PLACEHOLDER_NAMES = {"", "ученик", "ученица", "student"}
+
 # Уровень ставит ТОЛЬКО вводный тест (level_test). Пока тест не пройден,
 # уровня нет — поэтому в профиле он хранится как None, а в интерфейсе
 # показывается «не определён».
@@ -97,6 +102,10 @@ def _normalize(profile, user_id):
 
     profile["goal"] = str(profile.get("goal") or "").strip()
     profile["avatar"] = str(profile.get("avatar") or AVATARS[0]).strip() or AVATARS[0]
+
+    # Заполнен ли профиль формой (имя/пол заданы человеком). Старые профили
+    # поля не имеют → False, значит потребуют формы при следующем запуске.
+    profile["complete"] = bool(profile.get("complete", False))
 
     profile.setdefault("created", datetime.now().isoformat())
     return profile
@@ -187,11 +196,14 @@ def save_user(user_id, data):
         return False
 
 
-def create_user(name, gender="other", age=None, level=None, goal="", avatar=AVATARS[0]):
+def create_user(name, gender="other", age=None, level=None, goal="", avatar=AVATARS[0],
+                complete=True):
     """Создаёт новый профиль в первом свободном слоте 1..MAX_USERS.
 
     Возвращает профиль или None, если лимит исчерпан / имя пустое.
     Уровень по умолчанию НЕ задан (None): его выставит вводный тест.
+    complete=False — профиль-заготовка (без формы): общение запрещено,
+    пока его не заполнят.
     """
     if not str(name or "").strip():
         return None
@@ -205,7 +217,7 @@ def create_user(name, gender="other", age=None, level=None, goal="", avatar=AVAT
 
     profile = _normalize(
         {"name": name, "gender": gender, "age": age, "level": level,
-         "goal": goal, "avatar": avatar,
+         "goal": goal, "avatar": avatar, "complete": complete,
          "created": datetime.now().isoformat()},
         user_id,
     )
@@ -223,6 +235,21 @@ def update_user(user_id, data):
     merged = dict(profile)
     merged.update(data or {})
     return save_user(user_id, merged)
+
+
+def is_complete(user):
+    """Заполнен ли профиль настолько, чтобы начинать общение с Джейн.
+
+    Полным считается профиль, где задано непустое (не заглушечное) имя И стоит
+    флаг complete (его ставит форма). Профиль-заготовка («Ученик») и старые
+    профили без флага — НЕПОЛНЫЕ: имя/пол неизвестны, Джейн ошибалась в роде.
+    """
+    if not isinstance(user, dict):
+        return False
+    name = str(user.get("name") or "").strip().lower()
+    if not name or name in PLACEHOLDER_NAMES:
+        return False
+    return bool(user.get("complete"))
 
 
 def delete_user(user_id):

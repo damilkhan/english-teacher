@@ -46,6 +46,7 @@ from llm_client import LLMClient
 from roles.analyst import Analyst
 from ui import gradient
 from ui.first_run import FirstRunForm
+from ui.panels.boot_panel import BootPanel
 from ui.panels.level_test_panel import LevelTestPanel
 from ui.panels.settings_panel import SettingsPanel
 from ui.panels.users_panel import UsersPanel
@@ -67,6 +68,8 @@ STATUS_COLOR = {"ready": "ok", "loading": "warn", "offline": "err"}
 STT_LOADING_TEXT = "● Готовлю распознавание…"
 
 NEW_PROFILE_NOTE = "📊 Создан профиль ученика. Я буду запоминать твой прогресс!"
+SETUP_HINT = ("✋ Чтобы начать, заполни профиль: имя и пол. "
+              "Нажми «👥 Пользователи», затем ✏️ у активного профиля.")
 LEVEL_TEST_NOTE = "🎯 Уровень определён: %s. Подстрою уроки под него."
 NOT_READY_LOADING = "⏳ Модель ещё загружается — подожди несколько секунд и попробуй снова."
 NOT_READY_OFFLINE = "❌ LLM-сервер не отвечает. Подробности в logs\\llama-server.log"
@@ -131,11 +134,14 @@ class EnglishTeacherApp:
                                     cancel=self.window.after_cancel)
         self.dispatcher.start()
 
-        # ---------- активный пользователь (форма при первом запуске) ----------
-        self._pending_level_test = None        # id профиля для теста уровня
+        # ---------- активный пользователь ----------
+        # Заготовка профиля создаётся даже без формы, но считается НЕПОЛНОЙ:
+        # пока профиль не заполнен (имя + пол), общение с Джейн недоступно.
         self.current_user = self._resolve_user()
+        self.profile_ready = user_manager.is_complete(self.current_user)
         profile_store.set_active_user(self.current_user["id"])
-        print("👤 Активный профиль: #%s %s" % (self.current_user["id"], self.current_user["name"]))
+        print("👤 Активный профиль: #%s %s (полный: %s)"
+              % (self.current_user["id"], self.current_user["name"], self.profile_ready))
 
         # ---------- железо и сеть ----------
         self.vad = audio_vad.AudioVAD()
@@ -183,40 +189,92 @@ class EnglishTeacherApp:
         self.monitor.start()
         self.stt.preload()                      # Whisper — в фоне, окно не ждёт
         self.window.after(60, self._redraw)     # первая отрисовка после раскладки
-
-        # новый профиль → сразу предлагаем определить уровень
-        if self._pending_level_test is not None:
-            uid = self._pending_level_test
-            self.window.after(900, lambda: self.run_level_test(uid))
+        self._refresh_input_state()             # чат закрыт, пока нет профиля/модели
+        # неполный профиль → обязательная форма; иначе (нет уровня) — тест
+        self.window.after(200, self._first_run_flow)
 
     # =====================================================
     # Пользователи
     # =====================================================
     def _resolve_user(self):
-        """Активный профиль: последний из profiles/ либо форма первого запуска."""
+        """Активный профиль: последний из profiles/ либо НЕПОЛНАЯ заготовка.
+
+        Форму здесь НЕ показываем: за неё отвечает _first_run_flow (после
+        сборки окна). Так один путь и для первого запуска, и для «пустого»
+        профиля — оба обязаны задать имя и пол.
+        """
         users = user_manager.list_users()
         if users:
             return user_manager.get_last_user() or users[0]
+        # профилей нет — заготовка (complete=False), её заполнит форма
+        return (user_manager.create_user("Ученик", "other", None, None, "", "🙂",
+                                         complete=False)
+                or user_manager.get_last_user())
 
-        self.window.withdraw()              # прячем пустое окно под формой
-        try:
-            data = FirstRunForm.ask(self.window, self.palette)
-        finally:
-            self.window.deiconify()
+    # =====================================================
+    # Гейт: обязательный профиль + готовность сервера
+    # =====================================================
+    def _first_run_flow(self):
+        """После старта: заполнить профиль → дождаться модели → тест уровня."""
+        self._refresh_input_state()
+        if not self.profile_ready:
+            self._prompt_profile_setup()
+            return
+        self._after_profile_ready()
 
-        if data:
-            created = user_manager.create_user(**self._form_profile(data))
-            if created:
-                self._pending_level_test = created["id"]
-                return created
+    def _after_profile_ready(self):
+        """Профиль полон: показать экран загрузки модели и предложить тест.
 
-        # форму закрыли — заводим профиль по умолчанию, чтобы приложение жило
-        # (уровень не задаём: его определит вводный тест)
-        fallback = user_manager.create_user("Ученик", "other", None, None,
-                                            "Учиться говорить по-английски", "🙂")
-        if fallback:
-            self._pending_level_test = fallback["id"]
-        return fallback or user_manager.get_last_user()
+        Пока сервер грузится — модальный экран BootPanel (он сам закроется,
+        когда модель готова; можно «продолжить без модели»). Тест уровня
+        запускаем только при готовом сервере (он умеет ждать, но два окна
+        ожидания подряд — лишнее).
+        """
+        if not self.server_ready and self.server_state == "loading":
+            BootPanel.ask(self.window, self.palette, self.check_server)
+        self._refresh_input_state()
+        if self.server_ready and not (self.current_user or {}).get("level"):
+            self.window.after(300, lambda: self.run_level_test(self.current_user["id"]))
+
+    def _prompt_profile_setup(self):
+        """Обязательная форма: без имени и пола общение с Джейн запрещено."""
+        user = self.current_user or {}
+        data = FirstRunForm.ask(self.window, self.palette)     # режим «первого запуска»
+        if not data:
+            self.add_message("Джейн", SETUP_HINT)
+            return
+
+        target = user.get("id")
+        if target:
+            user_manager.update_user(target, dict(self._form_profile(data), complete=True))
+        else:
+            created = user_manager.create_user(**self._form_profile(data), complete=True)
+            target = created["id"] if created else None
+        if not target:
+            self.add_message("Джейн", SETUP_HINT)
+            return
+
+        self.current_user = user_manager.get_user(target) or self.current_user
+        self.profile_ready = user_manager.is_complete(self.current_user)
+        profile_store.set_active_user(target)
+        profile_store.ensure_profile(target)
+        self.chat.set_user(target)
+        self.chat_view.clear()
+        self.add_message("Джейн", self._greeting())
+        self._refresh_hero()
+        self._refresh_input_state()
+        self._after_profile_ready()
+
+    def _refresh_input_state(self):
+        """Поле ввода активно только при ПОЛНОМ профиле и готовом сервере."""
+        ready = bool(self.profile_ready and self.server_ready)
+        if not self.profile_ready:
+            hint = "Заполни профиль"
+        elif not self.server_ready:
+            hint = "Загружаю модель…"
+        else:
+            hint = ""
+        self.input_bar.set_enabled(ready, hint)
 
     @staticmethod
     def _form_profile(data):
@@ -266,6 +324,7 @@ class EnglishTeacherApp:
         if not user:
             return
         self.current_user = user
+        self.profile_ready = user_manager.is_complete(user)
         user_manager.set_last_user(user_id)
         profile_store.set_active_user(user_id)
         profile_store.ensure_profile(user_id)
@@ -273,6 +332,7 @@ class EnglishTeacherApp:
         self.chat_view.clear()
         self.add_message("Джейн", self._greeting())
         self._refresh_hero()
+        self._refresh_input_state()
         if self.users_panel is not None:
             self.users_panel.refresh(user_id)
 
@@ -294,11 +354,13 @@ class EnglishTeacherApp:
         data = FirstRunForm.ask(self.window, self.palette, user=user)
         if not data:
             return
-        user_manager.update_user(user_id, data)
+        user_manager.update_user(user_id, dict(data, complete=True))
         if user_id == (self.current_user or {}).get("id"):
             self.current_user = user_manager.get_user(user_id)
+            self.profile_ready = user_manager.is_complete(self.current_user)
             self.add_message("Джейн", "✅ Профиль обновлён.")
             self._refresh_hero()
+            self._refresh_input_state()
         if self.users_panel is not None:
             self.users_panel.refresh((self.current_user or {}).get("id"))
 
@@ -315,9 +377,9 @@ class EnglishTeacherApp:
             if data:
                 created = user_manager.create_user(**self._form_profile(data))
             if created is None:
-                # уровень не задаём: его определит вводный тест
-                created = user_manager.create_user("Ученик", "other", None, None,
-                                                   "Учиться говорить по-английски", "🙂")
+                # заготовка (неполный профиль): чат останется закрыт до заполнения
+                created = user_manager.create_user("Ученик", "other", None, None, "", "🙂",
+                                                   complete=False)
             remaining = [created] if created else user_manager.list_users()
 
         if was_active and remaining:
@@ -594,6 +656,7 @@ class EnglishTeacherApp:
         self.server_state = state
         self.server_ready = (state == "ready")
         self._refresh_status()
+        self._refresh_input_state()
         return state
 
     def _on_stt_state(self, state, message):
@@ -636,6 +699,10 @@ class EnglishTeacherApp:
         Сначала проверяем команду смены режима («урок», «перерыв»…):
         её выполняем локально, к модели не ходим и сервер не требуем.
         """
+        # пока профиль не заполнен — общение невозможно (гейт)
+        if not self.profile_ready:
+            self.add_message("Джейн", SETUP_HINT)
+            return
         # пользователь что-то делает — гасим текущую речь Джейн
         tts.stop()
 

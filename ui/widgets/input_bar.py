@@ -46,6 +46,9 @@ class InputBar(ctk.CTkFrame):
         self.palette = palette
         self.on_send = on_send
         self._placeholder_on = False
+        self._enabled = True      # разрешена ли отправка (профиль/сервер)
+        self._busy = False        # идёт ответ Джейн
+        self._hint = ""           # почему отправка недоступна
 
         self.textbox = ctk.CTkTextbox(
             self,
@@ -109,8 +112,25 @@ class InputBar(ctk.CTkFrame):
         self.textbox.configure(text_color=self.palette["text"])
 
     def set_busy(self, busy):
-        if busy:
+        self._busy = bool(busy)
+        self._apply_state()
+
+    def set_enabled(self, enabled, hint=""):
+        """Включить/выключить отправку.
+
+        hint — короткая причина, которую видно НА кнопке (например,
+        «Заполни профиль» или «Загружаю модель…»).
+        """
+        self._enabled = bool(enabled)
+        self._hint = hint or ""
+        self._apply_state()
+
+    def _apply_state(self):
+        """Кнопка отправки: «Думаю…» > причина блокировки > норма."""
+        if self._busy:
             self.send_btn.configure(state="disabled", text="Думаю…")
+        elif not self._enabled:
+            self.send_btn.configure(state="disabled", text=(self._hint or "Недоступно"))
         else:
             self.send_btn.configure(state="normal", text=SEND_TEXT)
 
