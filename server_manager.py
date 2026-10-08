@@ -19,6 +19,7 @@ import atexit
 import os
 import socket
 import subprocess
+import threading
 import time
 
 import requests
@@ -45,6 +46,9 @@ _NO_WINDOW = dict(creationflags=CREATE_NO_WINDOW) if os.name == "nt" else {}
 # Запросы к localhost не должны уходить в системный прокси (VPN/Amnezia и т.п.)
 _session = requests.Session()
 _session.trust_env = False
+# health_state опрашивается монитором, а перезапуск модели — из фонового
+# потока: requests.Session не потокобезопасен, поэтому сериализуем обращения.
+_session_lock = threading.Lock()
 
 server_process = None      # Popen нашего процесса (если мы его запускали)
 owns_server = False        # True = сервер запустили мы и должны его закрыть
@@ -124,7 +128,8 @@ def health_state(timeout=2.0):
         'offline' — на порту никого нет.
     """
     try:
-        resp = _session.get(HEALTH_URL, timeout=timeout)
+        with _session_lock:
+            resp = _session.get(HEALTH_URL, timeout=timeout)
     except requests.exceptions.RequestException:
         resp = None
 
@@ -150,8 +155,45 @@ def is_server_ready():
 # ---------------------------------------------------------
 # Запуск / остановка
 # ---------------------------------------------------------
-def start_server():
-    """Поднимает llama-server БЕЗ окна консоли. Второй экземпляр не создаёт."""
+def build_args(model):
+    """Собирает аргументы запуска llama-server для записи модели.
+
+    Чистая функция (без побочных эффектов) — её удобно проверять тестом.
+    """
+    ctx = int(model.get("ctx") or CONTEXT)
+    args = [SERVER_PATH, "-m", model.get("path", ""), "-c", str(ctx),
+            "--host", HOST, "--port", str(PORT), "--jinja"]
+    mmproj = model.get("mmproj")
+    if mmproj:
+        args += ["--mmproj", mmproj]
+    args += list(model.get("extra_args") or [])
+    return args
+
+
+def _resolve_model(model_id=None):
+    """Запись модели: явный id → выбранная в настройках → модель по умолчанию.
+
+    Спрашиваем РЕЕСТР (ручные + авто-найденные модели), а не только config.
+    """
+    if model_id is None:
+        try:
+            import settings_store
+            model_id = settings_store.get_selected_model_id()
+        except Exception:
+            model_id = None
+    try:
+        import model_registry
+        return model_registry.get_model(model_id)
+    except Exception:
+        return config.get_model(model_id)
+
+
+def start_server(model_id=None):
+    """Поднимает llama-server с нужной моделью БЕЗ окна консоли.
+
+    model_id: id из config.MODELS; None → выбранная в настройках модель.
+    Второй экземпляр не создаёт: если сервер уже отвечает, ничего не делает.
+    """
     global server_process, owns_server, last_error
 
     state, msg = health_state()
@@ -172,23 +214,25 @@ def start_server():
         last_error = "Не найден llama-server.exe:\n%s\n\nПроверьте SERVER_EXE_PATH в config.py" % SERVER_PATH
         print("❌ " + last_error)
         return False
-    if not os.path.exists(MODEL_PATH):
-        last_error = "Не найдена модель:\n%s\n\nПроверьте MODEL_PATH в config.py" % MODEL_PATH
+    model = _resolve_model(model_id)
+    model_path = model.get("path", "")
+    if not model_path or not os.path.exists(model_path):
+        last_error = ("Не найдена модель «%s»:\n%s\n\nПроверьте MODELS в config.py"
+                      % (model.get("id"), model_path))
         print("❌ " + last_error)
         return False
 
     os.makedirs(LOG_DIR, exist_ok=True)
     try:
         log_fh = open(SERVER_LOG, "a", encoding="utf-8", errors="replace", buffering=1)
-        log_fh.write("\n" + "=" * 70 + "\n[%s] СТАРТ llama-server\n%s\n"
-                     % (time.strftime("%Y-%m-%d %H:%M:%S"), MODEL_PATH))
+        log_fh.write("\n" + "=" * 70 + "\n[%s] СТАРТ llama-server\nмодель: %s\n%s\n"
+                     % (time.strftime("%Y-%m-%d %H:%M:%S"), model.get("label"), model_path))
     except Exception as exc:
         last_error = "Не удалось открыть лог сервера: %s" % exc
         print("❌ " + last_error)
         return False
 
-    args = [SERVER_PATH, "-m", MODEL_PATH, "-c", str(CONTEXT),
-            "--host", HOST, "--port", str(PORT), "--jinja"]
+    args = build_args(model)
     print("🚀 Запуск llama-server (без окна консоли)...")
     try:
         server_process = subprocess.Popen(
@@ -276,4 +320,42 @@ def stop_server():
         pass
     server_process = None
     owns_server = False
+
+
+def restart_server(model_id=None, on_progress=None):
+    """Перезапускает llama-server с нужной моделью.
+
+    Гасит текущий сервер (нашего процесса ИЛИ чужой/зависший) и поднимает
+    выбранную модель. Возвращает True при готовности. Блокирующая — звать из
+    фонового потока.
+    """
+    global server_process, owns_server
+    stop_server()
+    # добить любые оставшиеся llama-server (чужой запуск/зависший процесс)
+    for _ in range(10):
+        pids = _llama_server_pids()
+        if not pids:
+            break
+        _kill_pids(pids)
+        time.sleep(0.5)
+    server_process = None
+    owns_server = False
+    if not start_server(model_id):
+        return False
+    return wait_for_server(on_progress=on_progress)
+
+
+def running_model():
+    """(id, label) модели, загруженной в сервер, по /props. Иначе (None, None)."""
+    try:
+        with _session_lock:
+            resp = _session.get(BASE_URL + "/props", timeout=2)
+        path = (resp.json() or {}).get("model_path") or ""
+    except Exception:
+        return None, None
+    for model in getattr(config, "MODELS", []):
+        mpath = model.get("path", "")
+        if mpath and os.path.normcase(os.path.abspath(mpath)) == os.path.normcase(os.path.abspath(path)):
+            return model.get("id"), model.get("label")
+    return None, (os.path.basename(path) or None)
 

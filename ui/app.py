@@ -29,7 +29,10 @@ import customtkinter as ctk
 import audio_vad
 import commands
 import config
+import model_registry
 import profile_store
+import server_manager
+import settings_store
 import stt_engine
 import theme
 import tts
@@ -88,6 +91,7 @@ class EnglishTeacherApp:
         self.current_theme = config.DEFAULT_THEME
         self.palette = theme.palette(self.current_theme)
         self.mode = config.DEFAULT_MODE
+        self.current_model_id = settings_store.get_selected_model_id()
         self.current_lang = "en"
         self.panel_visible = False
         self.active_panel = None      # "settings" | "users" | None
@@ -387,7 +391,9 @@ class EnglishTeacherApp:
         # ---------- правая панель «настройки» ----------
         self.right_panel = SettingsPanel(self.base, p,
                                          mode=self.mode, theme_name=self.current_theme,
-                                         on_save=self.save_settings, on_close=self.close_panel)
+                                         on_save=self.save_settings, on_close=self.close_panel,
+                                         models=model_registry.available_models(),
+                                         model=self.current_model_id)
 
         # ---------- правая панель «пользователи» ----------
         self.users_panel = UsersPanel(self.base, p,
@@ -703,7 +709,41 @@ class EnglishTeacherApp:
             ctk.set_appearance_mode(new_theme)
             self._apply_theme()
 
+        new_model = self.right_panel.get_model()
+        if new_model and new_model != self.current_model_id:
+            self._apply_model(new_model)
+
         self.close_panel()
+
+    def _apply_model(self, model_id):
+        """Смена модели: сохранить выбор и перезапустить сервер в фоне.
+
+        Перезапуск долгий (~30 с) — делаем его в отдельном потоке, а статус
+        обновляем через dispatch, чтобы окно не морозилось.
+        """
+        settings_store.set_selected_model(model_id)
+        self.current_model_id = model_id
+        label = next((m["label"] for m in model_registry.available_models()
+                      if m["id"] == model_id), model_id)
+        self._set_status("● Загружаю модель…", "warn")
+        self.add_message("Джейн", "🔄 Перезапускаю модель: %s. Это займёт до минуты." % label)
+        threading.Thread(target=self._restart_model_worker, args=(model_id,),
+                         daemon=True).start()
+
+    def _restart_model_worker(self, model_id):
+        def _progress(_state, message, elapsed):
+            self._dispatch(lambda: self._set_status(
+                "● %s (%.0f с)" % (message, elapsed), "warn"))
+        ok = server_manager.restart_server(model_id, on_progress=_progress)
+        self._dispatch(lambda: self._model_restart_done(ok))
+
+    def _model_restart_done(self, ok):
+        self.check_server()
+        if ok:
+            self.add_message("Джейн", "✅ Модель загружена.")
+        else:
+            self.add_message("Джейн", "⚠️ Модель не загрузилась. "
+                                      "Подробности: logs\\llama-server.log")
 
     def _switch_mode(self, mode):
         """Единая точка смены режима: панель настроек и голосовые команды.

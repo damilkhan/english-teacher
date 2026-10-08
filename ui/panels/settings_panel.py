@@ -12,7 +12,7 @@ import theme
 
 class SettingsPanel(ctk.CTkFrame):
     def __init__(self, parent, palette, mode="lesson", theme_name="dark",
-                 on_save=None, on_close=None):
+                 on_save=None, on_close=None, models=None, model=None):
         super().__init__(parent, fg_color=palette["surface"],
                          corner_radius=theme.R["card"],
                          border_width=1, border_color=palette["border"])
@@ -34,6 +34,22 @@ class SettingsPanel(ctk.CTkFrame):
         self.theme_var = ctk.StringVar(value=theme_name)
         self.theme_dark = self._radio(self.theme_frame, "🌙  Тёмная", self.theme_var, "dark")
         self.theme_light = self._radio(self.theme_frame, "☀️  Светлая", self.theme_var, "light")
+
+        # ---------- модель ----------
+        # Выбор хранится в settings.json, а применяется перезапуском сервера.
+        self.model_frame = self._section("МОДЕЛЬ (при смене сервер перезапустится)")
+        self._model_labels = {m["label"]: m["id"] for m in (models or [])}
+        values = list(self._model_labels) or ["—"]
+        current = next((lb for lb, mid in self._model_labels.items() if mid == model),
+                       values[0])
+        self.model_var = ctk.StringVar(value=current)
+        self.model_menu = ctk.CTkOptionMenu(
+            self.model_frame, values=values, variable=self.model_var,
+            font=theme.FONT_UI, height=36, corner_radius=theme.R["button"],
+            fg_color=palette["btn"], button_color=palette["accent"],
+            button_hover_color=palette["accent_hover"], text_color=palette["text"],
+            dropdown_fg_color=palette["surface_alt"], dropdown_text_color=palette["text"])
+        self.model_menu.pack(fill="x", padx=16, pady=(6, 14))
 
         # ---------- подсказка про голосовые команды ----------
         self.hint = ctk.CTkLabel(
@@ -92,6 +108,10 @@ class SettingsPanel(ctk.CTkFrame):
     def get_theme(self):
         return self.theme_var.get()
 
+    def get_model(self):
+        """id выбранной модели (или None, если список пуст)."""
+        return self._model_labels.get(self.model_var.get())
+
     def set_values(self, mode=None, theme_name=None):
         if mode is not None:
             self.mode_var.set(mode)
@@ -105,13 +125,18 @@ class SettingsPanel(ctk.CTkFrame):
         self.title_label.configure(text_color=palette["text_strong"])
         self.hint.configure(text_color=palette["muted"])
 
-        for block in (self.mode_frame, self.theme_frame):
+        for block in (self.mode_frame, self.theme_frame, self.model_frame):
             block.configure(fg_color=palette["surface_alt"])
             block.caption.configure(text_color=palette["muted"])
         for radio in (self.mode_lesson, self.mode_free, self.theme_dark, self.theme_light):
             radio.configure(text_color=palette["text"], fg_color=palette["accent"],
                             hover_color=palette["accent_hover"],
                             border_color=palette["muted"])
+        self.model_menu.configure(fg_color=palette["btn"], button_color=palette["accent"],
+                                  button_hover_color=palette["accent_hover"],
+                                  text_color=palette["text"],
+                                  dropdown_fg_color=palette["surface_alt"],
+                                  dropdown_text_color=palette["text"])
 
         self.save_btn.configure(fg_color=palette["accent"],
                                 hover_color=palette["accent_hover"])

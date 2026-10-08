@@ -11,19 +11,86 @@ import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# ---------- модель ----------
-# Основная модель Gemma 4 E4B (без цензуры)
-MODEL_PATH = os.path.join(
-    BASE_DIR, "models", "gemma",
-    "Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
-)
+# ---------- реестр моделей ----------
+# llama.cpp-сервер может запускаться с ЛЮБОЙ моделью из этого списка: выбор
+# хранится в settings.json (settings_store), а запускает нужную server_manager.
+# Поля записи:
+#   id         — ключ (хранится в настройках);
+#   label      — подпись в интерфейсе;
+#   path       — путь к .gguf;
+#   ctx        — размер контекста (-c), по умолчанию SERVER_CONTEXT;
+#   mmproj     — опциональный проектор (мультимодальность), или None;
+#   extra_args — дополнительные флаги llama-server;
+#   max_tokens / temperature / stop — переопределения генерации чата
+#              (None → общие LLM_CHAT_MAX_TOKENS / LLM_TEMPERATURE / LLM_STOP_WORDS);
+#   note       — короткая подсказка для UI.
+#
+# Модели с недоступным файлом в списке остаются, но в UI не показываются
+# (см. available_models) — так удобно держать «примеры» для будущих моделей.
+MODELS = [
+    {
+        "id": "gemma4-e4b",
+        "label": "Gemma-4-E4B (Q4_K_M)",
+        "path": os.path.join(BASE_DIR, "models", "gemma",
+                             "Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf"),
+        "ctx": 4096,
+        "mmproj": None,
+        "extra_args": [],
+        "max_tokens": None,
+        "temperature": None,
+        "stop": None,
+        "note": "по умолчанию; загрузка ~30 с",
+    },
+    {
+        "id": "example-qwen2.5-7b",
+        "label": "Qwen2.5-7B-Instruct (пример)",
+        "path": os.path.join(BASE_DIR, "models", "qwen2.5-7b-instruct-q4_k_m.gguf"),
+        "ctx": 8192,
+        "mmproj": None,
+        "extra_args": [],
+        "max_tokens": None,
+        "temperature": None,
+        "stop": None,
+        "note": "пример: положите GGUF в models/ и перезапустите",
+    },
+]
+DEFAULT_MODEL_ID = "gemma4-e4b"
 
-# Файл-проектор для мультимодальности (изображения/аудио).
-# Если он у тебя есть и понадобится — раскомментируй и добавь в запуск сервера.
-# MMPROJ_PATH = os.path.join(
-#     BASE_DIR, "models", "gemma",
-#     "mmproj-Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-f16.gguf",
-# )
+# ---------- авто-обнаружение моделей ----------
+# Дополнительно к ручному списку MODELS можно сканировать папку на *.gguf
+# (model_registry): модель подхватится без правки config.py.
+AUTO_DISCOVER_MODELS = True
+MODELS_DIR = os.path.join(BASE_DIR, "models")
+# КОНСЕРВАТИВНЫЙ контекст для авто-найденных моделей: даже если модель умеет
+# 128k, по умолчанию даём немного — иначе легко вылететь по памяти. Точное
+# значение задаётся вручную (ручная запись в MODELS или overrides в настройках).
+AUTO_CTX = 4096
+
+# MODEL_PATH сохранён как «путь модели по умолчанию» (обратная совместимость).
+MODEL_PATH = next((m["path"] for m in MODELS if m["id"] == DEFAULT_MODEL_ID),
+                  MODELS[0]["path"] if MODELS else "")
+
+
+def get_model(model_id=None):
+    """Запись модели по id. Неизвестный/пустой id → модель по умолчанию."""
+    mid = model_id or DEFAULT_MODEL_ID
+    for model in MODELS:
+        if model.get("id") == mid:
+            return dict(model)
+    return dict(MODELS[0]) if MODELS else {}
+
+
+def available_models():
+    """Модели, чей файл реально есть на диске (их и показываем в UI)."""
+    return [dict(m) for m in MODELS if m.get("path") and os.path.exists(m["path"])]
+
+
+def model_is_available(model_id):
+    """Есть ли у модели id файл на диске."""
+    model = get_model(model_id)
+    return bool(model) and os.path.exists(model.get("path", ""))
+
+
 
 # ---------- значения по умолчанию для интерфейса ----------
 DEFAULT_MODE = "lesson"      # "lesson" (урок) | "free" (свободное общение)
@@ -60,13 +127,22 @@ PLANNER_ENABLED = False        # Планировщик пока не реали
 def check_paths():
     """Проверяет, что на месте всё, без чего приложение не заработает.
 
-    Раньше здесь проверялись модели Vosk — их в проекте уже нет,
-    а из-за этой проверки запуск падал с «не найдены модели» ни за что.
+    Обязателен только llama-server.exe; моделей достаточно ОДНОЙ доступной.
+    (Раньше требовалась одна конкретная модель — из-за этого падал запуск,
+    если выбрана другая или модель ещё не скачана.)
     """
-    required = [MODEL_PATH, SERVER_EXE_PATH]
     all_exist = True
-    for path in required:
-        if not os.path.exists(path):
-            print(f"⚠️ Не найдено: {path}")
-            all_exist = False
+    if not os.path.exists(SERVER_EXE_PATH):
+        print(f"⚠️ Не найдено: {SERVER_EXE_PATH}")
+        all_exist = False
+    # Доступность моделей спрашиваем у РЕЕСТРА (ручные + авто-найденные).
+    try:
+        import model_registry
+        models = model_registry.available_models()
+    except Exception:
+        models = available_models()
+    if not models:
+        print("⚠️ Не найдено ни одной доступной модели (MODELS или models/)")
+        print(f"   папка автопоиска: {MODELS_DIR}")
+        all_exist = False
     return all_exist
