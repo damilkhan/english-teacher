@@ -72,6 +72,9 @@ Rules:
 - errors: list ONLY real language problems in the student's English.
   Each item: {"type": "grammar|vocabulary|spelling|pronunciation", "wrong": "...", "correct": "...", "note": "short"}.
   Use [] if there are no real errors. Never invent errors.
+- The student often writes in RUSSIAN. Analyse ONLY the student's ENGLISH.
+  If the message is NOT in English, return "errors": [] (do NOT report Russian
+  mistakes as English errors) and do not force status A/P.
 - topics: up to 3 short topics of the message (for example "travel", "work and study").
 - note: one very short progress note (at most 12 words).
 %(context)s
@@ -186,6 +189,12 @@ class Analyst:
         if parsed is None:
             _log.warning("Аналитик: ответ модели не разобран — беру нейтральный дефолт")
             return default_analysis()
+        # Страховка: если в реплике нет латиницы, английских ошибок там быть
+        # не может — не засоряем профиль «ошибками» из русского текста.
+        if not re.search(r"[A-Za-z]", str(student_text or "")):
+            parsed["errors"] = []
+            if parsed.get("move_type") == "A":
+                parsed["move_status"] = "N"
         return parsed
 
     def build_prompt(self, student_text: str, teacher_reply: str = "",

@@ -287,6 +287,23 @@ def test_chat_controller_integration():
               any(s == "Джейн" for s, _ in messages2), messages2)
 
 
+def test_russian_guard():
+    print("\n[10] Аналитик не выдумывает английские ошибки в русском тексте")
+    raw = ('{"move_type": "A", "move_status": "P", '
+           '"errors": [{"type": "grammar", "wrong": "спорсил", "correct": "спросил"}], '
+           '"topics": [], "note": ""}')
+    res = Analyst(FakeLLM(raw)).analyze("Ты странно мне ответила. Я тебя спорсил")
+    check("русский текст → errors=[]", res["errors"] == [], res["errors"])
+    check("русский текст → статус N (не оцениваем)", res["move_status"] == "N", res)
+
+    raw2 = ('{"move_type": "A", "move_status": "P", '
+            '"errors": [{"type": "grammar", "wrong": "go", "correct": "went"}], '
+            '"topics": [], "note": ""}')
+    res2 = Analyst(FakeLLM(raw2)).analyze("I go to school yesterday")
+    check("английский текст → ошибка и P сохраняются",
+          len(res2["errors"]) == 1 and res2["move_status"] == "P", res2)
+
+
 def main():
     print("=" * 60)
     print("Проверка роли «Аналитик» (roles/analyst.py)")
@@ -300,6 +317,7 @@ def main():
     test_record_analysis()
     test_error_type_normalization()
     test_prompt_and_isolation()
+    test_russian_guard()
     test_chat_controller_integration()
 
     print("\n" + "=" * 60)

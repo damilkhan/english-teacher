@@ -77,6 +77,47 @@ def _weak_topics_block(profile):
         return ""
     return WEAK_TOPICS_TEMPLATE.format(topics=", ".join(names))
 
+# ---------- личность ученика (имя и род) ----------
+# Раньше в промпт попадал только ПРОГРЕСС, а имя/пол — нет, и модель
+# угадывала грамматический род ученика (обычно ЖЕНСКИЙ, т.к. сама Джейн —
+# женщина): «Чем бы ТЫ хотела заняться?». Теперь, когда личность известна,
+# добавляем отдельный блок с именем и родом И ОГРАНИЧИВАЕМ женские формы
+# самой Джейн.
+# ВАЖНО: при student=None ничего не добавляется — вывод build_system_prompt
+# не меняется (см. tests/smoke_test.test_prompt_unchanged).
+STUDENT_GENDER_FORMS = {
+    "male": "MASCULINE forms about the student in Russian (e.g. «ты хотел», «ты готов», «молодец», «ты справился»)",
+    "female": "FEMININE forms about the student in Russian (e.g. «ты хотела», «ты готова», «умница», «ты справилась»)",
+    "other": "gender-neutral phrasing — avoid gendered verb/adjective endings for the student, or ask which forms to use",
+}
+
+STUDENT_BLOCK_TEMPLATE = """
+\U0001F464 STUDENT: {name}
+The student's gender is: {gender}. When you address the student or talk about them in Russian, use {forms}.
+Address the student by their name when it feels natural.
+IMPORTANT: in Russian, NEVER use feminine forms about the student — the feminine forms above describe YOU, Jane, not the student.
+Answer the student's question directly. Do not show your reasoning, plans or inner thoughts — reply with the final answer only.
+"""
+
+
+def _student_block(student):
+    """Блок про личность ученика (имя и род). Пусто, если данных нет.
+
+    Без этого модель не знает имени ученика и угадывает грамматический род
+    (в русском — обычно женский, потому что Джейн женского пола).
+    """
+    student = student or {}
+    name = str(student.get("name") or "").strip()
+    gender = str(student.get("gender") or "").strip().lower()
+    forms = STUDENT_GENDER_FORMS.get(gender)
+    if not name and not forms:
+        return ""
+    return STUDENT_BLOCK_TEMPLATE.format(
+        name=name or "the student",
+        gender=gender or "unknown",
+        forms=forms or STUDENT_GENDER_FORMS["other"],
+    )
+
 
 def detect_language(text):
     """Есть кириллица → 'ru', иначе 'en'."""
@@ -89,20 +130,43 @@ def language_instruction(lang):
     return "Answer in English, keep responses short."
 
 
-def build_system_prompt(mode, profile, lang="en", level=None):
+
+
+def _mistake_line(err):
+    """Строка «недавней ошибки» для промпта.
+
+    После роли-Аналитика у ошибки есть поля wrong/correct/note — показываем
+    именно их («go → went»). Раньше использовался jane_response, и в промпт
+    попадал ОТВЕТ САМОЙ Джейн (в т.ч. её фолбэк «Извините, я не могу
+    ответить на это.») как будто это ошибка ученика — промпт засорялся.
+    Старые записи (без wrong/correct) читаются как раньше — по jane_response.
+    """
+    if not isinstance(err, dict):
+        return ""
+    wrong = str(err.get("wrong") or "").strip()
+    correct = str(err.get("correct") or "").strip()
+    if wrong or correct:
+        text = ("%s → %s" % (wrong, correct)) if (wrong and correct) else (wrong or correct)
+    else:
+        text = str(err.get("jane_response") or "")
+    return text[:50]
+
+def build_system_prompt(mode, profile, lang="en", level=None, student=None):
     """Собирает system-промпт (персона + профиль ученика).
 
     mode:    'lesson' | 'free'
     profile: словарь из profile_store
     lang:    'ru' | 'en' — на каком языке отвечать
+    student: личность из user_manager (name/gender) — необязательно;
+             None → блок не добавляется (обратная совместимость)
     """
     language_rule = language_instruction(lang)
 
     grammar_mistakes = profile.get("mistakes", {}).get("grammar", [])
     vocab_mistakes = profile.get("mistakes", {}).get("vocabulary", [])
 
-    recent_grammar = [err.get("jane_response", "")[:50] for err in grammar_mistakes[-5:]]
-    recent_vocab = [err.get("jane_response", "")[:50] for err in vocab_mistakes[-5:]]
+    recent_grammar = [_mistake_line(err) for err in grammar_mistakes[-5:]]
+    recent_vocab = [_mistake_line(err) for err in vocab_mistakes[-5:]]
 
     strengths = profile.get("strengths", [])[-3:]
     strengths_text = "\n".join([f"- {s.get('jane_response', '')[:50]}" for s in strengths]) if strengths else "Not enough data yet."
@@ -137,7 +201,8 @@ def build_system_prompt(mode, profile, lang="en", level=None):
     The student has completed {total_lessons} lessons.
     Be supportive and helpful. Use emojis freely: {EMOJIS}
     """
-    return prompt + _level_block(profile, level) + _weak_topics_block(profile)
+    return (prompt + _level_block(profile, level)
+            + _weak_topics_block(profile) + _student_block(student))
 
 
 def build_conversation_prompt(system_prompt, history, user_text, lang):
@@ -159,6 +224,11 @@ def clean_response(text):
     """Убирает служебные теги Gemma из ответа модели."""
     if not text:
         return ""
+    # «Канал размышлений» Gemma: <|channel>thought ... <channel|> (или до
+    # конца). Модель «думает вслух», и этот блок ученику показывать нельзя.
+    text = re.sub(r"<\|channel>\s*\w*\s*.*?(<channel\|>|<end_of_turn>|$)",
+                  "", text, flags=re.DOTALL)
+    text = text.replace("<channel|>", "")
     text = re.sub(r'<\|thought\|>.*?(\n|$)', '', text, flags=re.DOTALL)
     text = re.sub(r'<\|.*?\|>', '', text)
     text = re.sub(r'<end_of_turn>.*$', '', text, flags=re.DOTALL)

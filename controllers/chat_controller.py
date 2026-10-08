@@ -19,11 +19,15 @@
 # потому что Tk не потокобезопасен.
 # =========================================================
 
+import logging
 import threading
 
+import config
 import profile_store
 import prompt_builder
 import user_manager
+
+_log = logging.getLogger(__name__)
 
 
 class ChatController:
@@ -102,16 +106,21 @@ class ChatController:
 
         # прогресс ИМЕННО этого ученика
         # уровень ученика учитывается при сборке промпта (A1..C1)
-        level = (user_manager.get_user(self.user_id) or {}).get("level")
+        # личность ученика (имя/пол) — чтобы Джейн знала имя и НЕ путала
+        # грамматический род ученика со своим (женским)
+        user = user_manager.get_user(self.user_id) or {}
+        level = user.get("level")
+        student = {"name": user.get("name"), "gender": user.get("gender")}
         system_prompt = prompt_builder.build_system_prompt(
-            self.mode, profile_store.load(self.user_id), lang, level=level)
+            self.mode, profile_store.load(self.user_id), lang,
+            level=level, student=student)
         prompt = prompt_builder.build_conversation_prompt(system_prompt, self.history, user_text, lang)
 
         print(f"📤 Язык ответа: {'РУССКИЙ' if lang == 'ru' else 'ENGLISH'}")
 
         ok, raw = self.llm.complete(
             prompt,
-            max_tokens=120,
+            max_tokens=config.LLM_CHAT_MAX_TOKENS,
             temperature=0.5,
             stop=["<|thought|>", "<end_of_turn>"],
         )
@@ -165,8 +174,12 @@ class ChatController:
         self.busy = False
         self._emit(self.on_busy, False)
 
-        for note in self._record(user_text, response, analysis):
-            self._emit(self.on_message, "Джейн", note)
+        # Разбор пишем в профиль, но служебные заметки в чат НЕ показываем:
+        # ученику не нужны строки вида «📝 *Разбор: A/P · ошибок 3*» между
+        # репликами Джейн. Хочешь вывести — подпишись на on_analysis.
+        notes = self._record(user_text, response, analysis)
+        if notes:
+            _log.debug("прогресс: %s", notes)
         self._emit(self.on_analysis, analysis)
 
         self.history.append(f"Student: {user_text}")

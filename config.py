@@ -41,6 +41,11 @@ LLM_MAX_TOKENS = 200
 LLM_TEMPERATURE = 0.7
 LLM_STOP_WORDS = ["Student:", "\n\n"]
 
+# Лимит токенов на ОТВЕТ в чате. У Gemma бывает «канал размышлений»
+# (<|channel>thought …), и при маленьком лимите модель тратит все токены
+# на «размышления», не успевая ответить ученику (раньше было 120 — не хватало).
+LLM_CHAT_MAX_TOKENS = 400
+
 # ---------- запуск llama-server ----------
 SERVER_EXE_PATH = r"D:\llama.cpp\llama-server.exe"
 SERVER_CONTEXT = 4096          # -c
