@@ -19,6 +19,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -181,6 +182,74 @@ def test_stopwords_no_bridge():
     check("запрос из одних EN-стоп-слов → []",
           db.search("that this is are do be will can not so") == [])
 
+# =========================================================
+# 9. Интеграция: ChatController подключает RAG в промпт Учителя
+# =========================================================
+def test_chat_controller_uses_rag():
+    print("\n[9] ChatController подключает методический контекст (RAG)")
+    from controllers.chat_controller import ChatController
+    import profile_store
+    import user_manager
+
+    class CaptureLLM:
+        def __init__(self):
+            self.prompts = []
+        def complete(self, prompt, **kwargs):
+            self.prompts.append(prompt)
+            return True, "ok"
+
+    class FakeRAG:
+        def __init__(self):
+            self.queries = []
+        def build_context(self, query, top_k=2):
+            self.queries.append(query)
+            return "METHODOLOGY_SENTINEL"
+
+    real_dir, real_last = user_manager.PROFILES_DIR, user_manager.LAST_USER_FILE
+    tmp = tempfile.mkdtemp(prefix="et_rag_chat_")
+    try:
+        user_manager.PROFILES_DIR = tmp
+        user_manager.LAST_USER_FILE = os.path.join(tmp, "last_user.txt")
+        profile_store.set_active_user(None)
+        uid = user_manager.create_user("Тест", "other", 20, "A2", "", "🙂")["id"]
+
+        def _mute(chat):
+            for cb in ("on_message", "on_status", "on_busy", "on_response"):
+                setattr(chat, cb, lambda *a: None)
+
+        llm = CaptureLLM()
+        chat = ChatController(llm=llm, dispatch=lambda fn: fn(),
+                              mode="lesson", lang="en", user_id=uid)
+        chat.rag = FakeRAG()
+        _mute(chat)
+        chat.send("Let me tell you about my family")
+        deadline = time.time() + 5
+        while chat.busy and time.time() < deadline:
+            time.sleep(0.02)
+        prompt = llm.prompts[0] if llm.prompts else ""
+        check("методический контекст попал в промпт", "METHODOLOGY_SENTINEL" in prompt,
+              prompt[-200:])
+        check("RAG получил реплику ученика как запрос",
+              bool(chat.rag.queries) and "family" in chat.rag.queries[0], chat.rag.queries)
+
+        # свободный режим: методичка не подключается
+        chat.set_mode("free")
+        chat.clear_history()
+        llm2 = CaptureLLM()
+        chat.llm = llm2
+        chat.rag = FakeRAG()
+        chat.send("just chatting")
+        deadline = time.time() + 5
+        while chat.busy and time.time() < deadline:
+            time.sleep(0.02)
+        prompt2 = llm2.prompts[0] if llm2.prompts else ""
+        check("в свободном режиме RAG не подключается",
+              "METHODOLOGY_SENTINEL" not in prompt2, prompt2[-200:])
+    finally:
+        user_manager.PROFILES_DIR, user_manager.LAST_USER_FILE = real_dir, real_last
+        profile_store.set_active_user(None)
+
+
 def main():
     print("=" * 60)
     print("Проверка rag.py (knowledge_base)")
@@ -194,6 +263,7 @@ def main():
     test_all_chunks_extractable()
     test_match_boundaries()
     test_stopwords_no_bridge()
+    test_chat_controller_uses_rag()
 
     print("\n" + "=" * 60)
     if FAILED:

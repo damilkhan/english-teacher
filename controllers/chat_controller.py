@@ -25,6 +25,7 @@ import threading
 import config
 import profile_store
 import prompt_builder
+import rag
 import user_manager
 
 _log = logging.getLogger(__name__)
@@ -42,6 +43,14 @@ class ChatController:
         self.busy = False
         # роль-Аналитик (необязательна): разбирает реплики ПОСЛЕ ответа Учителя
         self.analyst = analyst
+
+        # RAG (необязателен): методические заметки в промпт Учителя (режим урока)
+        self.rag = None
+        if config.RAG_ENABLED:
+            try:
+                self.rag = rag.RAG()
+            except Exception as exc:
+                print(f"⚠️ RAG недоступен: {exc}")
 
         # --- колбэки, которые выставляет интерфейс ---
         self.on_message = None    # (sender, text)      — добавить сообщение в чат
@@ -113,9 +122,11 @@ class ChatController:
         user = user_manager.get_user(self.user_id) or {}
         level = user.get("level")
         student = {"name": user.get("name"), "gender": user.get("gender")}
+        # методические заметки (RAG) — только для режима урока
+        context = self._rag_context(user_text) if self.mode == "lesson" else ""
         system_prompt = prompt_builder.build_system_prompt(
             self.mode, profile_store.load(self.user_id), lang,
-            level=level, student=student)
+            level=level, student=student, context=context)
         prompt = prompt_builder.build_conversation_prompt(system_prompt, self.history, user_text, lang)
 
         print(f"📤 Язык ответа: {'РУССКИЙ' if lang == 'ru' else 'ENGLISH'}")
@@ -133,6 +144,20 @@ class ChatController:
         if not cleaned:
             cleaned = prompt_builder.fallback_response(lang)
         return True, cleaned
+
+    def _rag_context(self, query):
+        """Методический контекст (RAG) для промпта Учителя.
+
+        Пусто, если RAG выключен/недоступен или ничего не нашлось — тогда
+        промпт не меняется. Сбой RAG не должен мешать ответу Учителя.
+        """
+        if self.rag is None:
+            return ""
+        try:
+            return self.rag.build_context(query, top_k=config.RAG_TOP_K)
+        except Exception as exc:
+            print(f"⚠️ RAG: контекст не собран ({exc})")
+            return ""
 
     def _show_reply(self, user_text, response):
         """Главный поток: показать ответ Учителя как можно раньше."""

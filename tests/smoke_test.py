@@ -187,6 +187,13 @@ def test_prompt_unchanged():
           "WEAK TOPICS" in p_with and "travel and transport" in p_with)
     check("без слабых тем промпт не меняется", "WEAK TOPICS" not in p_without)
 
+    # RAG-контекст (методические заметки) — блок тоже ТОЛЬКО когда задан
+    p_ctx = prompt_builder.build_system_prompt(
+        "lesson", base, "en", context="TASK CYCLE: pre-task, task, language focus.")
+    check("методический контекст добавляется в промпт",
+          "TEACHING NOTES" in p_ctx and "pre-task" in p_ctx)
+    check("без контекста промпт не меняется", "TEACHING NOTES" not in p_without)
+
 
 def test_clean_response():
     print("\n[2] Чистка ответа модели")

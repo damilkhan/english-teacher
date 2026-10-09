@@ -119,6 +119,26 @@ def _student_block(student):
     )
 
 
+# ---------- база знаний (RAG) ----------
+# Готовые методические заметки приходят сюда ТЕКСТОМ из ChatController
+# (rag.build_context). prompt_builder НЕ знает про rag — так модуль
+# остаётся чистым и тестируемым без базы знаний.
+# ВАЖНО: при context=None/пусто блок не добавляется — вывод
+# build_system_prompt не меняется (см. tests/smoke_test.test_prompt_unchanged).
+KNOWLEDGE_BLOCK_TEMPLATE = """
+\n\U0001F4DA TEACHING NOTES (methodology — guide HOW you teach, do not quote):
+{context}
+"""
+
+
+def _knowledge_block(context):
+    """Блок методических заметок. Пусто, если контекста нет (обратная совместимость)."""
+    context = str(context or "").strip()
+    if not context:
+        return ""
+    return KNOWLEDGE_BLOCK_TEMPLATE.format(context=context)
+
+
 def detect_language(text):
     """Есть кириллица → 'ru', иначе 'en'."""
     return "ru" if any(c in _RUSSIAN_CHARS for c in (text or "").lower()) else "en"
@@ -169,7 +189,7 @@ def _mistake_line(err):
         text = str(err.get("jane_response") or "")
     return text[:50]
 
-def build_system_prompt(mode, profile, lang="en", level=None, student=None):
+def build_system_prompt(mode, profile, lang="en", level=None, student=None, context=None):
     """Собирает system-промпт (персона + профиль ученика).
 
     mode:    'lesson' | 'free'
@@ -177,6 +197,8 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None):
     lang:    'ru' | 'en' — на каком языке отвечать
     student: личность из user_manager (name/gender) — необязательно;
              None → блок не добавляется (обратная совместимость)
+    context: методические заметки (RAG) — необязательно;
+             None/пусто → блок не добавляется (обратная совместимость)
     """
     language_rule = language_instruction(lang)
 
@@ -220,7 +242,8 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None):
     Be supportive and helpful. Use emojis freely: {EMOJIS}
     """
     return (prompt + _level_block(profile, level)
-            + _weak_topics_block(profile) + _student_block(student))
+            + _weak_topics_block(profile) + _student_block(student)
+            + _knowledge_block(context))
 
 
 def build_conversation_prompt(system_prompt, history, user_text, lang):
