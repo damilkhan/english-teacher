@@ -22,7 +22,7 @@ except Exception:
 from ui.widgets import tooltip
 
 RECORD_LABEL = "Запись"
-RECORD_ACTIVE_LABEL = "Идёт запись"
+RECORD_ACTIVE_LABEL = "Отпусти — отправить"
 
 # Значки. 🗑️ и 👥 в Segoe UI Emoji идут ОДНОТОННЫМИ (emoji_render их
 # отбрасывает), поэтому берём цветные аналоги: метла и группа людей.
@@ -34,7 +34,7 @@ ICON_SETTINGS = "⚙️"
 # Запасной текст, если цветные эмодзи недоступны.
 FALLBACK = {
     "record": "🎤  Запись",
-    "record_active": "🔴  Идёт запись",
+    "record_active": "🔴  Отпусти — отправить",
     "clear": "🗑️  Очистить",
     "users": "👥  Пользователи",
     "settings": "⚙️  Настройки",
@@ -43,7 +43,7 @@ FALLBACK = {
 ICON_PX = 18
 
 TIPS = {
-    "record": "Запись с микрофона (распознавание речи)",
+    "record": "Запись: нажми и удерживай, отпусти — отправить",
     "clear": "Очистить историю чата",
     "users": "Профили учеников: выбор, правка, тест уровня",
     "settings": "Настройки: режим и тема оформления",
@@ -54,13 +54,17 @@ USERS_W = 158
 
 class ControlBar(ctk.CTkFrame):
     def __init__(self, parent, palette, on_record=None, on_settings=None,
-                 on_clear=None, on_users=None):
+                 on_clear=None, on_users=None, on_record_release=None):
         super().__init__(parent, fg_color="transparent")
         self.palette = palette
         self._images = {}                    # символ -> CTkImage (держит ссылки)
         self._use_images = bool(emoji_render and emoji_render.available())
 
-        self.record_btn = self._button("record", RECORD_LABEL, ICON_RECORD, on_record)
+        # Запись — «удержание»: пишем, ПОКА кнопка нажата. CTkButton.command
+        # срабатывает на НАЖАТИЕ, поэтому command не задаём, а нажатие и
+        # отпускание обрабатываем сами (иначе отпускание никак не поймать).
+        self.record_btn = self._button("record", RECORD_LABEL, ICON_RECORD, None)
+        self._bind_push_to_talk(on_record, on_record_release)
         self.record_btn.pack(side="left")
 
         self.settings_btn = self._button("settings", "Настройки", ICON_SETTINGS, on_settings)
@@ -110,6 +114,17 @@ class ControlBar(ctk.CTkFrame):
         if tip:
             tooltip.ToolTip(button, tip, self.palette)
         return button
+
+    def _bind_push_to_talk(self, on_press, on_release):
+        """«Держать кнопку»: нажал — пишем, отпустил — остановили.
+
+        Привязываемся к самому виджету (bind у CTkButton дублирует событие
+        на canvas и на подписи), сохраняя внутренние обработчики (add="+").
+        """
+        if on_press is not None:
+            self.record_btn.bind("<ButtonPress-1>", lambda _e: on_press(), add="+")
+        if on_release is not None:
+            self.record_btn.bind("<ButtonRelease-1>", lambda _e: on_release(), add="+")
 
     # ---------- API ----------
     def set_recording(self, recording):

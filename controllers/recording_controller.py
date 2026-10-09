@@ -38,11 +38,16 @@ class RecordingController:
             self.start()
 
     def start(self):
+        """Начало записи (в режиме удержания — пока кнопка нажата).
+
+        Останавливает запись не по тишине, а явный stop() (отпускание кнопки)
+        либо страховочный предел времени в audio_vad._monitor.
+        """
         if self.is_recording:
             return
         self.is_recording = True
         self._emit(self.on_recording_changed, True)
-        self._emit(self.on_status, "● Запись...", "warn")
+        self._emit(self.on_status, "● Слушаю… отпусти кнопку — отправить", "warn")
         try:
             self.vad.set_stop_callback(self._on_vad_stopped)
             self.vad.start_recording()

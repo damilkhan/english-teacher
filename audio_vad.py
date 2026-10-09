@@ -4,13 +4,19 @@ import time
 import threading
 
 class AudioVAD:
-    def __init__(self):
+    def __init__(self, silence_limit=1.0, max_seconds=45.0, stop_on_silence=False):
         self.sample_rate = 16000
         self.is_recording = False
         self.stream = None
         self.current_audio = b""
         self.silence_counter = 0
-        self.silence_limit = 1.0
+        self.silence_limit = silence_limit
+        # Режим «держать кнопку» (push-to-talk): по умолчанию НЕ режем запись
+        # по тишине — ученику нужно время подумать, иначе фраза обрывается на
+        # паузе. Страховка от «залипшей» кнопки — жёсткий предел длительности.
+        self.stop_on_silence = stop_on_silence
+        self.max_seconds = max_seconds
+        self._start_time = None
         self.stop_callback = None
 
     def set_stop_callback(self, callback):
@@ -33,6 +39,7 @@ class AudioVAD:
         self.is_recording = True
         self.current_audio = b""
         self.silence_counter = 0
+        self._start_time = time.time()
         device = self._find_input_device()
         self.stream = sd.RawInputStream(
             samplerate=self.sample_rate,
@@ -44,7 +51,7 @@ class AudioVAD:
         )
         self.stream.start()
         print(f"🎤 Запись начата (микрофон: {device})")
-        threading.Thread(target=self._monitor_silence, daemon=True).start()
+        threading.Thread(target=self._monitor, daemon=True).start()
 
     def stop_recording(self):
         if not self.is_recording:
@@ -58,10 +65,21 @@ class AudioVAD:
         if self.stop_callback:
             self.stop_callback(self.current_audio)
 
-    def _monitor_silence(self):
+    def _monitor(self):
+        """Следит за длительностью записи (в фоне).
+
+        В режиме «держать кнопку» тишину игнорируем (пауза = раздумье), но
+        держим жёсткий предел: если кнопка «залипла», запись остановится сама.
+        Прежнее поведение (стоп по тишине) включается флагом stop_on_silence.
+        """
         while self.is_recording:
             time.sleep(0.1)
-            if self.silence_counter >= self.silence_limit:
+            if (self.max_seconds and self._start_time is not None
+                    and (time.time() - self._start_time) >= self.max_seconds):
+                print(f"⏱ Предел записи ({self.max_seconds:.0f} с) — останавливаю")
+                self.stop_recording()
+                break
+            if self.stop_on_silence and self.silence_counter >= self.silence_limit:
                 print(f"🔇 Тишина {self.silence_limit} сек, останавливаю запись")
                 self.stop_recording()
                 break

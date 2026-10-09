@@ -427,7 +427,8 @@ class EnglishTeacherApp:
                                   greeting=("Джейн", self._greeting()))
         self.input_bar = InputBar(self.left_frame, p, on_send=self.send_text)
         self.control_bar = ControlBar(self.left_frame, p,
-                                      on_record=self.toggle_recording,
+                                      on_record=self._start_recording,
+                                      on_record_release=self._stop_recording,
                                       on_settings=self.open_panel,
                                       on_clear=self.clear_chat,
                                       on_users=self.open_users_panel)
@@ -466,6 +467,10 @@ class EnglishTeacherApp:
                                       on_select=self.select_user,
                                       on_close=self.close_panel,
                                       on_test=self.run_level_test)
+
+        # «Держать кнопку»: отпускание мыши в ЛЮБОМ месте останавливает запись
+        # (иначе, уведя курсор и отпустив вне кнопки, запись зависла бы).
+        self.window.bind("<ButtonRelease-1>", self._on_global_release, add="+")
 
     def _build_hero(self):
         """Шапка — ОДНА картинка: градиент, заголовок, подпись и пилюля статуса.
@@ -726,10 +731,29 @@ class EnglishTeacherApp:
         self.add_message("Джейн", NOT_READY_LOADING if state == "loading" else NOT_READY_OFFLINE)
         return False
 
-    def toggle_recording(self):
+    def _start_recording(self):
+        """Нажали «Запись»: пишем, пока кнопка нажата (push-to-talk)."""
+        if self.recorder.is_recording:
+            return
+        tts.stop()              # начинаем запись — гасим речь Джейн
+        self.recorder.start()
+
+    def _stop_recording(self):
+        """Отпустили кнопку (или сработала страховка) — стоп и распознавание."""
         if not self.recorder.is_recording:
-            tts.stop()          # начинаем запись — гасим речь Джейн
-        self.recorder.toggle()
+            return
+        self.recorder.stop()
+
+    def _on_global_release(self, _event=None):
+        """Отпускание ЛЮБОЙ кнопки мыши: если пишем — останавливаем запись."""
+        self._stop_recording()
+
+    def toggle_recording(self):
+        """Переключатель (для совместимости): старт/стоп записи."""
+        if self.recorder.is_recording:
+            self._stop_recording()
+        else:
+            self._start_recording()
 
     def clear_chat(self):
         self.chat_view.clear()
