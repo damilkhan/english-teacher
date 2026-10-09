@@ -123,6 +123,28 @@ def test_pure():
 # =========================================================
 # 2. Кэш
 # =========================================================
+def test_speech_clean():
+    print("\n[1b] clean_for_speech: разметка и символы не озвучиваются")
+    cases = [
+        ('**"She is preparing for competitions."**', '"She is preparing for competitions."'),
+        ("\u0422\u044b \u043c\u043e\u0436\u0435\u0448\u044c \u0441\u043a\u0430\u0437\u0430\u0442\u044c: **She trains.** \U0001F4AA",
+         "\u0422\u044b \u043c\u043e\u0436\u0435\u0448\u044c \u0441\u043a\u0430\u0437\u0430\u0442\u044c: She trains."),
+        ("\u0413\u043e\u0442\u043e\u0432\u043e <end_turn>", "\u0413\u043e\u0442\u043e\u0432\u043e"),
+        ("- \u043f\u0443\u043d\u043a\u0442 \u043e\u0434\u0438\u043d\n- \u043f\u0443\u043d\u043a\u0442 \u0434\u0432\u0430",
+         "\u043f\u0443\u043d\u043a\u0442 \u043e\u0434\u0438\u043d \u043f\u0443\u043d\u043a\u0442 \u0434\u0432\u0430"),
+        ("\u041e\u0442\u0432\u0435\u0442 \u0441 `\u043a\u043e\u0434\u043e\u043c` \u0438 _\u043a\u0443\u0440\u0441\u0438\u0432\u043e\u043c_",
+         "\u041e\u0442\u0432\u0435\u0442 \u0441 \u043a\u043e\u0434\u043e\u043c \u0438 \u043a\u0443\u0440\u0441\u0438\u0432\u043e\u043c"),
+        ("a \u2192 b", "a b"),
+        ("\U0001F60A", ""),
+        ("", ""),
+        (None, ""),
+    ]
+    for raw, expected in cases:
+        got = tts.clean_for_speech(raw)
+        check("clean_for_speech(%r)" % (raw,), got == expected,
+              "\u043f\u043e\u043b\u0443\u0447\u0435\u043d\u043e %r, \u0436\u0434\u0430\u043b\u0438 %r" % (got, expected))
+
+
 def test_cache():
     print("\n[2] Кэш синтеза")
     with restore_tts():
@@ -290,6 +312,7 @@ def main():
     print("=" * 60)
 
     test_pure()
+    test_speech_clean()
     test_cache()
     test_tempfile_playback()
     test_empty()

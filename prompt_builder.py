@@ -259,6 +259,18 @@ def clean_response(text):
     text = re.sub(r'<\|.*?\|>', '', text)
     text = re.sub(r'<end_of_turn>.*$', '', text, flags=re.DOTALL)
     text = re.sub(r'<end_of_turn>', '', text)
+    # Вариант тега без «of»: <end_turn>, <start_of_turn>, </s>… Модель пишет
+    # и так — раньше тег «протекал» и в чат, и в озвучку.
+    text = re.sub(r"</?\s*(?:start_of_turn|end_of_turn|end_turn|turn|eot|im_end|s)\s*>",
+                  "", text, flags=re.IGNORECASE)
+    # Markdown-разметка: в этом чате она не рендерится, поэтому «**» ученик
+    # видит как звёздочки и слышит их же в озвучке — снимаем.
+    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text, flags=re.DOTALL)
+    text = re.sub(r"__(.+?)__", r"\1", text, flags=re.DOTALL)
+    text = re.sub(r"`([^`]*)`", r"\1", text)
+    text = re.sub(r"(?m)^\s{0,3}#{1,6}\s*", "", text)
+    text = re.sub(r"(?m)^\s*[-*•]\s+", "", text)
+    text = text.replace("**", "")
     text = re.sub(r'RU$', '', text).strip()
     return text.strip()
 

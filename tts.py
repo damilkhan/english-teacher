@@ -90,6 +90,37 @@ EMOJI_PATTERN = re.compile("["
 def remove_emojis(text):
     return EMOJI_PATTERN.sub('', text).strip()
 
+# ---------------------------------------------------------
+# Подготовка текста к озвучке
+# ---------------------------------------------------------
+_TAG_RE = re.compile(r"<\|.*?\|>|</?\s*[A-Za-z_][A-Za-z0-9_]*\s*/?>", re.DOTALL)
+_LINE_MARKER_RE = re.compile(r"(?m)^\s{0,3}(?:#{1,6}\s*|[-*•·]\s+|\d+[.)]\s+)")
+_SPEECH_ARTIFACTS_RE = re.compile(r"[*_`~#|]+")
+_ARROW_RE = re.compile(r"→|←|⇒|⇐|->|<-")
+
+
+def clean_for_speech(text):
+    """Готовит ответ к озвучке: без эмодзи, markdown и служебных символов.
+
+    Модель отвечает с разметкой («**жирный**»), списками и иногда тегами
+    (<end_turn>); читать это вслух нельзя — слышно «звёздочка, звёздочка».
+    Эмодзи убираем отдельно (remove_emojis), затем снимаем разметку и
+    одиночные символы, которые не должны звучать.
+    """
+    if not text:
+        return ""
+    text = remove_emojis(str(text))
+    text = _TAG_RE.sub(" ", text)
+    text = re.sub(r"`+", "", text)                      # обратные кавычки
+    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text, flags=re.DOTALL)
+    text = re.sub(r"__(.+?)__", r"\1", text, flags=re.DOTALL)
+    text = re.sub(r"\*([^*\n]+)\*", r"\1", text)        # *курсив*
+    text = _LINE_MARKER_RE.sub("", text)                 # «- », «1. », «# »
+    text = _SPEECH_ARTIFACTS_RE.sub(" ", text)          # остатки ** _ ` ~ # |
+    text = _ARROW_RE.sub(" ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
 
 def detect_language(text):
     """'ru', если кириллических букв больше, чем латинских, иначе 'en'."""
@@ -151,7 +182,7 @@ def speak(text: str) -> None:
     """
     if not text or not str(text).strip():
         return
-    clean_text = remove_emojis(str(text))
+    clean_text = clean_for_speech(str(text))
     if not clean_text:
         return
 
