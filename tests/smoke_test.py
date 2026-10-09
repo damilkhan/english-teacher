@@ -6,7 +6,7 @@
 #   python tests\smoke_test.py --gui    — + создание окна и живой диалог
 #
 # Что проверяем:
-#   1) промпт НЕ изменился: сверяем с версией gui.py из git (commit HEAD);
+#   1) база промпта та же, КРОМЕ строки языка: сверяем с gui.py из git;
 #   2) чистка тегов Gemma (clean_response);
 #   3) profile_store: создание/чтение/запись во временной папке;
 #   4) окно собирается, тема и режим переключаются (--gui);
@@ -53,6 +53,20 @@ def check(name, ok, detail=""):
 def norm(text):
     """Единственное допустимое отличие — переводы строк (\r\n vs \n)."""
     return (text or "").replace("\r\n", "\n")
+
+
+# Единственная НАМЕРЕННАЯ правка базового промпта: жёсткое приказание языка
+# заменено мягкой политикой (язык выбирает модель). Всё остальное в базовом
+# промпте обязано совпасть с историческим gui.py байт-в-байт.
+OLD_LANGUAGE_LINES = {
+    "ru": "Ответь на русском языке, кратко.",
+    "en": "Answer in English, keep responses short.",
+}
+
+
+def _expected_system(old_prompt, lang):
+    """Старый системный промпт с ЗАМЕНЁННОЙ строкой языка (остальное — как было)."""
+    return old_prompt.replace(OLD_LANGUAGE_LINES[lang], prompt_builder.LANGUAGE_POLICY, 1)
 
 
 # =========================================================
@@ -107,7 +121,7 @@ def _make_fake_app(src, profile, mode, lang, history):
 
 
 def test_prompt_unchanged():
-    print("\n[1] Промпт не изменился (сверка с gui.py из git)")
+    print("\n[1] Промпт: база та же, КРОМЕ строки языка (сверка с gui.py из git)")
     src = _old_gui_source()
     if not src:
         print("  ⚠️ пропущено: не нашёл монолитный gui.py в истории git")
@@ -126,27 +140,41 @@ def test_prompt_unchanged():
     ]
     cases = [("lesson", "ru", []), ("lesson", "en", []), ("free", "ru", []), ("free", "en", [])]
 
+    # Системный промпт: единственная намеренная правка — политика языка.
     for pi, profile in enumerate(profiles):
         for mode, lang, _ in cases:
             fake = _make_fake_app(src, profile, mode, lang, [])
-            old_prompt = fake.get_dynamic_prompt()
+            old_prompt = _expected_system(fake.get_dynamic_prompt(), lang)
             new_prompt = prompt_builder.build_system_prompt(mode, profile, lang)
-            check(f"system-промпт mode={mode} lang={lang} профиль#{pi}",
+            check(f"system-промпт mode={mode} lang={lang} профиль#{pi} (кроме строки языка)",
                   norm(old_prompt) == norm(new_prompt),
                   f"было {len(old_prompt)} симв., стало {len(new_prompt)}")
 
-    # полный промпт (system + история + user) через СТАРЫЙ ask_jane
+    sys_ru = prompt_builder.build_system_prompt("lesson", profiles[0], "ru")
+    sys_en = prompt_builder.build_system_prompt("lesson", profiles[0], "en")
+    check("мягкая политика языка на месте (ru и en)",
+          prompt_builder.LANGUAGE_POLICY in sys_ru and prompt_builder.LANGUAGE_POLICY in sys_en)
+    check("жёсткого приказа языка больше нет",
+          "ТОЛЬКО НА РУССКОМ" not in sys_ru and "Answer ONLY in English" not in sys_en)
+
+    # Полный промпт: история — НАСТОЯЩИМИ тёрнами Gemma, реплика ученика — как есть.
     history = ["Student: hello", "Assistant: hi there"]
     for mode, lang in [("lesson", "ru"), ("lesson", "en"), ("free", "en")]:
         profile = profiles[1]
-        fake = _make_fake_app(src, profile, mode, lang, history)
-        fake.ask_jane("How are you?")
-        old_full = fake._http.payload["prompt"]
         system = prompt_builder.build_system_prompt(mode, profile, lang)
-        new_full = prompt_builder.build_conversation_prompt(system, history, "How are you?", lang)
-        check(f"полный промпт mode={mode} lang={lang} c историей",
-              norm(old_full) == norm(new_full),
-              f"было {len(old_full)} симв., стало {len(new_full)}")
+        full = prompt_builder.build_conversation_prompt(system, history, "How are you?", lang)
+        check(f"полный промпт {mode}/{lang}: system-тёрн в начале",
+              full.startswith("<start_of_turn>system\n" + system + "<end_of_turn>\n"), full[:60])
+        check(f"полный промпт {mode}/{lang}: история — user-тёрн",
+              "<start_of_turn>user\nhello<end_of_turn>\n" in full, full)
+        check(f"полный промпт {mode}/{lang}: история — model-тёрн",
+              "<start_of_turn>model\nhi there<end_of_turn>\n" in full, full)
+        check(f"полный промпт {mode}/{lang}: реплика ученика как есть",
+              full.endswith("<start_of_turn>user\nHow are you?<end_of_turn>\n<start_of_turn>model\n"), full[-70:])
+        check(f"полный промпт {mode}/{lang}: нет жёсткого приказа языка",
+              "Answer ONLY in English" not in full and "ТОЛЬКО НА РУССКОМ" not in full, full)
+        check(f"полный промпт {mode}/{lang}: «сырых» строк Student:/Assistant: нет",
+              "Student: hello" not in full and "Assistant: hi there" not in full, full)
 
     # «слабые темы» из теста уровня: блок появляется ТОЛЬКО когда данные есть
     # (иначе вывод промпта обязан остаться байт-в-байт прежним — см. выше)

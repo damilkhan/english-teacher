@@ -124,10 +124,28 @@ def detect_language(text):
     return "ru" if any(c in _RUSSIAN_CHARS for c in (text or "").lower()) else "en"
 
 
+# ---------- язык ответа: выбирает САМА модель ----------
+# Раньше в промпте стоял ЖЁСТКИЙ приказ языка («Answer ONLY in English» /
+# «Ответь на русском…»). Из-за него язык «залипал» (одного русского вопроса
+# хватало, чтобы Джейн отвечала по-русски до конца сессии, даже на английские
+# реплики), а ещё Джейн вслух проговаривала саму инструкцию («ты попросил
+# ответить только на русском»). Теперь политика МЯГКАЯ: Джейн зеркалит язык
+# собеседника, как живой преподаватель, и НЕ объявляет, на каком языке говорит.
+LANGUAGE_POLICY = (
+    "Reply in the same language the student is using right now: English for English, "
+    "Russian for Russian; if they mix languages, follow the language of their latest "
+    "sentence. Keep it short and natural. As a teacher you may gently encourage "
+    "English, but never announce, explain or lecture about which language you use."
+)
+
+
 def language_instruction(lang):
-    if lang == "ru":
-        return "Ответь на русском языке, кратко."
-    return "Answer in English, keep responses short."
+    """Политика языка ответа. Язык выбирает МОДЕЛЬ (мягкое зеркалирование).
+
+    Параметр lang сохранён для совместимости, но политика от него не зависит:
+    живой преподаватель подстраивается под собеседника, а не под флаг.
+    """
+    return LANGUAGE_POLICY
 
 
 
@@ -206,17 +224,25 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None):
 
 
 def build_conversation_prompt(system_prompt, history, user_text, lang):
-    """Собирает полный промпт в формате Gemma: system → история → user → model."""
-    if lang == "ru":
-        user_prompt = f"{user_text}\n\nОТВЕТЬ ТОЛЬКО НА РУССКОМ ЯЗЫКЕ. НЕ ИСПОЛЬЗУЙ АНГЛИЙСКИЙ."
-    else:
-        user_prompt = f"{user_text}\n\nAnswer ONLY in English. Do NOT use Russian."
+    """Собирает полный промпт в формате Gemma: system → диалог → реплика ученика.
 
+    История упаковывается в НАСТОЯЩИЕ тёрны Gemma (<start_of_turn>user/model),
+    а не «сырыми» строками «Student:/Assistant:». Так модель видит живую
+    беседу и НЕ считает каждую реплику новой сессией — раньше она здоровалась
+    в КАЖДОМ ответе («Привет, Дамиль!»).
+
+    Жёсткого «Answer ONLY in English» / «ОТВЕТЬ ТОЛЬКО НА РУССКОМ» тут больше
+    нет: язык ответа целиком на усмотрение модели (см. LANGUAGE_POLICY), а
+    реплика ученика уходит как есть. Параметр lang сохранён для совместимости.
+    """
     prompt = f"<start_of_turn>system\n{system_prompt}<end_of_turn>\n"
-    if history:
-        history_str = "\n".join(history[-6:]) + "\n"
-        prompt += history_str
-    prompt += f"<start_of_turn>user\n{user_prompt}<end_of_turn>\n<start_of_turn>model\n"
+    for line in (history or [])[-6:]:
+        line = str(line)
+        if line.startswith("Student: "):
+            prompt += f"<start_of_turn>user\n{line[9:]}<end_of_turn>\n"
+        elif line.startswith("Assistant: "):
+            prompt += f"<start_of_turn>model\n{line[11:]}<end_of_turn>\n"
+    prompt += f"<start_of_turn>user\n{user_text}<end_of_turn>\n<start_of_turn>model\n"
     return prompt
 
 
