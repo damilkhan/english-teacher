@@ -119,6 +119,24 @@ def _student_block(student):
     )
 
 
+# ---------- план урока (роль-Планировщик) ----------
+# Готовый текст плана приходит из ChatController (planner.format_plan).
+# ВАЖНО: при plan=None/пусто блок не добавляется — вывод
+# build_system_prompt не меняется (обратная совместимость).
+LESSON_PLAN_BLOCK_TEMPLATE = """
+\n\U0001F4CB TODAY'S LESSON PLAN (follow it, stay flexible):
+{plan}
+"""
+
+
+def _plan_block(plan):
+    """Блок плана урока. Пусто, если плана нет (обратная совместимость)."""
+    plan = str(plan or "").strip()
+    if not plan:
+        return ""
+    return LESSON_PLAN_BLOCK_TEMPLATE.format(plan=plan)
+
+
 # ---------- база знаний (RAG) ----------
 # Готовые методические заметки приходят сюда ТЕКСТОМ из ChatController
 # (rag.build_context). prompt_builder НЕ знает про rag — так модуль
@@ -189,7 +207,7 @@ def _mistake_line(err):
         text = str(err.get("jane_response") or "")
     return text[:50]
 
-def build_system_prompt(mode, profile, lang="en", level=None, student=None, context=None):
+def build_system_prompt(mode, profile, lang="en", level=None, student=None, context=None, plan=None):
     """Собирает system-промпт (персона + профиль ученика).
 
     mode:    'lesson' | 'free'
@@ -198,6 +216,8 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
     student: личность из user_manager (name/gender) — необязательно;
              None → блок не добавляется (обратная совместимость)
     context: методические заметки (RAG) — необязательно;
+             None/пусто → блок не добавляется (обратная совместимость)
+    plan:    текст плана урока (Планировщик) — необязательно;
              None/пусто → блок не добавляется (обратная совместимость)
     """
     language_rule = language_instruction(lang)
@@ -243,7 +263,7 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
     """
     return (prompt + _level_block(profile, level)
             + _weak_topics_block(profile) + _student_block(student)
-            + _knowledge_block(context))
+            + _plan_block(plan) + _knowledge_block(context))
 
 
 def build_conversation_prompt(system_prompt, history, user_text, lang):

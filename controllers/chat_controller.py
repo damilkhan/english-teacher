@@ -33,7 +33,7 @@ _log = logging.getLogger(__name__)
 
 class ChatController:
     def __init__(self, llm, dispatch=None, mode="lesson", lang="en", user_id=None,
-                 analyst=None):
+                 analyst=None, planner=None):
         self.llm = llm
         self._dispatch = dispatch or (lambda fn: fn())
         self.mode = mode
@@ -52,6 +52,12 @@ class ChatController:
             except Exception as exc:
                 print(f"⚠️ RAG недоступен: {exc}")
 
+        # роль-Планировщик (необязательна): план урока в промпт Учителя.
+        # План строится ОДИН раз за сессию (первый ход) и переиспользуется.
+        self.planner = planner
+        self._plan_text = ""
+        self._plan_done = False
+
         # --- колбэки, которые выставляет интерфейс ---
         self.on_message = None    # (sender, text)      — добавить сообщение в чат
         self.on_status = None     # (text, color_key)   — статус-бейдж
@@ -66,6 +72,7 @@ class ChatController:
         """Переключить ученика: история диалога у каждого своя, поэтому чистим."""
         self.user_id = user_id
         self.history = []
+        self._reset_plan()
         profile_store.set_active_user(user_id)
 
     def set_mode(self, mode):
@@ -76,6 +83,12 @@ class ChatController:
 
     def clear_history(self):
         self.history = []
+        self._reset_plan()
+
+    def _reset_plan(self):
+        """Сбросить план урока: новый ученик/новая сессия → новый план."""
+        self._plan_text = ""
+        self._plan_done = False
 
     def send(self, user_text):
         """Отправляет реплику и асинхронно получает ответ."""
@@ -122,11 +135,12 @@ class ChatController:
         user = user_manager.get_user(self.user_id) or {}
         level = user.get("level")
         student = {"name": user.get("name"), "gender": user.get("gender")}
-        # методические заметки (RAG) — только для режима урока
+        # методические заметки (RAG) и план урока (Планировщик) — только урок
         context = self._rag_context(user_text) if self.mode == "lesson" else ""
+        plan_text = self._lesson_plan_text() if self.mode == "lesson" else ""
         system_prompt = prompt_builder.build_system_prompt(
             self.mode, profile_store.load(self.user_id), lang,
-            level=level, student=student, context=context)
+            level=level, student=student, context=context, plan=plan_text)
         prompt = prompt_builder.build_conversation_prompt(system_prompt, self.history, user_text, lang)
 
         print(f"📤 Язык ответа: {'РУССКИЙ' if lang == 'ru' else 'ENGLISH'}")
@@ -144,6 +158,29 @@ class ChatController:
         if not cleaned:
             cleaned = prompt_builder.fallback_response(lang)
         return True, cleaned
+
+    def _lesson_plan_text(self):
+        """Текст плана урока (роль-Планировщик). Строится ОДИН раз за сессию.
+
+        Сбой Планировщика не мешает Учителю: тогда план пуст, промпт не
+        меняется. _plan_done ставим сразу, чтобы не дёргать модель каждый ход.
+        """
+        if self._plan_done:
+            return self._plan_text
+        self._plan_done = True
+        if self.planner is None:
+            return ""
+        try:
+            user = user_manager.get_user(self.user_id) or {}
+            context = self._rag_context("lesson design task cycle feedback scaffolding")
+            plan = self.planner.plan(profile_store.load(self.user_id),
+                                     level=user.get("level"), mode=self.mode,
+                                     context=context)
+            self._plan_text = self.planner.format_plan(plan)
+        except Exception as exc:
+            print(f"⚠️ Планировщик недоступен: {exc}")
+            self._plan_text = ""
+        return self._plan_text
 
     def _rag_context(self, query):
         """Методический контекст (RAG) для промпта Учителя.

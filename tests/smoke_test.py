@@ -194,6 +194,13 @@ def test_prompt_unchanged():
           "TEACHING NOTES" in p_ctx and "pre-task" in p_ctx)
     check("без контекста промпт не меняется", "TEACHING NOTES" not in p_without)
 
+    # план урока (Планировщик) — блок тоже ТОЛЬКО когда задан
+    p_plan = prompt_builder.build_system_prompt(
+        "lesson", base, "en", plan="Focus: Past Simple; Goals: ask about yesterday.")
+    check("план урока добавляется в промпт",
+          "LESSON PLAN" in p_plan and "Past Simple" in p_plan)
+    check("без плана промпт не меняется", "LESSON PLAN" not in p_without)
+
 
 def test_clean_response():
     print("\n[2] Чистка ответа модели")

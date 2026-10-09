@@ -44,6 +44,7 @@ from controllers.recording_controller import RecordingController
 from controllers.server_monitor import ServerMonitor
 from llm_client import LLMClient
 from roles.analyst import Analyst
+from roles.planner import Planner
 from ui import gradient
 from ui.first_run import FirstRunForm
 from ui.panels.boot_panel import BootPanel
@@ -153,10 +154,12 @@ class EnglishTeacherApp:
         # ---------- контроллеры ----------
         # роль-Аналитик: разбирает реплики ученика в режиме урока
         analyst = Analyst(self.llm) if config.ANALYST_ENABLED else None
+        # роль-Планировщик: короткий план урока (в промпт Учителя)
+        planner = Planner(self.llm) if config.PLANNER_ENABLED else None
         self.chat = ChatController(llm=self.llm, dispatch=self._dispatch,
                                    mode=self.mode, lang=self.current_lang,
                                    user_id=self.current_user["id"],
-                                   analyst=analyst)
+                                   analyst=analyst, planner=planner)
         self.chat.on_message = self.add_message
         self.chat.on_status = self._set_status
         self.chat.on_busy = self._set_busy
