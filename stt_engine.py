@@ -3,6 +3,8 @@ import threading
 import numpy as np
 from faster_whisper import WhisperModel
 
+import config
+
 
 class STTEngine:
     """Распознавание речи (faster-whisper).
@@ -18,8 +20,9 @@ class STTEngine:
     прокинуть его в главный поток (в приложении — через dispatch).
     """
 
-    def __init__(self, model_size="base", on_state=None):
-        self.model_size = model_size
+    def __init__(self, model_size=None, on_state=None):
+        # модель берём из config (STT_MODEL_SIZE); явный аргумент перекрывает
+        self.model_size = model_size or getattr(config, "STT_MODEL_SIZE", "base")
         self.on_state = on_state
         self.model = None
         self.error = None
@@ -56,8 +59,8 @@ class STTEngine:
 
     def _load(self):
         try:
-            print("⏳ Загрузка Whisper (автоопределение языка)...")
-            # model_size: tiny (~75MB), base (~150MB), small (~500MB)
+            print(f"⏳ Загрузка Whisper '{self.model_size}' (автоопределение языка)...")
+            # model_size: tiny (~75MB), base (~150MB), small (~500MB), medium (~1.5GB)
             self.model = WhisperModel(self.model_size, device="cpu",
                                       compute_type="int8")
             print("✅ Whisper готов! (будет определять язык автоматически)")
