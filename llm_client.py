@@ -12,6 +12,8 @@
 #     показать внятное сообщение.
 # =========================================================
 
+import threading
+
 import requests
 
 import config
@@ -29,6 +31,10 @@ class LLMClient:
 
         self._http = requests.Session()
         self._http.trust_env = False
+        # requests.Session НЕ потокобезопасен. Роли (Учитель/Аналитик) и
+        # фоновый Планировщик могут звать complete() из разных потоков —
+        # сериализуем обращения, иначе ответы могут перемешиваться.
+        self._lock = threading.Lock()
 
     # ---------- проверка связи ----------
     def is_health(self, timeout=2):
@@ -53,7 +59,8 @@ class LLMClient:
             "stop": stop if stop is not None else self.stop_words,
         }
         try:
-            resp = self._http.post(self.url, json=payload, timeout=timeout)
+            with self._lock:
+                resp = self._http.post(self.url, json=payload, timeout=timeout)
         except requests.exceptions.Timeout:
             return False, "Таймаут: сервер не отвечает"
         except Exception as exc:

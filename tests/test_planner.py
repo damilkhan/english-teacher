@@ -233,22 +233,34 @@ def test_chat_integration():
             while chat.busy and time.time() < deadline:
                 time.sleep(0.02)
 
+        def wait_for(pred, timeout=5.0):
+            end = time.time() + timeout
+            while time.time() < end:
+                if pred():
+                    return True
+                time.sleep(0.02)
+            return pred()
+
         llm = CaptureLLM()
         stub = StubPlanner()
         chat = ChatController(llm=llm, dispatch=lambda fn: fn(), mode="lesson",
                               lang="en", user_id=uid, planner=stub)
         mute(chat)
         send_and_wait(chat, "Hello Jane")
+        check("первый ответ БЕЗ плана (план — в фоне после ответа)",
+              "TODAY'S LESSON PLAN" not in llm.prompts[0], llm.prompts[0][-160:])
+        wait_for(lambda: stub.calls >= 1)     # ждём фоновое построение плана
+        check("план строится один раз за сессию (в фоне)", stub.calls == 1, stub.calls)
         send_and_wait(chat, "Let's continue")
-        check("план попал в промпт", "TODAY'S LESSON PLAN" in llm.prompts[0]
-              and "Past Simple" in llm.prompts[0], llm.prompts[0][-200:])
-        check("план строится один раз за сессию", stub.calls == 1, stub.calls)
-        check("план в обоих ходах", "TODAY'S LESSON PLAN" in llm.prompts[-1])
+        check("со 2-го хода план в промпте",
+              "TODAY'S LESSON PLAN" in llm.prompts[-1]
+              and "Past Simple" in llm.prompts[-1], llm.prompts[-1][-200:])
 
         # смена ученика → новый план
         user_manager.create_user("Второй", "other", 20, "B1", "", "🙂")
         chat.set_user(2)
         send_and_wait(chat, "Hi again")
+        wait_for(lambda: stub.calls >= 2)
         check("после смены ученика план строится заново", stub.calls == 2, stub.calls)
 
         # свободный режим — плана нет

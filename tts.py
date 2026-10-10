@@ -72,13 +72,10 @@ def _quiet_unraisable(unraisable):
 
 sys.unraisablehook = _quiet_unraisable
 
-# Микшер инициализируем один раз и держим живым: pygame.mixer.quit() после
-# каждой реплики давал лишние init/quit и гонки. Нет звуковой карты — озвучка
-# просто не пойдёт, но модуль обязан импортироваться.
-try:
-    pygame.mixer.init()
-except Exception as exc:                      # noqa: BLE001 — важен сам факт
-    _log.warning("TTS: pygame.mixer не инициализирован (%s)", exc)
+# Микшер pygame НЕ инициализируем на импорте: пока звучит потоковая озвучка
+# (sounddevice), держать аудиоустройство открытым в pygame не нужно — это
+# давало конфликт и «пропажу» звука. pygame.mixer.init() делается ЛЕНИВО
+# в запасном пути (_play), если поток недоступен. Модуль импортируется всегда.
 
 # ОДИН голос на оба языка: мультиязычный Ava произносит и русский, и
 # английский ОДНИМ тембром (проверено: локальный Whisper распознаёт и то,
@@ -98,6 +95,11 @@ CACHE_LIMIT = 16              # сколько mp3 держим в памяти
 STREAM_FORMAT = "mp3"         # edge-tts отдаёт audio-24khz-...-mp3
 STREAM_SRC_RATE = 24000       # частота mp3 от edge-tts
 STREAM_BLOCKSIZE = 2400       # размер блока вывода (0.1 с при 24 кГц)
+
+# edge-tts (онлайн) иногда отвечает 403 — делаем несколько попыток,
+# иначе реплика прозвучит «в тишину».
+RETRY_ATTEMPTS = 3
+RETRY_DELAY = 0.6             # пауза между попытками, сек
 
 EMOJI_PATTERN = re.compile("["
     u"\U0001F600-\U0001F64F"
@@ -223,8 +225,7 @@ def speak(text: str) -> None:
         _stop.clear()
         if my_gen != _current_generation():
             return                             # пока ждали — запросили ещё новее
-        # Основной путь: ПОТОК. Начинаем звучать по первым байтам, а не
-        # после полной загрузки mp3 (раньше это давало задержку до ~10 с).
+        # Основной путь: ПОТОК (звучим по первым байтам; повторы — внутри).
         if _streaming_enabled():
             try:
                 if _stream_play(clean_text, voice, my_gen):
@@ -233,7 +234,7 @@ def speak(text: str) -> None:
                 _log.warning("TTS: потоковый путь не сработал (%s)", exc)
         if _stop.is_set() or my_gen != _current_generation():
             return
-        # Запасной путь: скачать mp3 целиком и проиграть (pygame).
+        # Запасной путь: скачать mp3 целиком и проиграть (pygame; повторы внутри).
         try:
             data = _synthesize(clean_text, voice)
         except Exception as exc:               # noqa: BLE001 — синтез не должен ронять поток
@@ -265,7 +266,17 @@ def _synthesize(text: str, voice: str) -> Optional[bytes]:
 
 
 def _download(text: str, voice: str) -> Optional[bytes]:
-    """Скачивает mp3 во ВРЕМЕННЫЙ файл и возвращает байты. Файл всегда убираем."""
+    """Скачивает mp3 С ПОВТОРАМИ (403/сеть) во временный файл. Файл убираем."""
+    for _attempt in range(RETRY_ATTEMPTS):
+        data = _download_once(text, voice)
+        if data:
+            return data
+        time.sleep(RETRY_DELAY)
+    return None
+
+
+def _download_once(text: str, voice: str) -> Optional[bytes]:
+    """Одно скачивание mp3 во временный файл. Файл всегда убираем."""
     handle, path = tempfile.mkstemp(prefix="jane_tts_", suffix=".mp3")
     os.close(handle)
 
@@ -386,7 +397,23 @@ def _edge_stream(text: str, voice: str, chunks) -> None:
 
 
 def _stream_play(text: str, voice: str, my_gen: int) -> bool:
-    """Потоковая озвучка. True — что-то проиграли; False — не вышло."""
+    """Потоковая озвучка С ПОВТОРАМИ (edge-tts иногда отвечает 403).
+
+    True — что-то прозвучало; False — не вышло (переходим к запасному пути).
+    """
+    if not _STREAM_OK:
+        return False
+    for _attempt in range(RETRY_ATTEMPTS):
+        if _stop.is_set() or my_gen != _current_generation():
+            return False
+        if _stream_once(text, voice, my_gen):
+            return True
+        time.sleep(RETRY_DELAY)
+    return False
+
+
+def _stream_once(text: str, voice: str, my_gen: int) -> bool:
+    """Одна попытка потоковой озвучки. True — что-то проиграли."""
     if not _STREAM_OK:
         return False
     chunks = queue.Queue()

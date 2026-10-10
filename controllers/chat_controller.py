@@ -53,10 +53,11 @@ class ChatController:
                 print(f"⚠️ RAG недоступен: {exc}")
 
         # роль-Планировщик (необязательна): план урока в промпт Учителя.
-        # План строится ОДИН раз за сессию (первый ход) и переиспользуется.
+        # План строится ОДИН раз за сессию В ФОНЕ (после первого ответа),
+        # чтобы НЕ задерживать текст ответа: сам вызов модели небыстрый.
         self.planner = planner
         self._plan_text = ""
-        self._plan_done = False
+        self._plan_started = False
 
         # --- колбэки, которые выставляет интерфейс ---
         self.on_message = None    # (sender, text)      — добавить сообщение в чат
@@ -88,7 +89,7 @@ class ChatController:
     def _reset_plan(self):
         """Сбросить план урока: новый ученик/новая сессия → новый план."""
         self._plan_text = ""
-        self._plan_done = False
+        self._plan_started = False
 
     def send(self, user_text):
         """Отправляет реплику и асинхронно получает ответ."""
@@ -137,7 +138,8 @@ class ChatController:
         student = {"name": user.get("name"), "gender": user.get("gender")}
         # методические заметки (RAG) и план урока (Планировщик) — только урок
         context = self._rag_context(user_text) if self.mode == "lesson" else ""
-        plan_text = self._lesson_plan_text() if self.mode == "lesson" else ""
+        # план читаем БЕЗ ожидания: если он ещё строится — отвечаем без него
+        plan_text = self._plan_text if self.mode == "lesson" else ""
         system_prompt = prompt_builder.build_system_prompt(
             self.mode, profile_store.load(self.user_id), lang,
             level=level, student=student, context=context, plan=plan_text)
@@ -159,28 +161,30 @@ class ChatController:
             cleaned = prompt_builder.fallback_response(lang)
         return True, cleaned
 
-    def _lesson_plan_text(self):
-        """Текст плана урока (роль-Планировщик). Строится ОДИН раз за сессию.
+    def _ensure_plan_async(self):
+        """Построить план урока В ФОНЕ (не блокируя ответ Учителя).
 
-        Сбой Планировщика не мешает Учителю: тогда план пуст, промпт не
-        меняется. _plan_done ставим сразу, чтобы не дёргать модель каждый ход.
+        Планировщик — тяжёлый вызов модели (несколько секунд), поэтому
+        запускаем его ОТДЕЛЬНЫМ потоком ПОСЛЕ первого ответа, пока ученик
+        читает. План появится к следующей реплике. Строится один раз.
         """
-        if self._plan_done:
-            return self._plan_text
-        self._plan_done = True
-        if self.planner is None:
-            return ""
+        if self.planner is None or self._plan_started or self._plan_text:
+            return
+        self._plan_started = True
+        threading.Thread(target=self._build_plan_bg, daemon=True).start()
+
+    def _build_plan_bg(self):
+        """Фон: собрать план урока и запомнить текст. Сбой не критичен."""
         try:
             user = user_manager.get_user(self.user_id) or {}
             context = self._rag_context("lesson design task cycle feedback scaffolding")
             plan = self.planner.plan(profile_store.load(self.user_id),
-                                     level=user.get("level"), mode=self.mode,
+                                     level=user.get("level"), mode="lesson",
                                      context=context)
             self._plan_text = self.planner.format_plan(plan)
         except Exception as exc:
             print(f"⚠️ Планировщик недоступен: {exc}")
             self._plan_text = ""
-        return self._plan_text
 
     def _rag_context(self, query):
         """Методический контекст (RAG) для промпта Учителя.
@@ -250,6 +254,10 @@ class ChatController:
         self.history.append(f"Assistant: {response}")
         if len(self.history) > 10:
             self.history = self.history[-8:]
+
+        # план урока строим В ФОНЕ (после ответа) — чтобы не тормозить текст
+        if self.mode == "lesson":
+            self._ensure_plan_async()
 
         self._emit(self.on_status, "● Готов", "ok")
 
