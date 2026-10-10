@@ -118,6 +118,20 @@ def test_pure():
     check("строка из одного эмодзи → пусто", tts.remove_emojis("🙂") == "")
     check("detect_language: русский", tts.detect_language("привет") == "ru")
     check("detect_language: английский", tts.detect_language("hello there") == "en")
+    check("один голос на оба языка (VOICE_EN == VOICE_RU == VOICE)",
+          tts.VOICE_EN == tts.VOICE_RU == tts.VOICE, tts.VOICE)
+
+
+def test_single_voice():
+    print("\n[1c] Озвучка одним мультиязычным голосом")
+    with restore_tts():
+        used = []
+        tts._download = lambda text, voice: (used.append(voice), b"x")[1]
+        tts._play = lambda data, gen: None
+        tts.speak("Hello, my friend")     # английский
+        tts.speak("Привет, друг мой")     # русский
+        check("и EN, и RU синтезированы ОДНИМ голосом",
+              used == [tts.VOICE, tts.VOICE], used)
 
 
 # =========================================================
@@ -312,6 +326,7 @@ def main():
     print("=" * 60)
 
     test_pure()
+    test_single_voice()
     test_speech_clean()
     test_cache()
     test_tempfile_playback()
