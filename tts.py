@@ -34,11 +34,27 @@ import sys
 import tempfile
 import threading
 import time
+import queue
 from collections import OrderedDict
 from typing import Dict, Optional, Tuple
 
 import edge_tts
 import pygame
+
+# Потоковая озвучка: mp3 от edge-tts декодируем на лету (PyAV) и пишем в
+# динамик (sounddevice) ещё ДО того, как файл скачается целиком. Если av/
+# sounddevice недоступны — стриминг выключен, работает запасной путь
+# (mp3 целиком → pygame).
+try:
+    import av
+    import numpy as _np
+    import sounddevice as _sd
+    _STREAM_OK = True
+except Exception as _exc:            # noqa: BLE001 — без них просто нет стриминга
+    av = None
+    _np = None
+    _sd = None
+    _STREAM_OK = False
 
 _log = logging.getLogger(__name__)
 
@@ -77,6 +93,11 @@ RATE = "+10%"                 # скорость речи
 DOWNLOAD_TIMEOUT = 7.0        # ТОЛЬКО скачивание (проигрывание — отдельно)
 PLAYBACK_TICK = 0.05          # шаг опроса get_busy (для прерывания речи)
 CACHE_LIMIT = 16              # сколько mp3 держим в памяти
+
+# --- потоковая озвучка ---
+STREAM_FORMAT = "mp3"         # edge-tts отдаёт audio-24khz-...-mp3
+STREAM_SRC_RATE = 24000       # частота mp3 от edge-tts
+STREAM_BLOCKSIZE = 2400       # размер блока вывода (0.1 с при 24 кГц)
 
 EMOJI_PATTERN = re.compile("["
     u"\U0001F600-\U0001F64F"
@@ -202,6 +223,17 @@ def speak(text: str) -> None:
         _stop.clear()
         if my_gen != _current_generation():
             return                             # пока ждали — запросили ещё новее
+        # Основной путь: ПОТОК. Начинаем звучать по первым байтам, а не
+        # после полной загрузки mp3 (раньше это давало задержку до ~10 с).
+        if _streaming_enabled():
+            try:
+                if _stream_play(clean_text, voice, my_gen):
+                    return
+            except Exception as exc:           # noqa: BLE001 — вернёмся к запасному
+                _log.warning("TTS: потоковый путь не сработал (%s)", exc)
+        if _stop.is_set() or my_gen != _current_generation():
+            return
+        # Запасной путь: скачать mp3 целиком и проиграть (pygame).
         try:
             data = _synthesize(clean_text, voice)
         except Exception as exc:               # noqa: BLE001 — синтез не должен ронять поток
@@ -286,6 +318,126 @@ def _play(data: bytes, my_gen: int) -> None:
         print(f"⚠️ TTS воспроизведение ошибка: {exc}")
     finally:
         _safe_remove(path)
+
+
+# ---------------------------------------------------------
+# Потоковая озвучка (mp3 → PCM на лету → динамик)
+# ---------------------------------------------------------
+class _ByteStream:
+    """Файл-объект для PyAV: блокирующее чтение mp3-чанков из очереди."""
+
+    def __init__(self, chunks) -> None:
+        self._q = chunks
+        self._buf = b""
+        self._eof = False
+
+    def read(self, size=-1):
+        if self._eof:
+            return b""
+        while not self._buf:
+            item = self._q.get()
+            if item is None:
+                self._eof = True
+                return b""
+            self._buf += item
+        if size is None or size < 0:
+            out, self._buf = self._buf, b""
+            return out
+        out, self._buf = self._buf[:size], self._buf[size:]
+        return out
+
+    def readable(self):
+        return True
+
+    def seekable(self):
+        return False
+
+
+def _streaming_enabled() -> bool:
+    """Поток включён в настройках И есть av/sounddevice."""
+    import config
+    return bool(_STREAM_OK and getattr(config, "TTS_STREAMING", True))
+
+
+def _output_params():
+    """(частота, число каналов) устройства вывода по умолчанию."""
+    sr, ch = STREAM_SRC_RATE, 2
+    try:
+        info = _sd.query_devices(kind="output")
+        sr = int(info.get("default_samplerate") or STREAM_SRC_RATE)
+        ch = 2 if int(info.get("max_output_channels") or 2) >= 2 else 1
+    except Exception:
+        pass
+    return sr, ch
+
+
+def _edge_stream(text: str, voice: str, chunks) -> None:
+    """Качает mp3-чанки edge-tts в очередь и кладёт None в конце."""
+    async def _go():
+        async for chunk in edge_tts.Communicate(text, voice, rate=RATE).stream():
+            if chunk.get("type") == "audio":
+                chunks.put(chunk["data"])
+    try:
+        asyncio.run(_go())
+    except Exception as exc:                   # noqa: BLE001 — сбой сети/сервиса
+        _log.warning("TTS поток: %s", exc)
+    finally:
+        chunks.put(None)
+
+
+def _stream_play(text: str, voice: str, my_gen: int) -> bool:
+    """Потоковая озвучка. True — что-то проиграли; False — не вышло."""
+    if not _STREAM_OK:
+        return False
+    chunks = queue.Queue()
+    reader = _ByteStream(chunks)
+    threading.Thread(target=_edge_stream, args=(text, voice, chunks),
+                     daemon=True).start()
+    try:
+        container = av.open(reader, format=STREAM_FORMAT)
+    except Exception as exc:                   # noqa: BLE001 — пустой/битый поток
+        _log.warning("TTS поток: не открылся (%s)", exc)
+        return False
+
+    samplerate, channels = _output_params()
+    resampler = av.audio.resampler.AudioResampler(
+        format="s16", layout="mono", rate=samplerate)
+    played = False
+
+    def _write(out, frame):
+        nonlocal played
+        if frame is not None:          # None — сброс ресемплера (не кадр)
+            frame.pts = None
+        for rframe in resampler.resample(frame):
+            arr = rframe.to_ndarray().reshape(-1).astype("int16")
+            if channels == 2:
+                arr = _np.column_stack([arr, arr])
+            out.write(_np.ascontiguousarray(arr))
+            played = True
+            if _stop.is_set() or my_gen != _current_generation():
+                return False
+        return True
+
+    try:
+        with _sd.OutputStream(samplerate=samplerate, channels=channels,
+                              dtype="int16", blocksize=STREAM_BLOCKSIZE) as out:
+            for frame in container.decode(audio=0):
+                if _stop.is_set() or my_gen != _current_generation():
+                    break
+                if not _write(out, frame):
+                    break
+            else:
+                # поток закончился — сбрасываем остаток из ресемплера
+                _write(out, None)
+    except Exception as exc:                   # noqa: BLE001 — звук некритичен
+        _log.warning("TTS поток: воспроизведение (%s)", exc)
+        return played
+    finally:
+        try:
+            container.close()
+        except Exception:
+            pass
+    return played
 
 
 def _safe_remove(path: str) -> None:

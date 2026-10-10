@@ -93,9 +93,13 @@ class restore_tts:
         self.synth = tts._synthesize
         self.play = tts._play
         self.download = tts._download
+        self.stream_play = tts._stream_play
         tts._cache.clear()
         tts._stop.clear()
         tts._gen = 0
+        # по умолчанию потоковый путь «не срабатывает» → тесты гоняют
+        # запасной путь (mp3 целиком → pygame), как раньше
+        tts._stream_play = lambda *a, **k: False
         return self
 
     def __exit__(self, *exc):
@@ -103,6 +107,7 @@ class restore_tts:
         tts._synthesize = self.synth
         tts._play = self.play
         tts._download = self.download
+        tts._stream_play = self.stream_play
         tts._cache.clear()
         tts._stop.clear()
         tts._gen = 0
@@ -157,6 +162,51 @@ def test_speech_clean():
         got = tts.clean_for_speech(raw)
         check("clean_for_speech(%r)" % (raw,), got == expected,
               "\u043f\u043e\u043b\u0443\u0447\u0435\u043d\u043e %r, \u0436\u0434\u0430\u043b\u0438 %r" % (got, expected))
+
+
+def test_streaming_path():
+    print("\n[1d] Потоковая озвучка: поток первым, откат при неудаче")
+    with restore_tts():
+        called = {"stream": 0, "synth": 0, "play": 0}
+        tts._synthesize = lambda text, voice: (called.__setitem__("synth", called["synth"] + 1), b"x")[1]
+        tts._play = lambda data, gen: called.__setitem__("play", called["play"] + 1)
+
+        def stream_ok(text, voice, gen):
+            called["stream"] += 1
+            return True
+
+        tts._stream_play = stream_ok
+        tts.speak("Hello there")
+        check("при успешном потоке откат не вызывается",
+              called["stream"] == 1 and called["play"] == 0 and called["synth"] == 0, called)
+
+        called = {"stream": 0, "synth": 0, "play": 0}
+        tts._stream_play = lambda *a: (called.__setitem__("stream", called["stream"] + 1), False)[1]
+        tts.speak("Hello there")
+        check("если поток не вышло — играем запасным путём",
+              called["stream"] == 1 and called["play"] == 1 and called["synth"] == 1, called)
+
+
+def test_byte_stream():
+    print("\n[1e] _ByteStream: блокирующее чтение чанков")
+    import queue as _q
+    q = _q.Queue()
+    for piece in (b"abc", b"de", b"f"):
+        q.put(piece)
+    q.put(None)
+    r = tts._ByteStream(q)
+    first = r.read(2)
+    parts = []
+    while True:
+        chunk = r.read(2)
+        if not chunk:
+            break
+        parts.append(chunk)
+    check("read(2) отдаёт ровно 2 байта", first == b"ab", first)
+    check("поток отдаётся целиком по кускам",
+          first + b"".join(parts) == b"abcdef", (first, parts))
+    check("после EOF read -> b'' и поток не seekable",
+          r.read(2) == b"" and r.seekable() is False and r.readable() is True)
 
 
 def test_cache():
@@ -328,6 +378,8 @@ def main():
     test_pure()
     test_single_voice()
     test_speech_clean()
+    test_streaming_path()
+    test_byte_stream()
     test_cache()
     test_tempfile_playback()
     test_empty()

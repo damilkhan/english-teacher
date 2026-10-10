@@ -11,7 +11,8 @@ numpy==2.2.6
 
 # --- синтез речи (tts.py) ---
 edge-tts==7.2.8
-pygame==2.6.1                # воспроизведение mp3
+av==17.0.1                   # потоковая озвучка: mp3 → PCM на лету
+pygame==2.6.1                # запасное воспроизведение mp3
 
 # --- связь с llama.cpp (llm_client.py, server_manager.py) ---
 requests==2.33.1
