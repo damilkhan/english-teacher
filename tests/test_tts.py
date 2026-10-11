@@ -94,11 +94,13 @@ class restore_tts:
         self.play = tts._play
         self.download = tts._download
         self.stream_play = tts._stream_play
+        self.segments_play = tts._stream_play_segments
         tts._cache.clear()
         tts._stop.clear()
         tts._gen = 0
-        # по умолчанию потоковый путь «не срабатывает» → тесты гоняют
-        # запасной путь (mp3 целиком → pygame), как раньше
+        # по умолчанию сегментный и потоковый пути «не срабатывают» → тесты
+        # гоняют запасной путь (mp3 целиком → pygame), как раньше
+        tts._stream_play_segments = lambda *a, **k: False
         tts._stream_play = lambda *a, **k: False
         return self
 
@@ -108,6 +110,7 @@ class restore_tts:
         tts._play = self.play
         tts._download = self.download
         tts._stream_play = self.stream_play
+        tts._stream_play_segments = self.segments_play
         tts._cache.clear()
         tts._stop.clear()
         tts._gen = 0
@@ -229,6 +232,57 @@ def test_byte_stream():
           first + b"".join(parts) == b"abcdef", (first, parts))
     check("после EOF read -> b'' и поток не seekable",
           r.read(2) == b"" and r.seekable() is False and r.readable() is True)
+
+
+def test_substitutions():
+    print("\n[1g] Подстановка перед озвучкой (кириллица → латиница)")
+    with restore_tts():
+        used = []
+        tts._stream_play = lambda text, voice, gen: (used.append((voice, text)), True)[1]
+        tts.speak("Привет, Дамиль!", substitutions={"Дамиль": "Damil"})
+        joined = " ".join(t for _v, t in used)
+        check("подстановка применилась", "Damil" in joined and "Дамиль" not in joined, used)
+        check("имя ушло английскому голосу", any(v == tts.VOICE_EN and "Damil" in t for v, t in used), used)
+
+
+def test_segments_pipeline():
+    print("\n[1h] Сегментный поток: один выход, куски качаются заранее")
+    orig = (tts._Prefetch, tts._decode_into, tts._sd, tts._STREAM_OK)
+    opens = {"n": 0}
+    decoded = []
+
+    class FakePref:
+        def __init__(self, text, voice):
+            self.text, self.voice = text, voice
+        def wait(self, timeout=None):
+            return ("b:" + self.text).encode("utf-8")
+
+    class FakeOut:
+        def __enter__(self):
+            opens["n"] += 1
+            return self
+        def __exit__(self, *a):
+            return False
+        def write(self, arr):
+            pass
+
+    class FakeSD:
+        def OutputStream(self, **kw):
+            return FakeOut()
+
+    try:
+        tts._Prefetch = FakePref
+        tts._sd = FakeSD()
+        tts._decode_into = lambda out, data, sr, ch, gen: (decoded.append(data), True)[1]
+        tts._STREAM_OK = True
+        ok = tts._stream_play_segments([("en", "Hello"), ("ru", "Привет"), ("en", "OK")],
+                                       tts._bump_generation())
+        check("куски проиграны", ok is True, ok)
+        check("звук открыт ОДИН раз (не на каждый кусок)", opens["n"] == 1, opens)
+        check("все куски декодированы по порядку", len(decoded) == 3 and decoded[0] == b"b:Hello"
+              and decoded[2] == b"b:OK", decoded)
+    finally:
+        tts._Prefetch, tts._decode_into, tts._sd, tts._STREAM_OK = orig
 
 
 def test_cache():
@@ -402,6 +456,8 @@ def main():
     test_split_by_language()
     test_speech_clean()
     test_streaming_path()
+    test_substitutions()
+    test_segments_pipeline()
     test_byte_stream()
     test_cache()
     test_tempfile_playback()

@@ -26,6 +26,7 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import logging
 import os
 import re
@@ -264,8 +265,11 @@ def clear_cache() -> None:
 # ---------------------------------------------------------
 # Публичный вход
 # ---------------------------------------------------------
-def speak(text: str) -> None:
+def speak(text: str, substitutions=None) -> None:
     """Озвучить текст. Блокирующая: вызывать из фонового потока.
+
+    substitutions: необязательный словарь замен ПЕРЕД синтезом (например,
+    кириллическое имя → латинское, чтобы его прочитал правильный голос).
 
     Смешанный текст разбивается ПО ЯЗЫКУ: русские куски читает русский
     голос, английские — английский, без чужого акцента. Новая реплика
@@ -274,6 +278,10 @@ def speak(text: str) -> None:
     if not text or not str(text).strip():
         return
     clean_text = clean_for_speech(str(text))
+    if substitutions:                     # напр. «Дамиль» → «Damil» (читает Ava)
+        for src, dst in substitutions.items():
+            if src and dst and src != dst:
+                clean_text = clean_text.replace(src, dst)
     if not clean_text:
         return
 
@@ -285,6 +293,16 @@ def speak(text: str) -> None:
     stop()                                     # новая реплика прерывает старую
     with _lock:
         _stop.clear()
+        # Основной путь: СЕГМЕНТНЫЙ поток — один звуковой выход на всю реплику
+        # и предзагрузка кусков. Между языками нет пауз (раньше каждый кусок
+        # открывал свой поток и качался по очереди — отсюда «задумчивость»).
+        if _streaming_enabled():
+            try:
+                if _stream_play_segments(segments, my_gen):
+                    return
+            except Exception as exc:           # noqa: BLE001 — вернёмся к запасному
+                _log.warning("TTS: сегментный путь не сработал (%s)", exc)
+        # Запасной путь: по кускам (поток/скачивание, с повторами).
         for lang, chunk in segments:
             if _stop.is_set() or my_gen != _current_generation():
                 return                         # прервали / пришла более новая
@@ -535,6 +553,105 @@ def _stream_once(text: str, voice: str, my_gen: int) -> bool:
             container.close()
         except Exception:
             pass
+    return played
+
+
+# ---------------------------------------------------------
+# Сегментная озвучка: один выход + предзагрузка кусков
+# ---------------------------------------------------------
+class _Prefetch:
+    """Фоновая загрузка mp3 одного куска (играем текущий — качаем следующий)."""
+
+    def __init__(self, text: str, voice: str) -> None:
+        self.text = text
+        self.voice = voice
+        self._data = None
+        self._event = threading.Event()
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self) -> None:
+        try:
+            self._data = _download(self.text, self.voice)
+        except Exception:                      # noqa: BLE001 — сбой загрузки не критичен
+            self._data = None
+        finally:
+            self._event.set()
+
+    def wait(self, timeout=None):
+        self._event.wait(timeout)
+        return self._data
+
+
+def _decode_into(out, data, samplerate, channels, my_gen) -> bool:
+    """Декодирует mp3-байты (в памяти) и пишет PCM в ОБЩИЙ поток вывода."""
+    try:
+        container = av.open(io.BytesIO(data), format=STREAM_FORMAT)
+    except Exception as exc:                   # noqa: BLE001 — битый кусок
+        _log.warning("TTS: кусок не декодировался (%s)", exc)
+        return False
+    resampler = av.audio.resampler.AudioResampler(
+        format="s16", layout="mono", rate=samplerate)
+    played = False
+
+    def _write(frame):
+        nonlocal played
+        if frame is not None:
+            frame.pts = None
+        for rframe in resampler.resample(frame):
+            arr = rframe.to_ndarray().reshape(-1).astype("int16")
+            if channels == 2:
+                arr = _np.column_stack([arr, arr])
+            out.write(_np.ascontiguousarray(arr))
+            played = True
+
+    try:
+        for frame in container.decode(audio=0):
+            if _stop.is_set() or my_gen != _current_generation():
+                break
+            _write(frame)
+        else:
+            _write(None)                        # сброс остатка ресемплера
+    except Exception as exc:                   # noqa: BLE001 — звук некритичен
+        _log.warning("TTS: воспроизведение куска (%s)", exc)
+    finally:
+        try:
+            container.close()
+        except Exception:
+            pass
+    return played
+
+
+def _stream_play_segments(segments, my_gen) -> bool:
+    """Проиграть все куски ЧЕРЕЗ ОДИН звуковой выход, качая их заранее.
+
+    Так между кусками нет пауз: пока играет текущий, следующий уже качается,
+    а устройство вывода открывается ОДИН раз (не на каждый кусок).
+    """
+    if not _STREAM_OK or not segments:
+        return False
+    samplerate, channels = _output_params()
+    prefs = [None] * len(segments)
+
+    def _start(i):
+        if 0 <= i < len(segments) and prefs[i] is None:
+            lang, chunk = segments[i]
+            prefs[i] = _Prefetch(chunk, voice_for(lang))
+
+    _start(0)
+    _start(1)                                  # держим один кусок «в запасе»
+    played = False
+    try:
+        with _sd.OutputStream(samplerate=samplerate, channels=channels,
+                              dtype="int16", blocksize=STREAM_BLOCKSIZE) as out:
+            for i in range(len(segments)):
+                if _stop.is_set() or my_gen != _current_generation():
+                    break
+                data = prefs[i].wait() if prefs[i] is not None else None
+                if data and _decode_into(out, data, samplerate, channels, my_gen):
+                    played = True
+                _start(i + 2)
+    except Exception as exc:                   # noqa: BLE001 — звук некритичен
+        _log.warning("TTS: сегментный поток (%s)", exc)
     return played
 
 
