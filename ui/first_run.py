@@ -65,8 +65,9 @@ class FirstRunForm(ctk.CTkToplevel):
         self.gender_var = ctk.StringVar(value=(user or {}).get("gender", "other"))
         self.avatar_var = ctk.StringVar(value=(user or {}).get("avatar", user_manager.AVATARS[0]))
 
-        self._section(body, "КАК ТЕБЯ ЗОВУТ?")
-        self.name_entry = self._entry(body, self.name_var, "Например: Аня")
+        self._name_fixing = False           # защита от рекурсии при транслите
+        self._section(body, "КАК ТЕБЯ ЗОВУТ?  (латиницей)")
+        self.name_entry = self._entry(body, self.name_var, "Например: Damil")
 
         self._section(body, "ПОЛ")
         self.gender_widget = ctk.CTkSegmentedButton(
@@ -117,6 +118,8 @@ class FirstRunForm(ctk.CTkToplevel):
             text_color="#FFFFFF", corner_radius=theme.R["button"], font=theme.FONT_UI)
         self.submit_btn.pack(fill="x", padx=36, pady=(6, 20))
 
+        # Имя сразу переводим в латиницу по мере ввода (Дамиль → Damil).
+        self.name_var.trace_add("write", self._on_name_write)
         for var in (self.name_var, self.age_var, self.avatar_var):
             var.trace_add("write", lambda *_: self._refresh())
 
@@ -166,6 +169,28 @@ class FirstRunForm(ctk.CTkToplevel):
     @staticmethod
     def _age_text(age):
         return "" if age in (None, "") else str(age)
+
+    def _on_name_write(self, *_):
+        """Живая транслитерация имени: кириллица → латиница при вводе.
+
+        Чтобы имя ученика выглядело и озвучивалось единообразно (латиницей).
+        Переписывание переменной вызывает этот же обработчик повторно —
+        поэтому на время правки поднимаем флаг-защиту.
+        """
+        if self._name_fixing:
+            return
+        raw = self.name_var.get()
+        latin = user_manager.to_latin(raw)
+        if latin != raw:
+            self._name_fixing = True
+            try:
+                self.name_var.set(latin)
+                try:
+                    self.name_entry.icursor("end")
+                except Exception:
+                    pass
+            finally:
+                self._name_fixing = False
 
     def _on_gender(self, label):
         for key, lbl in user_manager.GENDER_LABELS.items():
@@ -229,7 +254,8 @@ class FirstRunForm(ctk.CTkToplevel):
         # «level» не отдаём: уровень ставит вводный тест, а не форма.
         # При редактировании это ещё и сохраняет уже определённый уровень.
         self.result = {
-            "name": self.name_var.get().strip(),
+            # страховка: имя обязано уйти латиницей, даже если транслит не сработал
+            "name": user_manager.to_latin(self.name_var.get().strip()).strip(),
             "gender": self._gender_value(),
             "age": self.age_var.get().strip() or None,
             "goal": self.goal_var.get().strip(),
