@@ -17,13 +17,24 @@ import customtkinter as ctk
 import theme
 from ui import emoji_render
 
+try:
+    from ui.widgets import tooltip as _tooltip
+except Exception:               # подсказка необязательна
+    _tooltip = None
+
 USER_SENDERS = ("Вы", "Вы (голос)")
 DOT = "·"
 EMOJI_PAD = 1          # px воздуха вокруг картинки-эмодзи, чтобы не липла к буквам
 
+# Кнопка «прослушать повторно» (появляется рядом с именем Джейн ПОСЛЕ того,
+# как реплика впервые озвучена до конца, и повторяет её по клику).
+REPLAY_ICON = "\U0001F50A"          # 🔊 динамик
+REPLAY_TOOLTIP = "Прослушать повторно"
+
 
 class ChatView(ctk.CTkFrame):
-    def __init__(self, parent, palette, greeting=None, corner_radius=None):
+    def __init__(self, parent, palette, greeting=None, corner_radius=None,
+                 on_replay=None):
         # Свою рамку карточки НЕ рисуем: у левой карточки (left_frame) она уже
         # есть, и две скруглённые рамки друг над другом читались как
         # «раздвоенный border-right» и «лишние радиусы». Отделяем чат цветом.
@@ -32,6 +43,15 @@ class ChatView(ctk.CTkFrame):
                          border_width=0,
                          height=140)   # запрос «минимум», растёт за счёт expand
         self.palette = palette
+        self.on_replay = on_replay    # callback(text) — озвучить реплику повторно
+
+        # «Прослушать повторно»: помним текст каждой реплики Джейн и её метку
+        # в тексте (метка стоит сразу после имени — туда и вставим кнопку).
+        self._msg_text = {}          # mark → текст реплики
+        self._msg_widgets = {}       # mark → tk.Label с иконкой динамика
+        self._replay_marks = set()   # для кого кнопка уже создана
+        self._msg_seq = 0
+        self._replay_icon = None     # держим ссылку на PhotoImage (иначе пропадёт)
 
         # область текста внутри карточки
         self.text = tk.Text(
@@ -86,7 +106,11 @@ class ChatView(ctk.CTkFrame):
 
     # ---------- API ----------
     def add_message(self, sender, text, stamp=None):
-        """Рисует реплику и прокручивает чат вниз."""
+        """Рисует реплику и прокручивает чат вниз.
+
+        Для реплик Джейн возвращает метку (mark) сразу после имени — по ней
+        потом вставляется кнопка «прослушать повторно». Для «Вы» — None.
+        """
         is_user = sender in USER_SENDERS
         head_tag = "head_user" if is_user else "head"
         body_tag = "body_user" if is_user else "body"
@@ -94,11 +118,115 @@ class ChatView(ctk.CTkFrame):
         header = f"{sender}  {DOT}  {stamp}" if stamp else sender
 
         self.text.configure(state="normal")
-        self.text.insert("end", header + "\n", head_tag)
+        self.text.insert("end", header, head_tag)
+        mark = None
+        if not is_user:
+            # метка «end» после имени с гравитацией влево: следующая вставка
+            # (\n) уйдёт ВПРАВО от неё, и точка останется сразу после имени
+            mark = "replay_%d" % self._msg_seq
+            self._msg_seq += 1
+            self.text.mark_set(mark, "end-1c")   # СРАЗУ после имени (не за \n)
+            self.text.mark_gravity(mark, tk.LEFT)
+            self._msg_text[mark] = text
+        self.text.insert("end", "\n", head_tag)
         self._insert_text(text, body_tag)
         self.text.insert("end", "\n", body_tag)
         self.text.configure(state="disabled")
         self.text.see("end")
+        return mark
+
+    def enable_replay(self, mark):
+        """Показать кнопку «прослушать повторно» для реплики с меткой mark.
+
+        Вызывается ПОСЛЕ того, как реплика впервые озвучена до конца. Если
+        метка неизвестна/уже включена — ничего не делаем.
+        """
+        if not mark or mark in self._replay_marks:
+            return
+        if mark not in self._msg_text:
+            return
+        if not self._mark_exists(mark):
+            return
+        widget = self._make_replay_button(mark)
+        if widget is None:
+            return
+        try:
+            self.text.configure(state="normal")
+            self.text.window_create(mark, window=widget, padx=4, align="center")
+            self.text.configure(state="disabled")
+        except Exception as exc:
+            print("⚠️ Кнопка прослушивания не вставилась: %s" % exc)
+            return
+        self._replay_marks.add(mark)
+        self._msg_widgets[mark] = widget
+
+    def _mark_exists(self, mark):
+        try:
+            self.text.index(mark)
+            return True
+        except Exception:
+            return False
+
+    def _make_replay_button(self, mark):
+        """Небольшая иконка-динамик с подсказкой; клик — повторная озвучка."""
+        p = self.palette
+        try:
+            label = tk.Label(self.text, bd=0, highlightthickness=0,
+                             bg=p["chat_bg"], cursor="hand2")
+        except Exception:
+            return None
+        icon = self._ensure_replay_icon()
+        if icon is not None:
+            label.configure(image=icon)
+        else:
+            # Pillow/шрифта нет — оставим текстовый значок цветом темы
+            label.configure(text=REPLAY_ICON, fg=p["accent"], font=theme.FONT_HEAD)
+        if _tooltip is not None:
+            _tooltip.ToolTip(label, REPLAY_TOOLTIP, p)
+        label.bind("<Button-1>", lambda _e, m=mark: self._replay_clicked(m))
+        return label
+
+    def _ensure_replay_icon(self):
+        """PhotoImage динамика (в цвете акцента). Кэшируем и держим ссылку."""
+        if self._replay_icon is not None:
+            return self._replay_icon
+        if not emoji_render.available():
+            return None
+        try:
+            from PIL import ImageTk
+        except Exception:
+            return None
+        try:
+            rgb = emoji_render.hex_to_rgb(self.palette["accent"])
+            ink = emoji_render.render_mono(REPLAY_ICON, self._icon_size(),
+                                           color=rgb + (255,))
+            if ink is None:
+                return None
+            self._replay_icon = ImageTk.PhotoImage(ink, master=self.text)
+        except Exception as exc:
+            print("⚠️ Иконка прослушивания не нарисовалась: %s" % exc)
+            self._replay_icon = None
+        return self._replay_icon
+
+    def _icon_size(self):
+        """Размер иконки динамика — чуть больше шрифта имени (в пикселях)."""
+        try:
+            import tkinter.font as tkfont
+            font = tkfont.Font(root=self, font=theme.FONT_HEAD)
+            points = abs(font.actual("size")) + 3
+            scaling = float(self.tk.call("tk", "scaling"))
+            return emoji_render.size_from_font(points, scaling)
+        except Exception:
+            return emoji_render.DEFAULT_PX
+
+    def _replay_clicked(self, mark):
+        """Клик по кнопке: озвучить реплику повторно."""
+        text = self._msg_text.get(mark)
+        if text and self.on_replay is not None:
+            try:
+                self.on_replay(text)
+            except Exception as exc:
+                print("⚠️ Повторное прослушивание не удалось: %s" % exc)
 
     def clear(self):
         self.text.configure(state="normal")
@@ -107,6 +235,10 @@ class ChatView(ctk.CTkFrame):
         # картинок в тексте больше нет — и имена их символов не нужны
         self._image_tokens.clear()
         self._emoji.clear()
+        # метки реплик и кнопки повтора тоже устарели
+        self._msg_text.clear()
+        self._msg_widgets.clear()
+        self._replay_marks.clear()
 
     def get_text(self):
         """Весь текст чата. Эмодзи-картинки возвращаются своими символами.
@@ -175,6 +307,19 @@ class ChatView(ctk.CTkFrame):
         self._configure_tags(palette)
         # картинки-эмодзи перерисовывать не нужно: фон у них прозрачный,
         # поэтому они одинаково ложатся на светлую и тёмную палитру.
+        # А кнопки повтора — обычные Label: у них фон под цвет чата и иконка
+        # в цвете акцента, поэтому перекрашиваем под новую палитру.
+        self._replay_icon = None
+        icon = self._ensure_replay_icon()
+        for mark, widget in self._msg_widgets.items():
+            try:
+                widget.configure(bg=palette["chat_bg"])
+                if icon is not None:
+                    widget.configure(image=icon, text="")
+                else:
+                    widget.configure(text=REPLAY_ICON, fg=palette["accent"])
+            except Exception:
+                pass
 
     def _configure_tags(self, palette):
         common = dict(lmargin1=14, lmargin2=14, rmargin=14)

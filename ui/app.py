@@ -97,6 +97,7 @@ class EnglishTeacherApp:
         self.mode = config.DEFAULT_MODE
         self.current_model_id = settings_store.get_selected_model_id()
         self.current_lang = "en"
+        self._jane_mark = None     # метка последней реплики Джейн (для повтора)
         self.panel_visible = False
         self.active_panel = None      # "settings" | "users" | None
         self.busy = False
@@ -427,7 +428,8 @@ class EnglishTeacherApp:
                                        border_width=1, border_color=p["border"])
         self.visualizer = AudioVisualizer(self.left_frame, p, height=30, bars=30)
         self.chat_view = ChatView(self.left_frame, p,
-                                  greeting=("Джейн", self._greeting()))
+                                  greeting=("Джейн", self._greeting()),
+                                  on_replay=self._replay_reply)
         self.input_bar = InputBar(self.left_frame, p, on_send=self.send_text)
         self.control_bar = ControlBar(self.left_frame, p,
                                       on_record=self._start_recording,
@@ -622,7 +624,11 @@ class EnglishTeacherApp:
     # Обратная связь от контроллеров
     # =====================================================
     def add_message(self, sender, text):
-        self.chat_view.add_message(sender, text)
+        mark = self.chat_view.add_message(sender, text)
+        # запоминаем метку последней реплики Джейн: к ней привяжем кнопку
+        # «прослушать повторно», когда озвучка этой реплики закончится
+        if sender == "Джейн" and mark:
+            self._jane_mark = mark
 
     def _set_status(self, text, color_key="ok"):
         """Пилюля статуса в шапке.
@@ -641,15 +647,49 @@ class EnglishTeacherApp:
         self.input_bar.set_busy(busy)
 
     def _on_response(self, user_text, response):
-        """Ответ получен: озвучиваем и гасим эквалайзер."""
-        self._say(response)
+        """Ответ получен: озвучиваем, гасим эквалайзер, готовим повтор."""
+        mark = self._jane_mark
+        if mark:
+            # кнопку «прослушать повторно» показываем ТОЛЬКО после того,
+            # как реплика впервые озвучена до конца (on_done из фонового потока)
+            self._say(response, on_done=lambda m=mark: self._dispatch(
+                lambda: self.chat_view.enable_replay(m)))
+        else:
+            self._say(response)
         self.visualizer.reset()
 
+    def _replay_reply(self, text):
+        """Кнопка «прослушать повторно»: озвучить ту же реплику заново."""
+        self._say(text)
+
     @staticmethod
-    def _say(text):
-        """Озвучка в фоне — окно ждать не должно."""
-        if text:
-            threading.Thread(target=tts.speak, args=(text,), daemon=True).start()
+    def _say(text, on_done=None):
+        """Озвучка в фоне — окно ждать не должно.
+
+        on_done вызывается (тоже в фоне) сразу после того, как звук доиграл;
+        UI-обновления внутри него обязаны уйти через dispatch в главный поток.
+        """
+        if not text:
+            if on_done:
+                try:
+                    on_done()
+                except Exception:
+                    pass
+            return
+
+        def _worker():
+            try:
+                tts.speak(text)
+            finally:
+                if on_done:
+                    try:
+                        on_done()
+                    except Exception:
+                        pass
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    # Примечание: _say объявлен выше (в блоке обратной связи), здесь пусто.
 
     def _on_recording_changed(self, recording):
         self.control_bar.set_recording(recording)
