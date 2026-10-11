@@ -123,20 +123,37 @@ def test_pure():
     check("строка из одного эмодзи → пусто", tts.remove_emojis("🙂") == "")
     check("detect_language: русский", tts.detect_language("привет") == "ru")
     check("detect_language: английский", tts.detect_language("hello there") == "en")
-    check("один голос на оба языка (VOICE_EN == VOICE_RU == VOICE)",
-          tts.VOICE_EN == tts.VOICE_RU == tts.VOICE, tts.VOICE)
+    check("voice_for: ru→русский, en→английский",
+          tts.voice_for("ru") == tts.VOICE_RU and tts.voice_for("en") == tts.VOICE_EN,
+          (tts.VOICE_RU, tts.VOICE_EN))
 
 
-def test_single_voice():
-    print("\n[1c] Озвучка одним мультиязычным голосом")
+def test_voice_per_language():
+    print("\n[1c] Голос по языку: русский текст — русским голосом")
     with restore_tts():
         used = []
         tts._download = lambda text, voice: (used.append(voice), b"x")[1]
         tts._play = lambda data, gen: None
         tts.speak("Hello, my friend")     # английский
         tts.speak("Привет, друг мой")     # русский
-        check("и EN, и RU синтезированы ОДНИМ голосом",
-              used == [tts.VOICE, tts.VOICE], used)
+        check("EN → VOICE_EN, RU → VOICE_RU",
+              used == [tts.VOICE_EN, tts.VOICE_RU], used)
+
+
+def test_split_by_language():
+    print("\n[1f] split_by_language: разбиение смешанного текста")
+    s = tts.split_by_language
+    check("чистый английский → один кусок", s("Hello there") == [("en", "Hello there")], s("Hello there"))
+    check("чистый русский → один кусок", s("Привет друг") == [("ru", "Привет друг")], s("Привет друг"))
+    mixed = s("Please choose three topics. Какой выбор ты сделаешь, Дамиль?")
+    check("смешанный → сначала en, затем ru",
+          len(mixed) == 2 and mixed[0][0] == "en" and mixed[1][0] == "ru", mixed)
+    check("русский кусок сохранён", mixed[1][1] == "Какой выбор ты сделаешь, Дамиль?", mixed)
+    check("пустой/None → []", s("") == [] and s(None) == [])
+    check("только цифры → [] (нет букв)", s("123 456") == [], s("123 456"))
+    inline = s("глагол train значит поезд")
+    check("инлайновое EN-слово выделено отдельным куском",
+          any(l == "en" and w == "train" for l, w in inline), inline)
 
 
 # =========================================================
@@ -376,7 +393,8 @@ def main():
     print("=" * 60)
 
     test_pure()
-    test_single_voice()
+    test_voice_per_language()
+    test_split_by_language()
     test_speech_clean()
     test_streaming_path()
     test_byte_stream()

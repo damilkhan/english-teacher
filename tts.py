@@ -2,8 +2,8 @@
 # =========================================================
 # TTS.PY — озвучка ответов Джейн (edge-tts → mp3 → pygame)
 # =========================================================
-# Схема: текст → чистка → синтез ОДНИМ мультиязычным голосом → проигрывание.
-# (edge-tts — ОНЛАЙН; pygame — звук.)
+# Схема: текст → чистка → РАЗБИЕНИЕ ПО ЯЗЫКУ → синтез куска своим голосом →
+# проигрывание. (edge-tts — ОНЛАЙН; звук — sounddevice-поток или pygame.)
 #
 # Что улучшено против первой версии:
 #   * СЕРИАЛИЗАЦИЯ: синтез и проигрывание идут строго по очереди (Lock) —
@@ -19,9 +19,8 @@
 #     звуковой карты больше не роняет ИМПОРТ модуля.
 #
 # Приложение зовёт speak(text) из фонового потока (окно не морозим).
-# stop() — по желанию: прервать текущую речь. Остальные имена
-# (VOICE_EN/VOICE_RU, remove_emojis, detect_language) оставлены для
-# совместимости — озвучка теперь использует единый голос VOICE.
+# stop() — по желанию: прервать текущую речь. remove_emojis /
+# detect_language оставлены для совместимости.
 # =========================================================
 
 from __future__ import annotations
@@ -77,14 +76,14 @@ sys.unraisablehook = _quiet_unraisable
 # давало конфликт и «пропажу» звука. pygame.mixer.init() делается ЛЕНИВО
 # в запасном пути (_play), если поток недоступен. Модуль импортируется всегда.
 
-# ОДИН голос на оба языка: мультиязычный Ava произносит и русский, и
-# английский ОДНИМ тембром (проверено: локальный Whisper распознаёт и то,
-# и другое с этого же голоса). Раньше были Jenny (EN) и Svetlana (RU) —
-# из-за этого Джейн «меняла характер» при смене языка.
-VOICE = "en-US-AvaMultilingualNeural"
-# Оставлены для совместимости (тесты). Озвучка идёт голосом VOICE.
-VOICE_EN = VOICE
-VOICE_RU = VOICE
+# Голоса ПО ЯЗЫКАМ. Мультиязычный Ava (en-US) отлично читает английский,
+# но на РУССКОМ даёт акцент (проверено: Whisper слышит искажения, напр.
+# «Дамиль» → «Доми»). Поэтому русские куски читает русский голос — так
+# каждая часть звучит НАТИВНО. Хочешь один голос — VOICE_RU = VOICE_EN
+# (тогда русский будет с акцентом).
+VOICE_EN = "en-US-AvaMultilingualNeural"
+VOICE_RU = "ru-RU-SvetlanaNeural"
+VOICE = VOICE_EN                    # голос по умолчанию (совместимость)
 
 RATE = "+10%"                 # скорость речи
 DOWNLOAD_TIMEOUT = 7.0        # ТОЛЬКО скачивание (проигрывание — отдельно)
@@ -159,6 +158,43 @@ def detect_language(text):
     return "ru" if ru_count > en_count else "en"
 
 
+def voice_for(lang):
+    """Голос для языка куска: 'ru' → русский, иначе английский."""
+    return VOICE_RU if lang == "ru" else VOICE_EN
+
+
+# Разбиение по языку (кириллица vs латиница). Нужно для СМЕШАННОГО текста:
+# иначе голос берёт один акцент на всю фразу и русские слова звучат
+# по-английски (и наоборот). Каждый кусок синтезируем своим голосом.
+_TOKEN_RE = re.compile(r"[A-Za-z]+|[А-Яа-яЁё]+|[^A-Za-zА-Яа-яЁё]+")
+_CYR_RE = re.compile(r"[А-Яа-яЁё]+")
+
+
+def split_by_language(text):
+    """Разбить текст на куски одного языка: [('ru'|'en', кусок), ...].
+
+    Пунктуация/пробелы приклеиваются к предыдущему куску. Если язык
+    один — вернётся один кусок (поведение не меняется).
+    """
+    segs = []      # [[lang, chunk], ...]
+    for tok in _TOKEN_RE.findall(text or ""):
+        if re.fullmatch(r"[A-Za-z]+", tok):
+            lang = "en"
+        elif _CYR_RE.fullmatch(tok):
+            lang = "ru"
+        else:
+            lang = None                     # цифры/пунктуация/пробелы
+        if lang is None:
+            if segs:
+                segs[-1][1] += tok
+            continue
+        if segs and segs[-1][0] == lang:
+            segs[-1][1] += tok
+        else:
+            segs.append([lang, tok])
+    return [(lang, chunk.strip()) for lang, chunk in segs if chunk.strip()]
+
+
 # ---------------------------------------------------------
 # Состояние (модуль-уровень: сериализация, прерывание, кэш)
 # ---------------------------------------------------------
@@ -206,8 +242,9 @@ def clear_cache() -> None:
 def speak(text: str) -> None:
     """Озвучить текст. Блокирующая: вызывать из фонового потока.
 
-    Порядок: чистка эмодзи → выбор голоса → синтез (кэш/скачивание) →
-    проигрывание. Новая реплика важнее текущей: она прерывает предыдущую.
+    Смешанный текст разбивается ПО ЯЗЫКУ: русские куски читает русский
+    голос, английские — английский, без чужого акцента. Новая реплика
+    важнее текущей: она прерывает предыдущую.
     """
     if not text or not str(text).strip():
         return
@@ -215,34 +252,41 @@ def speak(text: str) -> None:
     if not clean_text:
         return
 
-    voice = VOICE                        # один голос на оба языка
-    lang = detect_language(clean_text)   # только для диагностики
-    print(f"🔊 Озвучка голосом {voice} (язык текста: {lang})")
+    segments = split_by_language(clean_text)
+    if not segments:                       # только цифры/знаки
+        segments = [(detect_language(clean_text), clean_text)]
 
     my_gen = _bump_generation()
     stop()                                     # новая реплика прерывает старую
     with _lock:
         _stop.clear()
-        if my_gen != _current_generation():
-            return                             # пока ждали — запросили ещё новее
-        # Основной путь: ПОТОК (звучим по первым байтам; повторы — внутри).
-        if _streaming_enabled():
-            try:
-                if _stream_play(clean_text, voice, my_gen):
-                    return
-            except Exception as exc:           # noqa: BLE001 — вернёмся к запасному
-                _log.warning("TTS: потоковый путь не сработал (%s)", exc)
-        if _stop.is_set() or my_gen != _current_generation():
-            return
-        # Запасной путь: скачать mp3 целиком и проиграть (pygame; повторы внутри).
+        for lang, chunk in segments:
+            if _stop.is_set() or my_gen != _current_generation():
+                return                         # прервали / пришла более новая
+            _speak_chunk(chunk, voice_for(lang), my_gen)
+
+
+def _speak_chunk(text: str, voice: str, my_gen: int) -> None:
+    """Озвучить ОДИН кусок: сначала потоком, при неудаче — запасным путём."""
+    print(f"🔊 Озвучка: {voice} — {text[:48]!r}")
+    # Основной путь: ПОТОК (звучим по первым байтам; повторы — внутри).
+    if _streaming_enabled():
         try:
-            data = _synthesize(clean_text, voice)
-        except Exception as exc:               # noqa: BLE001 — синтез не должен ронять поток
-            print(f"⚠️ TTS ошибка синтеза: {exc}")
-            data = None
-        if not data or my_gen != _current_generation():
-            return                             # синтез устарел/не удался — не играем
-        _play(data, my_gen)
+            if _stream_play(text, voice, my_gen):
+                return
+        except Exception as exc:               # noqa: BLE001 — вернёмся к запасному
+            _log.warning("TTS: потоковый путь не сработал (%s)", exc)
+    if _stop.is_set() or my_gen != _current_generation():
+        return
+    # Запасной путь: скачать mp3 целиком и проиграть (pygame; повторы внутри).
+    try:
+        data = _synthesize(text, voice)
+    except Exception as exc:                   # noqa: BLE001 — синтез не должен ронять поток
+        print(f"⚠️ TTS ошибка синтеза: {exc}")
+        data = None
+    if not data or my_gen != _current_generation():
+        return                                 # синтез устарел/не удался — не играем
+    _play(data, my_gen)
 
 
 # ---------------------------------------------------------
