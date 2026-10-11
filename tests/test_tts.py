@@ -235,27 +235,32 @@ def test_byte_stream():
 
 
 def test_substitutions():
-    print("\n[1g] Подстановка перед озвучкой (кириллица → латиница)")
+    print("\n[1g] Имя подставляется перед озвучкой по языку куска")
     with restore_tts():
         used = []
         tts._stream_play = lambda text, voice, gen: (used.append((voice, text)), True)[1]
-        tts.speak("Привет, Дамиль!", substitutions={"Дамиль": "Damil"})
-        joined = " ".join(t for _v, t in used)
-        check("подстановка применилась", "Damil" in joined and "Дамиль" not in joined, used)
-        check("имя ушло английскому голосу", any(v == tts.VOICE_EN and "Damil" in t for v, t in used), used)
+        # Реально Джейн в русском тексте пишет имя кириллицей (по промпту) —
+        # такой кусок читает Светлана, и имя звучит по-русски.
+        tts.speak("Привет, Дамиль!", name="Дамиль", name_latin="Damil")
+        check("русская фраза с кириллическим именем → русский голос",
+              bool(used) and used[0][0] == tts.VOICE_RU and "Дамиль" in used[0][1], used)
+        used.clear()
+        tts.speak("Hello, Damil!", name="Дамиль", name_latin="Damil")
+        check("английская фраза с латинским именем → английский голос",
+              bool(used) and used[0][0] == tts.VOICE_EN and "Damil" in used[0][1], used)
 
 
 def test_segments_pipeline():
-    print("\n[1h] Сегментный поток: один выход, куски качаются заранее")
-    orig = (tts._Prefetch, tts._decode_into, tts._sd, tts._STREAM_OK)
+    print("\n[1h] Сегментный поток: один выход, 1-й потоком, дальше заранее")
+    orig = (tts._Prefetch, tts._decode_into, tts._decode_stream_into, tts._sd, tts._STREAM_OK)
     opens = {"n": 0}
-    decoded = []
+    order = []
 
     class FakePref:
         def __init__(self, text, voice):
             self.text, self.voice = text, voice
         def wait(self, timeout=None):
-            return ("b:" + self.text).encode("utf-8")
+            return ("P:" + self.text).encode("utf-8")
 
     class FakeOut:
         def __enter__(self):
@@ -273,30 +278,32 @@ def test_segments_pipeline():
     try:
         tts._Prefetch = FakePref
         tts._sd = FakeSD()
-        tts._decode_into = lambda out, data, sr, ch, gen: (decoded.append(data), True)[1]
+        tts._decode_stream_into = lambda out, text, voice, sr, ch, gen: (order.append("S:" + text), True)[1]
+        tts._decode_into = lambda out, data, sr, ch, gen: (order.append("D:" + data.decode("utf-8")), True)[1]
         tts._STREAM_OK = True
         ok = tts._stream_play_segments([("en", "Hello"), ("ru", "Привет"), ("en", "OK")],
                                        tts._bump_generation())
         check("куски проиграны", ok is True, ok)
         check("звук открыт ОДИН раз (не на каждый кусок)", opens["n"] == 1, opens)
-        check("все куски декодированы по порядку", len(decoded) == 3 and decoded[0] == b"b:Hello"
-              and decoded[2] == b"b:OK", decoded)
+        check("1-й кусок потоком, остальные из предзагрузки, по порядку",
+              order == ["S:Hello", "D:P:Привет", "D:P:OK"], order)
     finally:
-        tts._Prefetch, tts._decode_into, tts._sd, tts._STREAM_OK = orig
+        (tts._Prefetch, tts._decode_into, tts._decode_stream_into,
+         tts._sd, tts._STREAM_OK) = orig
 
 
-def test_name_substitutions():
-    print("\n[1i] Имя звучит на языке фразы (ru→кириллица, en→латиница)")
-    f = tts.name_substitutions
-    check("русская фраза → латинское имя меняем на кириллицу",
-          f("Привет, Damil! Как дела?", "Дамиль", "Damil") == {"Damil": "Дамиль"},
-          f("Привет, Damil! Как дела?", "Дамиль", "Damil"))
-    check("английская фраза → кириллическое имя меняем на латиницу",
-          f("Hello, Дамиль! How are you?", "Дамиль", "Damil") == {"Дамиль": "Damil"},
-          f("Hello, Дамиль! How are you?", "Дамиль", "Damil"))
+def test_name_per_segment():
+    print("\n[1i] Имя звучит на языке КАЖДОГО куска")
+    f = tts._apply_name
+    check("русский кусок: латинское имя → кириллица",
+          f("Привет, Damil!", "ru", "Дамиль", "Damil") == "Привет, Дамиль!",
+          f("Привет, Damil!", "ru", "Дамиль", "Damil"))
+    check("английский кусок: кириллическое имя → латиница",
+          f("Hello, Дамиль!", "en", "Дамиль", "Damil") == "Hello, Damil!",
+          f("Hello, Дамиль!", "en", "Дамиль", "Damil"))
     check("одинаковые формы → без замен",
-          f("Hello", "Damil", "Damil") is None)
-    check("пустой латинице → без замен", f("Hello", "Damil", "") is None)
+          f("Hello", "en", "Damil", "Damil") == "Hello")
+    check("пустая латиница → без замен", f("Hello", "en", "Damil", "") == "Hello")
 
 
 def test_cache():
@@ -471,7 +478,7 @@ def main():
     test_speech_clean()
     test_streaming_path()
     test_substitutions()
-    test_name_substitutions()
+    test_name_per_segment()
     test_segments_pipeline()
     test_byte_stream()
     test_cache()

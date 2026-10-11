@@ -189,20 +189,20 @@ def voice_for(lang):
     return VOICE_RU if lang == "ru" else VOICE_EN
 
 
-def name_substitutions(text, name, name_latin):
-    """Замены перед озвучкой, чтобы ИМЯ прозвучало на языке фразы.
+def _apply_name(chunk, lang, name, name_latin):
+    """Подставить имя НА ЯЗЫКЕ куска: ru → кириллица, en → латиница.
 
-    Русская фраза → латинское имя подменяем кириллическим (читает Светлана),
-    английская → кириллическое подменяем латинским (читает Ava). Так в русском
-    тексте имя звучит по-русски, в английском — по-английски.
+    Так в русском куске имя читает Светлана (по-русски), в английском — Ava.
+    Смешанную фразу разбиваем заранее, поэтому каждый кусок получает свою
+    форму имени (а не «как вся фраза»).
     """
     name = str(name or "").strip()
     name_latin = str(name_latin or "").strip()
     if not name or not name_latin or name == name_latin:
-        return None
-    if detect_language(text) == "ru":
-        return {name_latin: name}          # Damil → Дамиль
-    return {name: name_latin}              # Дамиль → Damil
+        return chunk
+    if lang == "ru":
+        return chunk.replace(name_latin, name)     # Damil → Дамиль
+    return chunk.replace(name, name_latin)         # Дамиль → Damil
 
 
 # Разбиение по языку (кириллица vs латиница). Нужно для СМЕШАННОГО текста:
@@ -281,29 +281,28 @@ def clear_cache() -> None:
 # ---------------------------------------------------------
 # Публичный вход
 # ---------------------------------------------------------
-def speak(text: str, substitutions=None) -> None:
+def speak(text: str, name=None, name_latin=None) -> None:
     """Озвучить текст. Блокирующая: вызывать из фонового потока.
 
-    substitutions: необязательный словарь замен ПЕРЕД синтезом (например,
-    кириллическое имя → латинское, чтобы его прочитал правильный голос).
+    name / name_latin: имя ученика в двух формах. Для КАЖДОГО куска имя
+    подставляется НА ЯЗЫКЕ куска (ru → кириллица, en → латиница): в русском
+    тексте имя звучит по-русски, в английском — по-английски.
 
     Смешанный текст разбивается ПО ЯЗЫКУ: русские куски читает русский
-    голос, английские — английский, без чужого акцента. Новая реплика
-    важнее текущей: она прерывает предыдущую.
+    голос, английские — английский. Новая реплика важнее текущей.
     """
     if not text or not str(text).strip():
         return
     clean_text = clean_for_speech(str(text))
-    if substitutions:                     # напр. «Дамиль» → «Damil» (читает Ava)
-        for src, dst in substitutions.items():
-            if src and dst and src != dst:
-                clean_text = clean_text.replace(src, dst)
     if not clean_text:
         return
 
     segments = split_by_language(clean_text)
     if not segments:                       # только цифры/знаки
         segments = [(detect_language(clean_text), clean_text)]
+    # имя — на языке КАЖДОГО куска (русский кусок → кириллица, англ. → латиница)
+    segments = [(lang, _apply_name(chunk, lang, name, name_latin))
+                for lang, chunk in segments]
 
     my_gen = _bump_generation()
     stop()                                     # новая реплика прерывает старую
@@ -637,11 +636,55 @@ def _decode_into(out, data, samplerate, channels, my_gen) -> bool:
     return played
 
 
-def _stream_play_segments(segments, my_gen) -> bool:
-    """Проиграть все куски ЧЕРЕЗ ОДИН звуковой выход, качая их заранее.
+def _decode_stream_into(out, text, voice, samplerate, channels, my_gen) -> bool:
+    """Декодирует mp3-ПОТОК edge-tts прямо в общий выход (старт по первым байтам)."""
+    chunks = queue.Queue()
+    threading.Thread(target=_edge_stream, args=(text, voice, chunks),
+                     daemon=True).start()
+    try:
+        container = av.open(_ByteStream(chunks), format=STREAM_FORMAT)
+    except Exception as exc:                   # noqa: BLE001 — битый/пустой поток
+        _log.warning("TTS: поток куска не открылся (%s)", exc)
+        return False
+    resampler = av.audio.resampler.AudioResampler(
+        format="s16", layout="mono", rate=samplerate)
+    played = False
 
-    Так между кусками нет пауз: пока играет текущий, следующий уже качается,
-    а устройство вывода открывается ОДИН раз (не на каждый кусок).
+    def _write(frame):
+        nonlocal played
+        if frame is not None:
+            frame.pts = None
+        for rframe in resampler.resample(frame):
+            arr = rframe.to_ndarray().reshape(-1).astype("int16")
+            if channels == 2:
+                arr = _np.column_stack([arr, arr])
+            out.write(_np.ascontiguousarray(arr))
+            played = True
+
+    try:
+        for frame in container.decode(audio=0):
+            if _stop.is_set() or my_gen != _current_generation():
+                break
+            _write(frame)
+        else:
+            _write(None)
+    except Exception as exc:                   # noqa: BLE001 — звук некритичен
+        _log.warning("TTS: поток куска, воспроизведение (%s)", exc)
+    finally:
+        try:
+            container.close()
+        except Exception:
+            pass
+    return played
+
+
+def _stream_play_segments(segments, my_gen) -> bool:
+    """Проиграть все куски ЧЕРЕЗ ОДИН звуковой выход.
+
+    Первый кусок читаем ПОТОКОМ (звук — как только пришли первые байты, не
+    дожидаясь полной загрузки), остальные качаются заранее (пока играет
+    текущий — грузится следующий). Выход открывается ОДИН раз → нет пауз
+    между языками и быстрый старт даже для длинного первого куска.
     """
     if not _STREAM_OK or not segments:
         return False
@@ -653,13 +696,23 @@ def _stream_play_segments(segments, my_gen) -> bool:
             lang, chunk = segments[i]
             prefs[i] = _Prefetch(chunk, voice_for(lang))
 
-    _start(0)
-    _start(1)                                  # держим один кусок «в запасе»
+    _start(1)                                  # пока играет кусок 0 — качаем 1 и 2
+    _start(2)
     played = False
     try:
         with _sd.OutputStream(samplerate=samplerate, channels=channels,
                               dtype="int16", blocksize=STREAM_BLOCKSIZE) as out:
-            for i in range(len(segments)):
+            # кусок 0 — ПОТОКОМ (быстрый старт, не ждём полной загрузки)
+            lang0, chunk0 = segments[0]
+            if _decode_stream_into(out, chunk0, voice_for(lang0),
+                                   samplerate, channels, my_gen):
+                played = True
+            else:
+                data = _download(chunk0, voice_for(lang0))
+                if data and _decode_into(out, data, samplerate, channels, my_gen):
+                    played = True
+            # остальные куски — из предзагрузки (без пауз между языками)
+            for i in range(1, len(segments)):
                 if _stop.is_set() or my_gen != _current_generation():
                     break
                 data = prefs[i].wait() if prefs[i] is not None else None

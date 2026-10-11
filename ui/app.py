@@ -663,14 +663,6 @@ class EnglishTeacherApp:
         """Кнопка «прослушать повторно»: озвучить ту же реплику заново."""
         self._say(text)
 
-    def _name_for_speech(self, text):
-        """Замены для озвучки: имя подставляется НА ЯЗЫКЕ фразы.
-
-        Русская фраза → имя по-русски (голос Светланы), английская → по-английски
-        (голос Ava). В чате текст не меняется — правка только для синтеза.
-        """
-        u = self.current_user or {}
-        return tts.name_substitutions(text, u.get("name"), u.get("name_latin"))
 
     def _say(self, text, on_done=None):
         """Озвучка в фоне — окно ждать не должно.
@@ -686,11 +678,13 @@ class EnglishTeacherApp:
                     pass
             return
 
-        subs = self._name_for_speech(text)
+        u = self.current_user or {}
+        name = u.get("name")
+        name_latin = u.get("name_latin")
 
         def _worker():
             try:
-                tts.speak(text, substitutions=subs)
+                tts.speak(text, name=name, name_latin=name_latin)
             finally:
                 if on_done:
                     try:
