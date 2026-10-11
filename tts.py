@@ -85,6 +85,19 @@ VOICE_EN = "en-US-AvaMultilingualNeural"
 VOICE_RU = "ru-RU-SvetlanaNeural"
 VOICE = VOICE_EN                    # голос по умолчанию (совместимость)
 
+# Тон по голосам. Светлана ниже Авы (замер: ~165 Гц против ~225 Гц), из-за
+# чего на смене языка «меняется человек». Поднимаем Светлану на +50 Гц —
+# получается ~219 Гц (почти как у Авы), и переход звучит ровнее.
+VOICE_PITCH = {
+    "en-US-AvaMultilingualNeural": "+0Hz",
+    "ru-RU-SvetlanaNeural": "+50Hz",
+}
+
+
+def pitch_for(voice):
+    """Сдвиг тона (SSML pitch) для голоса. По умолчанию +0Hz."""
+    return VOICE_PITCH.get(voice, "+0Hz")
+
 RATE = "+10%"                 # скорость речи
 DOWNLOAD_TIMEOUT = 7.0        # ТОЛЬКО скачивание (проигрывание — отдельно)
 PLAYBACK_TICK = 0.05          # шаг опроса get_busy (для прерывания речи)
@@ -325,7 +338,7 @@ def _download_once(text: str, voice: str) -> Optional[bytes]:
     os.close(handle)
 
     async def _run():
-        communicate = edge_tts.Communicate(text, voice, rate=RATE)
+        communicate = edge_tts.Communicate(text, voice, rate=RATE, pitch=pitch_for(voice))
         await communicate.save(path)
 
     try:
@@ -429,7 +442,8 @@ def _output_params():
 def _edge_stream(text: str, voice: str, chunks) -> None:
     """Качает mp3-чанки edge-tts в очередь и кладёт None в конце."""
     async def _go():
-        async for chunk in edge_tts.Communicate(text, voice, rate=RATE).stream():
+        async for chunk in edge_tts.Communicate(text, voice, rate=RATE,
+                                                     pitch=pitch_for(voice)).stream():
             if chunk.get("type") == "audio":
                 chunks.put(chunk["data"])
     try:
