@@ -189,6 +189,22 @@ def voice_for(lang):
     return VOICE_RU if lang == "ru" else VOICE_EN
 
 
+def name_substitutions(text, name, name_latin):
+    """Замены перед озвучкой, чтобы ИМЯ прозвучало на языке фразы.
+
+    Русская фраза → латинское имя подменяем кириллическим (читает Светлана),
+    английская → кириллическое подменяем латинским (читает Ava). Так в русском
+    тексте имя звучит по-русски, в английском — по-английски.
+    """
+    name = str(name or "").strip()
+    name_latin = str(name_latin or "").strip()
+    if not name or not name_latin or name == name_latin:
+        return None
+    if detect_language(text) == "ru":
+        return {name_latin: name}          # Damil → Дамиль
+    return {name: name_latin}              # Дамиль → Damil
+
+
 # Разбиение по языку (кириллица vs латиница). Нужно для СМЕШАННОГО текста:
 # иначе голос берёт один акцент на всю фразу и русские слова звучат
 # по-английски (и наоборот). Каждый кусок синтезируем своим голосом.

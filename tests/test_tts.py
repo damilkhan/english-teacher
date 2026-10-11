@@ -285,6 +285,20 @@ def test_segments_pipeline():
         tts._Prefetch, tts._decode_into, tts._sd, tts._STREAM_OK = orig
 
 
+def test_name_substitutions():
+    print("\n[1i] Имя звучит на языке фразы (ru→кириллица, en→латиница)")
+    f = tts.name_substitutions
+    check("русская фраза → латинское имя меняем на кириллицу",
+          f("Привет, Damil! Как дела?", "Дамиль", "Damil") == {"Damil": "Дамиль"},
+          f("Привет, Damil! Как дела?", "Дамиль", "Damil"))
+    check("английская фраза → кириллическое имя меняем на латиницу",
+          f("Hello, Дамиль! How are you?", "Дамиль", "Damil") == {"Дамиль": "Damil"},
+          f("Hello, Дамиль! How are you?", "Дамиль", "Damil"))
+    check("одинаковые формы → без замен",
+          f("Hello", "Damil", "Damil") is None)
+    check("пустой латинице → без замен", f("Hello", "Damil", "") is None)
+
+
 def test_cache():
     print("\n[2] Кэш синтеза")
     with restore_tts():
@@ -457,6 +471,7 @@ def main():
     test_speech_clean()
     test_streaming_path()
     test_substitutions()
+    test_name_substitutions()
     test_segments_pipeline()
     test_byte_stream()
     test_cache()

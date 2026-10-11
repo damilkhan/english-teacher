@@ -663,19 +663,14 @@ class EnglishTeacherApp:
         """Кнопка «прослушать повторно»: озвучить ту же реплику заново."""
         self._say(text)
 
-    def _name_substitutions(self):
-        """Замены для озвучки: кириллическое имя → латинское.
+    def _name_for_speech(self, text):
+        """Замены для озвучки: имя подставляется НА ЯЗЫКЕ фразы.
 
-        Имя-кириллицу русский голос читает неверно, а латинскую форму — Ava.
-        Поэтому перед синтезом подменяем «Дамиль» на «Damil» (в чате при этом
-        остаётся кириллица). Нет второй формы — ничего не меняем.
+        Русская фраза → имя по-русски (голос Светланы), английская → по-английски
+        (голос Ava). В чате текст не меняется — правка только для синтеза.
         """
         u = self.current_user or {}
-        name = str(u.get("name") or "").strip()
-        latin = str(u.get("name_latin") or "").strip()
-        if name and latin and name != latin:
-            return {name: latin}
-        return None
+        return tts.name_substitutions(text, u.get("name"), u.get("name_latin"))
 
     def _say(self, text, on_done=None):
         """Озвучка в фоне — окно ждать не должно.
@@ -691,7 +686,7 @@ class EnglishTeacherApp:
                     pass
             return
 
-        subs = self._name_substitutions()
+        subs = self._name_for_speech(text)
 
         def _worker():
             try:
