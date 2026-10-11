@@ -72,8 +72,10 @@ def test_backward_compat():
 def test_gender_forms():
     print("\n[2] Пол ученика → грамматические формы")
     m = prompt_builder.build_system_prompt("lesson", BASE_PROFILE, "ru",
-                                           student={"name": "Дамиль", "gender": "male"})
-    check("имя ученика в промпте", "Дамиль" in m)
+                                           student={"name": "Damil", "gender": "male"})
+    check("имя ученика в промпте", "Damil" in m)
+    check("имя просят писать латиницей даже в русском",
+          "in LATIN letters" in m and "Never transliterate" in m)
     check("male → MASCULINE формы", "MASCULINE forms about the student" in m)
     check("запрет женских форм о ученике", "NEVER use feminine forms about the student" in m)
 
