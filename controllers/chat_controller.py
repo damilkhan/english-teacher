@@ -135,7 +135,9 @@ class ChatController:
         # грамматический род ученика со своим (женским)
         user = user_manager.get_user(self.user_id) or {}
         level = user.get("level")
-        student = {"name": user.get("name"), "gender": user.get("gender")}
+        student = {"name": user.get("name"),
+                   "name_latin": user.get("name_latin"),
+                   "gender": user.get("gender")}
         # методические заметки (RAG) и план урока (Планировщик) — только урок
         context = self._rag_context(user_text) if self.mode == "lesson" else ""
         # план читаем БЕЗ ожидания: если он ещё строится — отвечаем без него

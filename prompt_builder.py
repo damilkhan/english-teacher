@@ -95,7 +95,8 @@ STUDENT_BLOCK_TEMPLATE = """
 \U0001F464 STUDENT: {name}
 The student's gender is: {gender}. When you address the student or talk about them in Russian, use {forms}.
 Address the student by their name when it feels natural.
-ALWAYS write the student's name EXACTLY as shown above ({name}) — in LATIN letters — even inside Russian text. Never transliterate it to Cyrillic and never translate it, or the name will be read incorrectly.
+The student's name has two spellings: «{name}» (Russian) and «{name_latin}» (Latin). Write the Russian form in Russian text and the Latin form in English text. Copy them EXACTLY — a misspelling will be read aloud incorrectly.
+Write Russian correctly: proper cases (падежи), gender, number and word agreement.
 IMPORTANT: in Russian, NEVER use feminine forms about the student — the feminine forms above describe YOU, Jane, not the student.
 Answer the student's question directly. Do not show your reasoning, plans or inner thoughts — reply with the final answer only.
 """
@@ -109,12 +110,14 @@ def _student_block(student):
     """
     student = student or {}
     name = str(student.get("name") or "").strip()
+    name_latin = str(student.get("name_latin") or "").strip() or name
     gender = str(student.get("gender") or "").strip().lower()
     forms = STUDENT_GENDER_FORMS.get(gender)
     if not name and not forms:
         return ""
     return STUDENT_BLOCK_TEMPLATE.format(
         name=name or "the student",
+        name_latin=name_latin or "the student",
         gender=gender or "unknown",
         forms=forms or STUDENT_GENDER_FORMS["other"],
     )

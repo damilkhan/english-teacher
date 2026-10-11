@@ -61,10 +61,14 @@ def test_form():
     try:
         form = FirstRunForm(root, theme.DARK)
         form.name_var.set("Дамиль")
-        check("ввод кириллицей → латиница в поле", form.name_var.get() == "Damil",
+        check("кириллица сохранена в имени", form.name_var.get() == "Дамиль",
               form.name_var.get())
-        form.name_var.set("Damil")
-        check("латиница не портится", form.name_var.get() == "Damil", form.name_var.get())
+        check("латиница заполнилась автоматически",
+              form.name_latin_var.get() == "Damil", form.name_latin_var.get())
+        form.name_latin_var.set("Damil777")
+        form.name_var.set("Дамиль Второй")
+        check("правленую латиницу не перезаписываем",
+              form.name_latin_var.get() == "Damil777", form.name_latin_var.get())
     finally:
         if form is not None:
             try:

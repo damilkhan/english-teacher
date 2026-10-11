@@ -120,6 +120,11 @@ def _normalize(profile, user_id):
     profile["id"] = int(user_id)
     profile["name"] = str(profile.get("name") or "Ученик").strip()
 
+    # Латинская форма имени — для КОРРЕКТНОЙ озвучки (латинское слово читает
+    # Ava). Если пользователь её не задал — получаем транслитерацией имени.
+    latin = str(profile.get("name_latin") or "").strip()
+    profile["name_latin"] = latin or to_latin(profile["name"]).strip()
+
     gender = str(profile.get("gender") or "other").lower()
     profile["gender"] = gender if gender in GENDERS else "other"
 

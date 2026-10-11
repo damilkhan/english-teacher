@@ -60,14 +60,19 @@ class FirstRunForm(ctk.CTkToplevel):
         body.pack(fill="both", expand=True, padx=18)
 
         self.name_var = ctk.StringVar(value=(user or {}).get("name", ""))
+        self.name_latin_var = ctk.StringVar(value=(user or {}).get("name_latin", ""))
         self.age_var = ctk.StringVar(value=self._age_text((user or {}).get("age")))
         self.goal_var = ctk.StringVar(value=(user or {}).get("goal", ""))
         self.gender_var = ctk.StringVar(value=(user or {}).get("gender", "other"))
         self.avatar_var = ctk.StringVar(value=(user or {}).get("avatar", user_manager.AVATARS[0]))
 
-        self._name_fixing = False           # защита от рекурсии при транслите
-        self._section(body, "КАК ТЕБЯ ЗОВУТ?  (латиницей)")
-        self.name_entry = self._entry(body, self.name_var, "Например: Damil")
+        self._latin_fill = False            # защита от рекурсии автозаполнения
+        # при редактировании латиницу не перетираем (её правил человек)
+        self._latin_manual = bool((user or {}).get("name_latin"))
+        self._section(body, "КАК ТЕБЯ ЗОВУТ?  (кириллицей)")
+        self.name_entry = self._entry(body, self.name_var, "Например: Дамиль")
+        self._section(body, "ИМЯ ЛАТИНИЦЕЙ  (для озвучки)")
+        self.name_latin_entry = self._entry(body, self.name_latin_var, "Например: Damil")
 
         self._section(body, "ПОЛ")
         self.gender_widget = ctk.CTkSegmentedButton(
@@ -118,8 +123,10 @@ class FirstRunForm(ctk.CTkToplevel):
             text_color="#FFFFFF", corner_radius=theme.R["button"], font=theme.FONT_UI)
         self.submit_btn.pack(fill="x", padx=36, pady=(6, 20))
 
-        # Имя сразу переводим в латиницу по мере ввода (Дамиль → Damil).
+        # Кириллическое имя → латинская форма заполняется автоматически (её
+        # можно править вручную; тогда автозаполнение больше не мешает).
         self.name_var.trace_add("write", self._on_name_write)
+        self.name_latin_var.trace_add("write", self._on_latin_write)
         for var in (self.name_var, self.age_var, self.avatar_var):
             var.trace_add("write", lambda *_: self._refresh())
 
@@ -171,26 +178,25 @@ class FirstRunForm(ctk.CTkToplevel):
         return "" if age in (None, "") else str(age)
 
     def _on_name_write(self, *_):
-        """Живая транслитерация имени: кириллица → латиница при вводе.
+        """Автозаполнение латинской формы из кириллического имени (Дамиль → Damil).
 
-        Чтобы имя ученика выглядело и озвучивалось единообразно (латиницей).
-        Переписывание переменной вызывает этот же обработчик повторно —
-        поэтому на время правки поднимаем флаг-защиту.
+        Если латиницу человек правил сам (_latin_manual) — не перезаписываем.
         """
-        if self._name_fixing:
+        if self._latin_fill or self._latin_manual:
             return
-        raw = self.name_var.get()
-        latin = user_manager.to_latin(raw)
-        if latin != raw:
-            self._name_fixing = True
+        latin = user_manager.to_latin(self.name_var.get())
+        if latin != self.name_latin_var.get():
+            self._latin_fill = True
             try:
-                self.name_var.set(latin)
-                try:
-                    self.name_entry.icursor("end")
-                except Exception:
-                    pass
+                self.name_latin_var.set(latin)
             finally:
-                self._name_fixing = False
+                self._latin_fill = False
+
+    def _on_latin_write(self, *_):
+        """Пользователь правит латиницу сам — автозаполнение отключаем."""
+        if self._latin_fill:
+            return
+        self._latin_manual = True
 
     def _on_gender(self, label):
         for key, lbl in user_manager.GENDER_LABELS.items():
@@ -253,9 +259,11 @@ class FirstRunForm(ctk.CTkToplevel):
         self.gender_var.set(self._gender_value())
         # «level» не отдаём: уровень ставит вводный тест, а не форма.
         # При редактировании это ещё и сохраняет уже определённый уровень.
+        name = self.name_var.get().strip()
+        latin = self.name_latin_var.get().strip() or user_manager.to_latin(name).strip()
         self.result = {
-            # страховка: имя обязано уйти латиницей, даже если транслит не сработал
-            "name": user_manager.to_latin(self.name_var.get().strip()).strip(),
+            "name": name,
+            "name_latin": latin,
             "gender": self._gender_value(),
             "age": self.age_var.get().strip() or None,
             "goal": self.goal_var.get().strip(),

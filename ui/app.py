@@ -285,7 +285,8 @@ class EnglishTeacherApp:
         """Поля профиля из формы. Уровень НЕ берём: его ставит вводный тест,
         поэтому у нового профиля уровень остаётся «не определён»."""
         return {
-            "name": data["name"], "gender": data["gender"], "age": data["age"],
+            "name": data["name"], "name_latin": data.get("name_latin") or "",
+            "gender": data["gender"], "age": data["age"],
             "goal": data.get("goal", ""), "avatar": data.get("avatar"),
         }
 
@@ -662,8 +663,21 @@ class EnglishTeacherApp:
         """Кнопка «прослушать повторно»: озвучить ту же реплику заново."""
         self._say(text)
 
-    @staticmethod
-    def _say(text, on_done=None):
+    def _name_substitutions(self):
+        """Замены для озвучки: кириллическое имя → латинское.
+
+        Имя-кириллицу русский голос читает неверно, а латинскую форму — Ava.
+        Поэтому перед синтезом подменяем «Дамиль» на «Damil» (в чате при этом
+        остаётся кириллица). Нет второй формы — ничего не меняем.
+        """
+        u = self.current_user or {}
+        name = str(u.get("name") or "").strip()
+        latin = str(u.get("name_latin") or "").strip()
+        if name and latin and name != latin:
+            return {name: latin}
+        return None
+
+    def _say(self, text, on_done=None):
         """Озвучка в фоне — окно ждать не должно.
 
         on_done вызывается (тоже в фоне) сразу после того, как звук доиграл;
@@ -677,9 +691,11 @@ class EnglishTeacherApp:
                     pass
             return
 
+        subs = self._name_substitutions()
+
         def _worker():
             try:
-                tts.speak(text)
+                tts.speak(text, substitutions=subs)
             finally:
                 if on_done:
                     try:
