@@ -98,7 +98,19 @@ def pitch_for(voice):
     """Сдвиг тона (SSML pitch) для голоса. По умолчанию +0Hz."""
     return VOICE_PITCH.get(voice, "+0Hz")
 
-RATE = "+10%"                 # скорость речи
+
+# Скорость по голосам (как и тон — можно задать каждому свою).
+VOICE_RATE = {
+    "en-US-AvaMultilingualNeural": "+10%",
+    "ru-RU-SvetlanaNeural": "+10%",
+}
+
+
+def rate_for(voice):
+    """Скорость речи (SSML rate) для голоса. По умолчанию RATE."""
+    return VOICE_RATE.get(voice, RATE)
+
+RATE = "+10%"                 # скорость речи по умолчанию (если нет в VOICE_RATE)
 DOWNLOAD_TIMEOUT = 7.0        # ТОЛЬКО скачивание (проигрывание — отдельно)
 PLAYBACK_TICK = 0.05          # шаг опроса get_busy (для прерывания речи)
 CACHE_LIMIT = 16              # сколько mp3 держим в памяти
@@ -307,7 +319,7 @@ def _speak_chunk(text: str, voice: str, my_gen: int) -> None:
 # ---------------------------------------------------------
 def _synthesize(text: str, voice: str) -> Optional[bytes]:
     """mp3-байты для (text, voice): из кэша или скачиванием. None при ошибке."""
-    key = (voice, RATE, text)
+    key = (voice, rate_for(voice), text)
     cached = _cache.get(key)
     if cached is not None:
         _cache.move_to_end(key)
@@ -338,7 +350,8 @@ def _download_once(text: str, voice: str) -> Optional[bytes]:
     os.close(handle)
 
     async def _run():
-        communicate = edge_tts.Communicate(text, voice, rate=RATE, pitch=pitch_for(voice))
+        communicate = edge_tts.Communicate(text, voice, rate=rate_for(voice),
+                                           pitch=pitch_for(voice))
         await communicate.save(path)
 
     try:
@@ -442,7 +455,7 @@ def _output_params():
 def _edge_stream(text: str, voice: str, chunks) -> None:
     """Качает mp3-чанки edge-tts в очередь и кладёт None в конце."""
     async def _go():
-        async for chunk in edge_tts.Communicate(text, voice, rate=RATE,
+        async for chunk in edge_tts.Communicate(text, voice, rate=rate_for(voice),
                                                      pitch=pitch_for(voice)).stream():
             if chunk.get("type") == "audio":
                 chunks.put(chunk["data"])

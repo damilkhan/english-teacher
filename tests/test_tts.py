@@ -129,6 +129,8 @@ def test_pure():
     check("тон: Светлана поднята (+10Hz), Ava без сдвига",
           tts.pitch_for(tts.VOICE_RU) == "+10Hz" and tts.pitch_for(tts.VOICE_EN) == "+0Hz",
           (tts.pitch_for(tts.VOICE_RU), tts.pitch_for(tts.VOICE_EN)))
+    check("скорость: у Светланы +10%",
+          tts.rate_for(tts.VOICE_RU) == "+10%", tts.rate_for(tts.VOICE_RU))
 
 
 def test_voice_per_language():
