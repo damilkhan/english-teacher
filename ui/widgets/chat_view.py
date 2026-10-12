@@ -26,6 +26,12 @@ USER_SENDERS = ("Вы", "Вы (голос)")
 DOT = "·"
 EMOJI_PAD = 1          # px воздуха вокруг картинки-эмодзи, чтобы не липла к буквам
 
+# Отступы полосы прокрутки от правого края области чата. Держим их
+# константами: те же значения прибавляет резерв под робота-персонажа
+# (set_character_reserve), иначе полоса «отклеилась» бы от текста.
+SCROLL_PAD_X = 8
+SCROLL_PAD_Y = 12
+
 # Кнопка «прослушать повторно» (появляется рядом с именем Джейн ПОСЛЕ того,
 # как реплика впервые озвучена до конца, и повторяет её по клику).
 REPLAY_ICON = "\U0001F50A"          # 🔊 динамик
@@ -83,7 +89,7 @@ class ChatView(ctk.CTkFrame):
             button_color=palette["muted"],
             button_hover_color=palette["btn_hover"],
         )
-        self.scrollbar.pack(side="right", fill="y", padx=(0, 8), pady=12)
+        self.scrollbar.pack(side="right", fill="y", padx=(0, SCROLL_PAD_X), pady=SCROLL_PAD_Y)
         self.text.configure(yscrollcommand=self.scrollbar.set)
 
         # --- цветные эмодзи ---
@@ -159,6 +165,37 @@ class ChatView(ctk.CTkFrame):
             return
         self._replay_marks.add(mark)
         self._msg_widgets[mark] = widget
+
+    def set_character_reserve(self, right=0, bottom=0):
+        """Зарезервировать справа/снизу место под персонажа (робота).
+
+        Робот стоит в правом нижнем углу области чата, поэтому текст и
+        полоса прокрутки сдвигаются от правого и нижнего краёв — реплики
+        его обходят и никогда не прячутся под картинкой.
+
+        Почему через отступы упаковки, а не через padx/pady самого tk.Text:
+        в Tk 8.6 у Text они принимают ТОЛЬКО одно число, поэтому «16 слева,
+        310 справа» задать нельзя. Внешние pad-отступы pack пару значений
+        принимают — на них и опираемся.
+        """
+        right = max(0, int(right))
+        bottom = max(0, int(bottom))
+        try:
+            # Просим у текста УЗКУЮ «запрошенную» ширину: иначе его запрос
+            # (80 символов) плюс отступы резерва не помещались бы в карточку
+            # и полоса прокрутки уезжала бы за правый край (проверено на
+            # окне 1160×760: полоса оказывалась за пределами карточки).
+            # Ширину даёт expand — текст всё равно растягивается до полосы.
+            self.text.configure(width=20)
+            self.text.pack_configure(pady=(0, bottom))
+            # Полосу сдвигаем влево на весь резерв — остаётся у текста,
+            # а не посреди «сцены» робота. Снизу тоже подрезаем, чтобы она
+            # не заходила под картинку.
+            self.scrollbar.pack_configure(padx=(SCROLL_PAD_X, right),
+                                          pady=(SCROLL_PAD_Y,
+                                               SCROLL_PAD_Y + bottom))
+        except Exception as exc:
+            print("⚠️ Место под персонажа не зарезервировано: %s" % exc)
 
     def _mark_exists(self, mark):
         try:

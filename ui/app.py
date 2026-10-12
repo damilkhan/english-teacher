@@ -27,6 +27,7 @@ import tkinter as tk
 import customtkinter as ctk
 
 import audio_vad
+import character
 import commands
 import config
 import model_registry
@@ -84,6 +85,7 @@ TITLE_EMOJI = "🎙️"
 TITLE_TEXT = "ИИ-ПРЕПОДАВАТЕЛЬ"
 SUBTITLE_TEXT = "Джейн · локальный преподаватель английского"
 INITIAL_STATUS = ("● Проверяю сервер…", "muted")
+CHARACTER_WIDTH = 300        # ширина робота-персонажа в области чата, px
 REDRAW_DELAY_MS = 90
 
 
@@ -431,6 +433,23 @@ class EnglishTeacherApp:
         self.chat_view = ChatView(self.left_frame, p,
                                   greeting=("Джейн", self._greeting()),
                                   on_replay=self._replay_reply)
+
+        # ---------- робот-персонаж Джейн (idle-анимация) ----------
+        # Робот — украшение области чата: его сбой не должен ломать окно,
+        # поэтому весь блок в try/except. Тексту чата резервируем правый
+        # нижний угол (ширина робота + отступ), чтобы реплики его обходили.
+        self.character = None
+        try:
+            self.character = character.Character(self.chat_view,
+                                                 width=CHARACTER_WIDTH,
+                                                 dispatch=self._dispatch)
+            if self.character.available:
+                reserve_w, reserve_h = self.character.reserve
+                self.chat_view.set_character_reserve(reserve_w, reserve_h)
+                self.character.start_idle()
+        except Exception as exc:
+            print("⚠️ Робот-персонаж не подключился: %s" % exc)
+            self.character = None
         self.input_bar = InputBar(self.left_frame, p, on_send=self.send_text)
         self.control_bar = ControlBar(self.left_frame, p,
                                       on_record=self._start_recording,
@@ -910,6 +929,8 @@ class EnglishTeacherApp:
         self._hero_cache = (None, None)          # шапку пересобрать под новую палитру
         self.visualizer.apply_theme(p)
         self.chat_view.apply_theme(p)
+        if self.character is not None:
+            self.character.apply_theme(p["chat_bg"])
         self.input_bar.apply_theme(p)
         self.control_bar.apply_theme(p)
         self.right_panel.apply_theme(p)
@@ -936,4 +957,6 @@ class EnglishTeacherApp:
                 pass
         if self.recorder.is_recording:
             self.recorder.stop()
+        if self.character is not None:
+            self.character.stop_idle()
         self.window.destroy()
