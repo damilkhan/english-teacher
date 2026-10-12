@@ -191,6 +191,7 @@ class ChatView(ctk.CTkFrame):
                                                 SCROLL_PAD_Y + bottom))
         except Exception as exc:
             print("⚠️ Место под персонажа не зарезервировано: %s" % exc)
+
     def _mark_exists(self, mark):
         try:
             self.text.index(mark)
