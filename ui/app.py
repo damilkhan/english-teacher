@@ -436,16 +436,18 @@ class EnglishTeacherApp:
 
         # ---------- робот-персонаж Джейн (idle-анимация) ----------
         # Робот — украшение области чата: его сбой не должен ломать окно,
-        # поэтому весь блок в try/except. Тексту чата резервируем правый
-        # нижний угол (ширина робота + отступ), чтобы реплики его обходили.
+        # поэтому весь блок в try/except. Робот лежит ПОВЕРХ области чата,
+        # но текст чата заканчивается выше него — реплики не перекрываются
+        # (полоса прокрутки при этом остаётся у правого края, не в середине).
         self.character = None
         try:
             self.character = character.Character(self.chat_view,
                                                  width=CHARACTER_WIDTH,
                                                  dispatch=self._dispatch)
             if self.character.available:
-                reserve_w, reserve_h = self.character.reserve
-                self.chat_view.set_character_reserve(reserve_w, reserve_h)
+                # нижний отступ: робот ниже полосы текста, ширину не трогаем
+                _, reserve_bottom = self.character.reserve
+                self.chat_view.set_character_reserve(reserve_bottom)
                 self.character.start_idle()
         except Exception as exc:
             print("⚠️ Робот-персонаж не подключился: %s" % exc)
