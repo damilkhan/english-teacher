@@ -151,7 +151,8 @@ class EnglishTeacherApp:
         self.vad = audio_vad.AudioVAD()
         # Модель грузится В ФОНЕ (preload ниже): иначе старт окна «замирал»
         # на десятки секунд, пока Whisper читается с диска.
-        self.stt = stt_engine.STTEngine(on_state=self._on_stt_state)
+        self.stt = stt_engine.STTEngine(on_state=self._on_stt_state,
+                                        hotwords_provider=self._stt_hotwords)
         self.llm = LLMClient()
 
         # ---------- контроллеры ----------
@@ -732,6 +733,17 @@ class EnglishTeacherApp:
         self._refresh_status()
         self._refresh_input_state()
         return state
+
+    def _stt_hotwords(self):
+        """Слова-подсказки для Whisper: имя ученика в двух формах.
+
+        Имена — главная «жертва» распознавания («Дамиль» легко услышать как
+        что-то другое). Возвращаем строку через запятую; вызывается из
+        фонового потока распознавания, поэтому только ЧИТАЕМ данные.
+        """
+        u = self.current_user or {}
+        parts = [u.get("name"), u.get("name_latin")]
+        return ", ".join(p for p in parts if p)
 
     def _on_stt_state(self, state, message):
         """Колбэк STTEngine (из фонового потока) → в главный поток."""
