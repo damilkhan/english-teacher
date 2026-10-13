@@ -250,6 +250,27 @@ def test_chat_controller_uses_rag():
         profile_store.set_active_user(None)
 
 
+def test_widening():
+    print("\n[10] Родительский контекст: «чанки шире»")
+    db = rag.RAG()
+    chunk = {"file": "methodology/tblt_willis_1996.md",
+             "heading": "2.3 Motivation (мотивация)"}
+    plain = db.load_chunk_text(chunk)
+    wide = db.load_chunk_context(chunk)
+    check("текст чанка извлекается", bool(plain), plain[:60])
+    check("широкий вариант ДЛИННЕЕ обычного", len(wide) > len(plain),
+          "плоский %d, широкий %d" % (len(plain), len(wide)))
+    check("в широком варианте есть родительский раздел",
+          "2. Три обязательных" in wide, wide[:200])
+    check("в широком варианте сохранён текст чанка", "Motivation" in wide)
+    check("обычный текст начинается с заголовка чанка",
+          plain.splitlines()[0].lower().startswith("### 2.3"),
+          plain.splitlines()[0][:60])
+    check("load_chunk_context({}) → ''", db.load_chunk_context({}) == "")
+    ctx = db.build_context("motivation", top_k=2)
+    check("build_context использует широкий контекст", "Раздел:" in ctx, ctx[:200])
+
+
 def main():
     print("=" * 60)
     print("Проверка rag.py (knowledge_base)")
@@ -264,6 +285,7 @@ def main():
     test_match_boundaries()
     test_stopwords_no_bridge()
     test_chat_controller_uses_rag()
+    test_widening()
 
     print("\n" + "=" * 60)
     if FAILED:

@@ -20,6 +20,8 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List
 
+import config
+
 
 class RAG:
     """Локальная база знаний: поиск чанков и извлечение их текста.
@@ -274,6 +276,73 @@ class RAG:
 
         return "\n".join(lines[start:end]).strip()
 
+    # --- родительский контекст («чанки шире», RAG_WIDEN) ---
+    def _section_span(self, lines, heading):
+        """(start, level) секции по заголовку. (None, 0), если не нашлась."""
+        heading_lower = (heading or "").strip().lower()
+        for idx, line in enumerate(lines):
+            lvl = self._heading_level(line)
+            if lvl >= 2 and heading_lower in line.lower():
+                return idx, lvl
+        return None, 0
+
+    def _breadcrumbs(self, lines, start, level):
+        """Заголовки РОДИТЕЛЬСКИХ разделов (уровни меньше), сверху вниз."""
+        crumbs = []
+        seen = set()
+        for idx in range(start - 1, -1, -1):
+            lvl = self._heading_level(lines[idx])
+            if lvl and lvl < level and lvl not in seen:
+                seen.add(lvl)
+                crumbs.append(lines[idx].strip())
+        return list(reversed(crumbs))
+
+    def _parent_intro(self, lines, start, level):
+        """Вводный текст родительского раздела (до его первого подзаголовка)."""
+        parent_idx = parent_lvl = None
+        for idx in range(start - 1, -1, -1):
+            lvl = self._heading_level(lines[idx])
+            if lvl and lvl < level:
+                parent_idx, parent_lvl = idx, lvl
+                break
+        if parent_idx is None:
+            return ""
+        intro = []
+        for idx in range(parent_idx + 1, len(lines)):
+            lvl = self._heading_level(lines[idx])
+            if lvl and lvl > parent_lvl:
+                break
+            intro.append(lines[idx])
+        return "\n".join(intro).strip()
+
+    def load_chunk_context(self, chunk):
+        """Текст чанка С РОДИТЕЛЬСКИМ КОНТЕКСТОМ — «шире» (config.RAG_WIDEN).
+
+        Чанки — это подразделы (### 2.1 …). Здесь к тексту добавляются
+        заголовки верхних разделов и вводный абзац родителя: модель понимает,
+        к какому разделу относится заметка. Пусто, если чанка нет.
+        """
+        if not chunk:
+            return ""
+        text = self.load_chunk_text(chunk)
+        if not text:
+            return ""
+        file_name = chunk.get("file")
+        lines = self._read_file(file_name).splitlines() if file_name else []
+        start, level = self._section_span(lines, chunk.get("heading") or "")
+        if start is None:
+            return text
+        parts = []
+        crumbs = self._breadcrumbs(lines, start, level)
+        if crumbs:
+            parts.append("Раздел: " + " / ".join(crumbs))
+        intro = self._parent_intro(lines, start, level)
+        if intro:
+            parts.append(intro)
+        if not parts:
+            return text
+        return "\n".join(parts) + "\n\n" + text
+
     # =====================================================
     # Контекст для промпта
     # =====================================================
@@ -288,9 +357,11 @@ class RAG:
         if not found:
             return ""
 
+        # «Чанки шире»: с родительским контекстом, если включено в config.
+        widen = bool(getattr(config, "RAG_WIDEN", True))
         blocks: List[str] = []
         for chunk in found:
-            text = self.load_chunk_text(chunk)
+            text = self.load_chunk_context(chunk) if widen else self.load_chunk_text(chunk)
             if not text:
                 continue
             header = "=== %s (%s) ===" % (
