@@ -54,6 +54,7 @@ from ui.panels.settings_panel import SettingsPanel
 from ui.panels.users_panel import UsersPanel
 from ui.widgets.chat_view import ChatView
 from ui.widgets.control_bar import ControlBar
+from ui.widgets.info_bar import InfoBar
 from ui.widgets.input_bar import InputBar
 from ui.widgets.visualizer import AudioVisualizer
 
@@ -87,6 +88,10 @@ SUBTITLE_TEXT = "Джейн · локальный преподаватель а�
 INITIAL_STATUS = ("● Проверяю сервер…", "muted")
 CHARACTER_WIDTH = 300        # ширина робота-персонажа в области чата, px
 REDRAW_DELAY_MS = 90
+
+# Подписи разбора Аналитика для тонкой строки «учительского» вида.
+MOVE_TYPE_RU = {"Q": "вопрос", "A": "ответ", "S": "реплика", "F": "отклик", "O": "прочее"}
+MOVE_STATUS_RU = {"A": "✔ принято", "P": "⚠ доработать"}
 
 
 class EnglishTeacherApp:
@@ -168,6 +173,8 @@ class EnglishTeacherApp:
         self.chat.on_status = self._set_status
         self.chat.on_busy = self._set_busy
         self.chat.on_response = self._on_response
+        self.chat.on_analysis = self._on_analysis   # разбор → строка над вводом
+        self.chat.on_plan = self._on_plan           # план урока → туда же
 
         # ---------- тест уровня (адаптивный, любой активной моделью) ----------
         self.level_test = LevelTestController(dispatch=self._dispatch)
@@ -267,6 +274,7 @@ class EnglishTeacherApp:
         profile_store.ensure_profile(target)
         self.chat.set_user(target)
         self.chat_view.clear()
+        self.info_bar.clear()
         self.add_message("Джейн", self._greeting())
         self._refresh_hero()
         self._refresh_input_state()
@@ -338,6 +346,7 @@ class EnglishTeacherApp:
         profile_store.ensure_profile(user_id)
         self.chat.set_user(user_id)         # сброс истории диалога
         self.chat_view.clear()
+        self.info_bar.clear()
         self.add_message("Джейн", self._greeting())
         self._refresh_hero()
         self._refresh_input_state()
@@ -460,6 +469,12 @@ class EnglishTeacherApp:
                                       on_settings=self.open_panel,
                                       on_clear=self.clear_chat,
                                       on_users=self.open_users_panel)
+
+        # ---------- тонкая строка «учительского» вида ----------
+        # Разбор Аналитика и фокус плана урока — ОТДЕЛЬНОЙ полосой над
+        # полем ввода (в чат такие служебные строки не пишем). Виджет сам
+        # прячется, пока данных нет, поэтому при старте её не видно.
+        self.info_bar = InfoBar(self.left_frame, p, before=self.chat_view)
 
         self._build_hero()
 
@@ -685,6 +700,46 @@ class EnglishTeacherApp:
         """Кнопка «прослушать повторно»: озвучить ту же реплику заново."""
         self._say(text)
 
+    # =====================================================
+    # «Учительский» вид: разбор Аналитика и план урока
+    # =====================================================
+    def _on_analysis(self, result):
+        """Разбор Аналитика → тонкая строка (не в чат)."""
+        self.info_bar.set_analysis(self._analysis_text(result))
+
+    @staticmethod
+    def _analysis_text(result):
+        """Короткая подпись разбора: что ученик сделал, статус, ошибки, тема."""
+        if not result or not result.get("ok"):
+            return ""
+        parts = [MOVE_TYPE_RU.get(result.get("move_type"),
+                                  result.get("move_type") or "—")]
+        status = MOVE_STATUS_RU.get(result.get("move_status"))
+        if status:
+            parts.append(status)
+        errors = result.get("errors") or []
+        if errors:
+            parts.append("ошибок %d" % len(errors))
+        topics = result.get("topics") or []
+        if topics:
+            parts.append(str(topics[0]))
+        return " · ".join(str(p) for p in parts if p)
+
+    def _on_plan(self, plan_text):
+        """План урока построен → показать фокус урока в строке (не в чат)."""
+        self.info_bar.set_plan(self._plan_info_text(plan_text))
+
+    @staticmethod
+    def _plan_info_text(plan_text):
+        """Из текста плана берём первую строку («Focus: …») без префикса."""
+        plan_text = str(plan_text or "").strip()
+        if not plan_text:
+            return ""
+        first = plan_text.splitlines()[0].strip()
+        if first.lower().startswith("focus:"):
+            first = first.split(":", 1)[1].strip()
+        return first
+
 
     def _say(self, text, on_done=None):
         """Озвучка в фоне — окно ждать не должно.
@@ -839,6 +894,7 @@ class EnglishTeacherApp:
     def clear_chat(self):
         self.chat_view.clear()
         self.chat.clear_history()
+        self.info_bar.clear()
 
     def _show_panel(self, name):
         """Показать правую панель: только одну из двух."""
@@ -926,6 +982,7 @@ class EnglishTeacherApp:
         self.mode = mode
         self.chat.set_mode(mode)
         self.right_panel.set_values(mode=mode)
+        self.info_bar.clear()
         self.add_message("Джейн", f"⚙️ Режим изменён на {commands.MODE_LABELS.get(mode, mode)}")
 
     # =====================================================
@@ -947,6 +1004,7 @@ class EnglishTeacherApp:
             self.character.apply_theme(p["chat_bg"])
         self.input_bar.apply_theme(p)
         self.control_bar.apply_theme(p)
+        self.info_bar.apply_theme(p)
         self.right_panel.apply_theme(p)
         self.users_panel.apply_theme(p)
 

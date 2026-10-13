@@ -65,6 +65,7 @@ class ChatController:
         self.on_busy = None       # (busy: bool)        — блокировка кнопки отправки
         self.on_response = None   # (user_text, reply)  — удачный ответ (TTS и пр.)
         self.on_analysis = None   # (result: dict)      — разбор от Аналитика (или None)
+        self.on_plan = None       # (plan_text: str)    — план урока построен (или "")
 
     # -----------------------------------------------------
     # Публичный интерфейс
@@ -90,6 +91,7 @@ class ChatController:
         """Сбросить план урока: новый ученик/новая сессия → новый план."""
         self._plan_text = ""
         self._plan_started = False
+        self._dispatch(lambda: self._emit(self.on_plan, ""))
 
     def send(self, user_text):
         """Отправляет реплику и асинхронно получает ответ."""
@@ -184,6 +186,8 @@ class ChatController:
                                      level=user.get("level"), mode="lesson",
                                      context=context)
             self._plan_text = self.planner.format_plan(plan)
+            if self._plan_text:
+                self._dispatch(lambda: self._emit(self.on_plan, self._plan_text))
         except Exception as exc:
             print(f"⚠️ Планировщик недоступен: {exc}")
             self._plan_text = ""

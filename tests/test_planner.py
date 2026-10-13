@@ -250,11 +250,15 @@ def test_chat_integration():
         chat = ChatController(llm=llm, dispatch=lambda fn: fn(), mode="lesson",
                               lang="en", user_id=uid, planner=stub)
         mute(chat)
+        plans = []
+        chat.on_plan = lambda text: plans.append(text)
         send_and_wait(chat, "Hello Jane")
         check("первый ответ БЕЗ плана (план — в фоне после ответа)",
               "TODAY'S LESSON PLAN" not in flat(llm.prompts[0]), flat(llm.prompts[0])[-160:])
         wait_for(lambda: stub.calls >= 1)     # ждём фоновое построение плана
         check("план строится один раз за сессию (в фоне)", stub.calls == 1, stub.calls)
+        check("Планировщик сообщает план наружу (on_plan)",
+              any("Past Simple" in (t or "") for t in plans), plans)
         send_and_wait(chat, "Let's continue")
         check("со 2-го хода план в промпте",
               "TODAY'S LESSON PLAN" in flat(llm.prompts[-1])
