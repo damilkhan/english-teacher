@@ -199,10 +199,14 @@ def test_chat_integration():
 
     class CaptureLLM:
         def __init__(self):
-            self.prompts = []
-        def complete(self, prompt, **kwargs):
-            self.prompts.append(prompt)
+            self.prompts = []      # теперь это СПИСКИ сообщений (OpenAI-формат)
+        def complete(self, messages, **kwargs):
+            self.prompts.append(messages)
             return True, "ok"
+
+    def flat(messages):
+        """Текст всех сообщений одним куском — чтобы искать блоки промпта."""
+        return "\n".join(m.get("content", "") for m in (messages or []))
 
     class StubPlanner:
         def __init__(self):
@@ -248,13 +252,13 @@ def test_chat_integration():
         mute(chat)
         send_and_wait(chat, "Hello Jane")
         check("первый ответ БЕЗ плана (план — в фоне после ответа)",
-              "TODAY'S LESSON PLAN" not in llm.prompts[0], llm.prompts[0][-160:])
+              "TODAY'S LESSON PLAN" not in flat(llm.prompts[0]), flat(llm.prompts[0])[-160:])
         wait_for(lambda: stub.calls >= 1)     # ждём фоновое построение плана
         check("план строится один раз за сессию (в фоне)", stub.calls == 1, stub.calls)
         send_and_wait(chat, "Let's continue")
         check("со 2-го хода план в промпте",
-              "TODAY'S LESSON PLAN" in llm.prompts[-1]
-              and "Past Simple" in llm.prompts[-1], llm.prompts[-1][-200:])
+              "TODAY'S LESSON PLAN" in flat(llm.prompts[-1])
+              and "Past Simple" in flat(llm.prompts[-1]), flat(llm.prompts[-1])[-200:])
 
         # смена ученика → новый план
         user_manager.create_user("Второй", "other", 20, "B1", "", "🙂")
@@ -271,7 +275,7 @@ def test_chat_integration():
         mute(chat2)
         send_and_wait(chat2, "just chatting")
         check("в свободном режиме плана нет",
-              "TODAY'S LESSON PLAN" not in llm2.prompts[0], llm2.prompts[0][-200:])
+              "TODAY'S LESSON PLAN" not in flat(llm2.prompts[0]), flat(llm2.prompts[0])[-200:])
         check("в свободном режиме Планировщик не зовётся", stub2.calls == 0, stub2.calls)
     finally:
         user_manager.PROFILES_DIR, user_manager.LAST_USER_FILE = real_dir, real_last

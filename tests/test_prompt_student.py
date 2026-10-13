@@ -148,10 +148,10 @@ def test_controller_identity():
 
     class CaptureLLM:
         def __init__(self):
-            self.prompts = []
+            self.prompts = []      # теперь это СПИСКИ сообщений (OpenAI-формат)
 
-        def complete(self, prompt, **kwargs):
-            self.prompts.append(prompt)
+        def complete(self, messages, **kwargs):
+            self.prompts.append(messages)
             return True, "Привет! Как дела?"
 
     real_dir, real_last = user_manager.PROFILES_DIR, user_manager.LAST_USER_FILE
@@ -174,7 +174,8 @@ def test_controller_identity():
         while chat.busy and time.time() < deadline:
             time.sleep(0.02)
 
-        prompt = llm.prompts[0] if llm.prompts else ""
+        messages = llm.prompts[0] if llm.prompts else []
+        prompt = "\n".join(m.get("content", "") for m in messages)
         check("в промпт попало имя ученика", "Дамиль" in prompt)
         check("в промпт попал род (MASCULINE)", "MASCULINE forms about the student" in prompt)
     finally:

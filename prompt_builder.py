@@ -270,27 +270,27 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
             + _plan_block(plan) + _knowledge_block(context))
 
 
-def build_conversation_prompt(system_prompt, history, user_text, lang):
-    """Собирает полный промпт в формате Gemma: system → диалог → реплика ученика.
+def build_messages(system_prompt, history, user_text):
+    """Собирает СПИСОК сообщений (OpenAI-формат) для нашего llm_client.
 
-    История упаковывается в НАСТОЯЩИЕ тёрны Gemma (<start_of_turn>user/model),
-    а не «сырыми» строками «Student:/Assistant:». Так модель видит живую
-    беседу и НЕ считает каждую реплику новой сессией — раньше она здоровалась
-    в КАЖДОМ ответе («Привет, Дамиль!»).
+    Возвращает [{"role": "system", ...}, {"role": "user"/"assistant", ...}, …,
+    {"role": "user", "content": user_text}]. Разметку под конкретную модель
+    (<start_of_turn>… и т.п.) применяет САМ сервер llama.cpp, поэтому теги
+    вручную НЕ расставляем.
 
-    Жёсткого «Answer ONLY in English» / «ОТВЕТЬ ТОЛЬКО НА РУССКОМ» тут больше
-    нет: язык ответа целиком на усмотрение модели (см. LANGUAGE_POLICY), а
-    реплика ученика уходит как есть. Параметр lang сохранён для совместимости.
+    История у нас хранится строками «Student: …» / «Assistant: …» (так было и
+    раньше) — здесь превращаем их в роли user/assistant. Так модель видит
+    живую беседу и НЕ считает каждую реплику новой сессией.
     """
-    prompt = f"<start_of_turn>system\n{system_prompt}<end_of_turn>\n"
+    messages = [{"role": "system", "content": system_prompt}]
     for line in (history or [])[-6:]:
         line = str(line)
         if line.startswith("Student: "):
-            prompt += f"<start_of_turn>user\n{line[9:]}<end_of_turn>\n"
+            messages.append({"role": "user", "content": line[9:]})
         elif line.startswith("Assistant: "):
-            prompt += f"<start_of_turn>model\n{line[11:]}<end_of_turn>\n"
-    prompt += f"<start_of_turn>user\n{user_text}<end_of_turn>\n<start_of_turn>model\n"
-    return prompt
+            messages.append({"role": "assistant", "content": line[11:]})
+    messages.append({"role": "user", "content": user_text})
+    return messages
 
 
 def clean_response(text):

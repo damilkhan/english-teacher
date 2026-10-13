@@ -217,15 +217,18 @@ class Planner:
         return head + "\nSTUDENT PROFILE:\n" + _profile_summary(profile, level) + "\n"
 
     def _ask(self, prompt: str) -> Optional[str]:
-        """Один вызов модели в разметке Gemma. None — если модели нет/ошибка."""
+        """Один вызов модели как ОДНО сообщение пользователя (OpenAI-эндпоинт).
+
+        Разметку под конкретную модель применяет сам сервер llama.cpp, поэтому
+        вручную теги Gemma тут не ставим. None — если модели нет/ошибка.
+        """
         if self.llm is None:
             return None
-        text = ("<start_of_turn>user\n" + prompt + "<end_of_turn>\n"
-                "<start_of_turn>model\n")
+        messages = [{"role": "user", "content": prompt}]
         try:
             ok, payload = self.llm.complete(
-                text, max_tokens=self.max_tokens, temperature=self.temperature,
-                stop=["<end_of_turn>"], timeout=self.timeout)
+                messages, max_tokens=self.max_tokens, temperature=self.temperature,
+                timeout=self.timeout)
         except Exception as exc:
             _log.warning("Планировщик: LLM недоступна (%s)", exc)
             return None

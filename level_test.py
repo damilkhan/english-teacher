@@ -227,19 +227,17 @@ def _get_client():
 def _ask_llm(prompt):
     """Возвращает текст ответа модели или None (оффлайн/ошибка).
 
-    Промпт оборачиваем в разметку Gemma (<start_of_turn>…): на «сыром» тексте
-    инструктованная модель часто отдаёт ПУСТОЙ ответ (и каждый вопрос уходил в
-    резервный банк), а в формате диалога стабильно возвращает JSON.
+    Промпт отправляем как ОДНО сообщение пользователя через OpenAI-совместимый
+    эндпоинт: разметку под модель применяет сам сервер llama.cpp (--jinja), и
+    инструктованная модель стабильно возвращает JSON (а не пустой ответ).
     """
     client = _get_client()
     if client is None:
         return None
-    text = ("<start_of_turn>user\n" + prompt + "<end_of_turn>\n"
-            "<start_of_turn>model\n")
+    messages = [{"role": "user", "content": prompt}]
     try:
         ok, payload = client.complete(
-            text, max_tokens=300, temperature=0.5,
-            stop=["<end_of_turn>"], timeout=90)
+            messages, max_tokens=300, temperature=0.5, timeout=90)
     except Exception as exc:                       # клиент любого типа
         print("⚠️ level_test: LLM недоступна (%s)" % exc)
         return None

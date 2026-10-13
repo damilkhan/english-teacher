@@ -194,8 +194,8 @@ def test_chat_controller_uses_rag():
     class CaptureLLM:
         def __init__(self):
             self.prompts = []
-        def complete(self, prompt, **kwargs):
-            self.prompts.append(prompt)
+        def complete(self, messages, **kwargs):
+            self.prompts.append(messages)
             return True, "ok"
 
     class FakeRAG:
@@ -226,7 +226,7 @@ def test_chat_controller_uses_rag():
         deadline = time.time() + 5
         while chat.busy and time.time() < deadline:
             time.sleep(0.02)
-        prompt = llm.prompts[0] if llm.prompts else ""
+        prompt = "\n".join(m.get("content", "") for m in (llm.prompts[0] if llm.prompts else []))
         check("методический контекст попал в промпт", "METHODOLOGY_SENTINEL" in prompt,
               prompt[-200:])
         check("RAG получил реплику ученика как запрос",
@@ -242,7 +242,7 @@ def test_chat_controller_uses_rag():
         deadline = time.time() + 5
         while chat.busy and time.time() < deadline:
             time.sleep(0.02)
-        prompt2 = llm2.prompts[0] if llm2.prompts else ""
+        prompt2 = "\n".join(m.get("content", "") for m in (llm2.prompts[0] if llm2.prompts else []))
         check("в свободном режиме RAG не подключается",
               "METHODOLOGY_SENTINEL" not in prompt2, prompt2[-200:])
     finally:

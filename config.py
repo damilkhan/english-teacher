@@ -101,7 +101,11 @@ DEFAULT_LANGUAGE = "en"      # язык ответа до первой репл�
 LLM_HOST = "127.0.0.1"
 LLM_PORT = 8080
 LLM_BASE_URL = "http://%s:%d" % (LLM_HOST, LLM_PORT)
-LLM_SERVER_URL = LLM_BASE_URL + "/completion"   # сюда шлём промпты
+# Чат идёт через OpenAI-совместимый эндпоинт: шлём СПИСОК сообщений
+# (messages: system / user / assistant), а разметку под конкретную модель
+# применяет САМ сервер (llama.cpp запущен с флагом --jinja). Так смена
+# модели не ломает формат промпта — ручной сборки тегов Gemma больше нет.
+LLM_CHAT_URL = LLM_BASE_URL + "/v1/chat/completions"
 LLM_HEALTH_URL = LLM_BASE_URL + "/health"       # здесь проверяем готовность
 
 LLM_MAX_TOKENS = 200
@@ -112,6 +116,13 @@ LLM_STOP_WORDS = ["Student:", "\n\n"]
 # (<|channel>thought …), и при маленьком лимите модель тратит все токены
 # на «размышления», не успевая ответить ученику (раньше было 120 — не хватало).
 LLM_CHAT_MAX_TOKENS = 400
+
+# Отключать ли «размышления» модели. Gemma-4 — reasoning-модель: её шаблон
+# (применяется сервером с --jinja) иначе тратит токены на внутренний
+# «Thinking Process», а он НЕ попадает в ответ (content остаётся пустым).
+# Флаг добавляет chat_template_kwargs={"enable_thinking": false} — модель
+# отвечает сразу. Шаблон без такой переменной ключ просто игнорирует.
+LLM_NO_THINKING = True
 
 # ---------- запуск llama-server ----------
 SERVER_EXE_PATH = r"D:\llama.cpp\llama-server.exe"

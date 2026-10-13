@@ -157,24 +157,28 @@ def test_prompt_unchanged():
     check("жёсткого приказа языка больше нет",
           "ТОЛЬКО НА РУССКОМ" not in sys_ru and "Answer ONLY in English" not in sys_en)
 
-    # Полный промпт: история — НАСТОЯЩИМИ тёрнами Gemma, реплика ученика — как есть.
+    # Полный промпт: теперь СПИСОК СООБЩЕНИЙ (OpenAI-формат). Разметку под
+    # конкретную модель применяет САМ сервер llama.cpp, поэтому теги Gemma
+    # вручную НЕ ставим (ручной сборки промпта больше нет).
     history = ["Student: hello", "Assistant: hi there"]
     for mode, lang in [("lesson", "ru"), ("lesson", "en"), ("free", "en")]:
         profile = profiles[1]
         system = prompt_builder.build_system_prompt(mode, profile, lang)
-        full = prompt_builder.build_conversation_prompt(system, history, "How are you?", lang)
-        check(f"полный промпт {mode}/{lang}: system-тёрн в начале",
-              full.startswith("<start_of_turn>system\n" + system + "<end_of_turn>\n"), full[:60])
-        check(f"полный промпт {mode}/{lang}: история — user-тёрн",
-              "<start_of_turn>user\nhello<end_of_turn>\n" in full, full)
-        check(f"полный промпт {mode}/{lang}: история — model-тёрн",
-              "<start_of_turn>model\nhi there<end_of_turn>\n" in full, full)
-        check(f"полный промпт {mode}/{lang}: реплика ученика как есть",
-              full.endswith("<start_of_turn>user\nHow are you?<end_of_turn>\n<start_of_turn>model\n"), full[-70:])
-        check(f"полный промпт {mode}/{lang}: нет жёсткого приказа языка",
-              "Answer ONLY in English" not in full and "ТОЛЬКО НА РУССКОМ" not in full, full)
-        check(f"полный промпт {mode}/{lang}: «сырых» строк Student:/Assistant: нет",
-              "Student: hello" not in full and "Assistant: hi there" not in full, full)
+        msgs = prompt_builder.build_messages(system, history, "How are you?")
+        roles = [m.get("role") for m in msgs]
+        check(f"сообщения {mode}/{lang}: system первым и равен промпту",
+              msgs[0] == {"role": "system", "content": system}, msgs[0].get("role"))
+        check(f"сообщения {mode}/{lang}: история — роли user/assistant",
+              roles[1:3] == ["user", "assistant"]
+              and msgs[1]["content"] == "hello" and msgs[2]["content"] == "hi there", roles)
+        check(f"сообщения {mode}/{lang}: последняя реплика — user с текстом как есть",
+              msgs[-1] == {"role": "user", "content": "How are you?"}, msgs[-1])
+        check(f"сообщения {mode}/{lang}: тегов Gemma в тексте нет",
+              not any(("<start_of_turn>" in m["content"] or "<end_of_turn>" in m["content"])
+                      for m in msgs))
+        check(f"сообщения {mode}/{lang}: «сырых» префиксов Student:/Assistant: нет",
+              all(not m["content"].startswith("Student: ")
+                  and not m["content"].startswith("Assistant: ") for m in msgs))
 
     # «слабые темы» из теста уровня: блок появляется ТОЛЬКО когда данные есть
     # (иначе вывод промпта обязан остаться байт-в-байт прежним — см. выше)

@@ -145,12 +145,12 @@ class ChatController:
         system_prompt = prompt_builder.build_system_prompt(
             self.mode, profile_store.load(self.user_id), lang,
             level=level, student=student, context=context, plan=plan_text)
-        prompt = prompt_builder.build_conversation_prompt(system_prompt, self.history, user_text, lang)
+        messages = prompt_builder.build_messages(system_prompt, self.history, user_text)
 
         print(f"📤 Язык ответа: {'РУССКИЙ' if lang == 'ru' else 'ENGLISH'}")
 
         ok, raw = self.llm.complete(
-            prompt,
+            messages,
             max_tokens=config.LLM_CHAT_MAX_TOKENS,
             temperature=0.5,
             stop=["<|thought|>", "<end_of_turn>"],
