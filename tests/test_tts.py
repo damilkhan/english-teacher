@@ -26,6 +26,7 @@ for _stream in (sys.stdout, sys.stderr):
     except Exception:
         pass
 
+import config  # noqa: E402
 import tts  # noqa: E402
 
 FAILED = []
@@ -134,6 +135,13 @@ def test_pure():
           (tts.pitch_for(tts.VOICE_RU), tts.pitch_for(tts.VOICE_EN)))
     check("скорость: у Светланы +10%",
           tts.rate_for(tts.VOICE_RU) == "+10%", tts.rate_for(tts.VOICE_RU))
+    check("темп РАЗНЫЙ у языков (ru быстрее en)",
+          tts.rate_for(tts.VOICE_RU) != tts.rate_for(tts.VOICE_EN),
+          (tts.rate_for(tts.VOICE_RU), tts.rate_for(tts.VOICE_EN)))
+    check("rate берётся из config (TTS_RATE_EN/RU)",
+          tts.rate_for(tts.VOICE_EN) == config.TTS_RATE_EN
+          and tts.rate_for(tts.VOICE_RU) == config.TTS_RATE_RU,
+          (tts.rate_for(tts.VOICE_EN), config.TTS_RATE_EN))
 
 
 def test_voice_per_language():

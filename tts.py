@@ -41,6 +41,8 @@ from typing import Dict, Optional, Tuple
 import edge_tts
 import pygame
 
+import config
+
 # Потоковая озвучка: mp3 от edge-tts декодируем на лету (PyAV) и пишем в
 # динамик (sounddevice) ещё ДО того, как файл скачается целиком. Если av/
 # sounddevice недоступны — стриминг выключен, работает запасной путь
@@ -100,10 +102,11 @@ def pitch_for(voice):
     return VOICE_PITCH.get(voice, "+0Hz")
 
 
-# Скорость по голосам (как и тон — можно задать каждому свою).
+# Скорость речи по голосам. Темп РАЗНЫЙ для языков (см. config): английский
+# чуть медленнее — ученику легче различать слова; русский — быстрее (родной).
 VOICE_RATE = {
-    "en-US-AvaMultilingualNeural": "+10%",
-    "ru-RU-SvetlanaNeural": "+10%",
+    "en-US-AvaMultilingualNeural": getattr(config, "TTS_RATE_EN", "+0%"),
+    "ru-RU-SvetlanaNeural": getattr(config, "TTS_RATE_RU", "+10%"),
 }
 
 
@@ -469,7 +472,6 @@ class _ByteStream:
 
 def _streaming_enabled() -> bool:
     """Поток включён в настройках И есть av/sounddevice."""
-    import config
     return bool(_STREAM_OK and getattr(config, "TTS_STREAMING", True))
 
 
