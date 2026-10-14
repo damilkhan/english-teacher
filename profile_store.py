@@ -50,6 +50,7 @@ EMPTY_PROFILE = {
     "total_lessons": 0,
     "level_tests": [],
     "weak_topics": [],
+    "completed_lessons": [],   # id пройденных уроков карты (progress_map)
 }
 
 
@@ -104,6 +105,7 @@ def default_profile():
         "level_tests": [],       # итоги тестов уровня + разбор ответов
         "weak_topics": [],       # темы, где ученик чаще ошибался (для промпта)
         "analysis_log": [],      # разборы реплик Аналитиком (roles/analyst)
+        "completed_lessons": [],  # id пройденных уроков карты (progress_map)
     }
 
 
@@ -128,6 +130,8 @@ def load(user_id=None):
             data = json.load(fh)
         if not isinstance(data, dict):
             raise ValueError("профиль не является объектом JSON")
+        # мягкая миграция: у профилей, созданных до карты прогресса, ключа нет
+        data.setdefault("completed_lessons", [])
         return data
     except FileNotFoundError:
         return _empty_profile()
@@ -274,6 +278,28 @@ def record_analysis(analysis, user_text, jane_response="", user_id=None):
     if recorded:
         notes.append("📝 *Разбор: %s/%s · ошибок %d*" % (move_type, move_status, recorded))
     return notes
+
+
+def record_lesson_completed(lesson_id, user_id=None):
+    """Отметить урок карты пройденным (карта прогресса, progress_map).
+
+    ВАЖНО: урок — это НЕ «занятие», поэтому счётчик total_lessons не
+    увеличиваем: пишем напрямую через _write, а не через save().
+    Возвращает True, если урок добавлен впервые (иначе False).
+    """
+    lesson_id = str(lesson_id or "").strip()
+    if not lesson_id:
+        return False
+    profile = load(user_id)
+    done = profile.get("completed_lessons")
+    if not isinstance(done, list):
+        done = []
+    profile["completed_lessons"] = done
+    if lesson_id in done:
+        return False
+    done.append(lesson_id)
+    _write(profile, progress_path(user_id))
+    return True
 
 
 def record_level_test(result, answers, user_id=None):
