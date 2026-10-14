@@ -52,6 +52,19 @@ DARK = {
     "err_soft":      "#3A1721",
     "muted_soft":    "#232839",
     "record":        "#F43F5E",
+
+    # --- карта прогресса (ui/widgets/map_view) ---
+    # Жетоны рисуются ПОВЕРХ картинки карты (песок), поэтому цвета
+    # подобраны так, чтобы читаться на тёплом фоне.
+    "map_locked":           "#8B223C",   # точка ещё не открыта (бордовый)
+    "map_unlocked":         "#4ADE80",   # активная точка (яркий зелёный, пульсирует)
+    "map_done":             "#2E9E63",   # точка пройдена (приглушённый зелёный)
+    "map_border":           "#FFFFFF",   # белый ободок жетона
+    "map_num_outline":      "#0A3D26",   # контур цифры на зелёном
+    "map_num_outline_locked": "#3A0814", # контур цифры на бордовом
+    "map_bg":               "#14161F",   # фон карты, если картинки нет
+    "map_tooltip_bg":       "#1F2331",
+    "map_tooltip_text":     "#E7E9F0",
 }
 
 # Светлая палитра специально МЯГКАЯ: без чистой белизны (#FFFFFF) и почти
@@ -87,6 +100,17 @@ LIGHT = {
     "err_soft":      "#FCE9EF",
     "muted_soft":    "#EBEDF6",
     "record":        "#E15C77",
+
+    # --- карта прогресса (см. DARK: те же роли, чуть плотнее для светлой темы) ---
+    "map_locked":           "#A82847",
+    "map_unlocked":         "#22B25E",
+    "map_done":             "#1F8A52",
+    "map_border":           "#FFFFFF",
+    "map_num_outline":      "#06301C",
+    "map_num_outline_locked": "#420A1A",
+    "map_bg":               "#EFE6D2",
+    "map_tooltip_bg":       "#FFFFFF",
+    "map_tooltip_text":     "#2C3040",
 }
 
 PALETTES = {"dark": DARK, "light": LIGHT}
