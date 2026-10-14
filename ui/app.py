@@ -32,6 +32,7 @@ import commands
 import config
 import model_registry
 import profile_store
+import progress_map
 import server_manager
 import settings_store
 import stt_engine
@@ -48,6 +49,7 @@ from roles.analyst import Analyst
 from roles.planner import Planner
 from ui import gradient
 from ui.first_run import FirstRunForm
+from ui.panels.block_panel import BlockPanel
 from ui.panels.boot_panel import BootPanel
 from ui.panels.level_test_panel import LevelTestPanel
 from ui.panels.settings_panel import SettingsPanel
@@ -56,6 +58,7 @@ from ui.widgets.chat_view import ChatView
 from ui.widgets.control_bar import ControlBar
 from ui.widgets.info_bar import InfoBar
 from ui.widgets.input_bar import InputBar
+from ui.widgets.map_view import MapView
 from ui.widgets.visualizer import AudioVisualizer
 
 # --- состояние сервера → текст и цвет бейджа ---
@@ -92,6 +95,81 @@ REDRAW_DELAY_MS = 90
 # Подписи разбора Аналитика для тонкой строки «учительского» вида.
 MOVE_TYPE_RU = {"Q": "вопрос", "A": "ответ", "S": "реплика", "F": "отклик", "O": "прочее"}
 MOVE_STATUS_RU = {"A": "✔ принято", "P": "⚠ доработать"}
+
+# Подписи ошибок для вкладки «Профиль».
+MISTAKE_WORD = {"grammar": "грамматика", "vocabulary": "лексика",
+                "pronunciation": "произношение"}
+
+
+def profile_summary(user, profile, map_progress=(0, 0)):
+    """Строки сводки для вкладки «Профиль»: [(заголовок, значение), …].
+
+    Чистая функция (без Tk) — её удобно проверять тестами и пересобирать
+    при смене ученика/темы, не трогая логику окна.
+    """
+    user = user or {}
+    profile = profile or {}
+    out = []
+
+    name = str(user.get("name") or "").strip() or "Ученик"
+    avatar = user.get("avatar") or "🙂"
+    out.append(("Ученик", "%s %s" % (avatar, name)))
+    out.append(("Уровень", user_manager.level_label(user.get("level"))))
+    try:
+        done, total = int(map_progress[0]), int(map_progress[1])
+    except Exception:
+        done, total = 0, 0
+    out.append(("Карта «Пустыня»", "пройдено блоков: %d из %d" % (done, total)))
+    out.append(("Занятий с Джейн", str(profile.get("total_lessons", 0))))
+
+    mistakes = profile.get("mistakes") or {}
+    counts = []
+    for key in ("grammar", "vocabulary", "pronunciation"):
+        items = mistakes.get(key) or []
+        if items:
+            counts.append("%s %d" % (MISTAKE_WORD.get(key, key), len(items)))
+    out.append(("Ошибки", " · ".join(counts) if counts else "пока нет"))
+
+    weak = profile.get("weak_topics") or []
+    topics = [str(w.get("topic")) for w in weak if isinstance(w, dict) and w.get("topic")]
+    if topics:
+        out.append(("Слабые темы", ", ".join(topics[:5])))
+
+    strengths = profile.get("strengths") or []
+    if strengths:
+        out.append(("Сильные стороны", "удачных реплик: %d" % len(strengths)))
+
+    recent = []
+    for key in ("grammar", "vocabulary", "pronunciation"):
+        for item in (mistakes.get(key) or [])[-5:]:
+            if not isinstance(item, dict):
+                continue
+            wrong = str(item.get("wrong") or "").strip()
+            correct = str(item.get("correct") or "").strip()
+            if wrong and correct:
+                recent.append("%s → %s" % (wrong, correct))
+    if recent:
+        out.append(("Последние ошибки", "\n".join(recent[-5:])))
+    return out
+
+
+class _Tabview(ctk.CTkTabview):
+    """CTkTabview, который зовёт command и при ПРОГРАММНОМ set().
+
+    Штатный CTkTabview дёргает command только по клику мыши (значение
+    передаётся с флагом from_button_callback). Из-за этого переключение
+    вкладки кодом (tabs.set("Карта")) не будило карту. Здесь мы просто
+    дублируем вызов command после смены вкладки.
+    """
+
+    def set(self, name):
+        super().set(name)
+        command = getattr(self, "_command", None)
+        if command is not None:
+            try:
+                command(name)
+            except Exception:
+                pass
 
 
 class EnglishTeacherApp:
@@ -186,6 +264,12 @@ class EnglishTeacherApp:
             on_recognized=self._on_recognized,
         )
 
+        # ---------- карта прогресса ----------
+        # curriculum.json читаем ОДИН раз: карта и вкладка «Профиль»
+        # берут данные отсюда (см. progress_map.ProgressMap)
+        self.progress_map = progress_map.ProgressMap()
+        self.map_view = None
+
         # ---------- интерфейс ----------
         self._build_ui()
 
@@ -278,6 +362,7 @@ class EnglishTeacherApp:
         self.add_message("Джейн", self._greeting())
         self._refresh_hero()
         self._refresh_input_state()
+        self._refresh_side_views()
         self._after_profile_ready()
 
     def _refresh_input_state(self):
@@ -350,6 +435,7 @@ class EnglishTeacherApp:
         self.add_message("Джейн", self._greeting())
         self._refresh_hero()
         self._refresh_input_state()
+        self._refresh_side_views()
         if self.users_panel is not None:
             self.users_panel.refresh(user_id)
 
@@ -378,6 +464,7 @@ class EnglishTeacherApp:
             self.add_message("Джейн", "✅ Профиль обновлён.")
             self._refresh_hero()
             self._refresh_input_state()
+            self._refresh_side_views()
         if self.users_panel is not None:
             self.users_panel.refresh((self.current_user or {}).get("id"))
 
@@ -440,7 +527,26 @@ class EnglishTeacherApp:
                                        corner_radius=theme.R["card"],
                                        border_width=1, border_color=p["border"])
         self.visualizer = AudioVisualizer(self.left_frame, p, height=30, bars=30)
-        self.chat_view = ChatView(self.left_frame, p,
+
+        # Вкладки «Чат» / «Карта» / «Профиль» живут ВНУТРИ левой карточки,
+        # а шапка и эквалайзер остаются НАД ними (вариант А) — они общие.
+        self.tabs = _Tabview(
+            self.left_frame, fg_color=p["surface"],
+            segmented_button_fg_color=p["btn"],
+            segmented_button_selected_color=p["accent"],
+            segmented_button_selected_hover_color=p["accent_hover"],
+            segmented_button_unselected_color=p["btn"],
+            segmented_button_unselected_hover_color=p["btn_hover"],
+            text_color=p["text"], corner_radius=theme.R["block"],
+            command=self._on_tab_changed,
+        )
+        self.chat_tab = self.tabs.add("Чат")
+        self.map_tab = self.tabs.add("Карта")
+        self.profile_tab = self.tabs.add("Профиль")
+
+        self._ui_ready = False      # до конца сборки на смену вкладок не реагируем
+
+        self.chat_view = ChatView(self.chat_tab, p,
                                   greeting=("Джейн", self._greeting()),
                                   on_replay=self._replay_reply)
 
@@ -462,8 +568,8 @@ class EnglishTeacherApp:
         except Exception as exc:
             print("⚠️ Робот-персонаж не подключился: %s" % exc)
             self.character = None
-        self.input_bar = InputBar(self.left_frame, p, on_send=self.send_text)
-        self.control_bar = ControlBar(self.left_frame, p,
+        self.input_bar = InputBar(self.chat_tab, p, on_send=self.send_text)
+        self.control_bar = ControlBar(self.chat_tab, p,
                                       on_record=self._start_recording,
                                       on_record_release=self._stop_recording,
                                       on_settings=self.open_panel,
@@ -474,7 +580,7 @@ class EnglishTeacherApp:
         # Разбор Аналитика и фокус плана урока — ОТДЕЛЬНОЙ полосой над
         # полем ввода (в чат такие служебные строки не пишем). Виджет сам
         # прячется, пока данных нет, поэтому при старте её не видно.
-        self.info_bar = InfoBar(self.left_frame, p, before=self.chat_view)
+        self.info_bar = InfoBar(self.chat_tab, p, before=self.chat_view)
 
         self._build_hero()
 
@@ -485,14 +591,21 @@ class EnglishTeacherApp:
         # панель управления уходила за нижний край окна.
         self.hero.pack(side="top", fill="x", padx=theme.CARD_PAD, pady=(theme.CARD_PAD, 8))
         self.visualizer.pack(side="top", fill="x", padx=theme.CARD_PAD + 4, pady=(0, 6))
+        self.tabs.pack(side="top", fill="both", expand=True,
+                       padx=theme.CARD_PAD - 6, pady=(0, theme.CARD_PAD - 6))
 
-        self.control_bar.pack(side="bottom", fill="x", padx=theme.CARD_PAD,
-                              pady=(0, theme.CARD_PAD))
-        self.input_bar.pack(side="bottom", fill="x", padx=theme.CARD_PAD, pady=(0, 8))
+        # ---- вкладка «Чат»: кнопки и ввод прижаты к низу, чат растёт ----
+        self.control_bar.pack(side="bottom", fill="x", padx=6,
+                              pady=(0, theme.CARD_PAD - 6))
+        self.input_bar.pack(side="bottom", fill="x", padx=6, pady=(0, 8))
 
         # чат — последним: он и только он растягивается
         self.chat_view.pack(side="top", fill="both", expand=True,
-                            padx=theme.CARD_PAD, pady=(0, 10))
+                            padx=6, pady=(0, 8))
+
+        # ---- вкладки «Карта» и «Профиль» ----
+        self._build_map_tab()
+        self._build_profile_tab()
 
         # ---------- правая панель «настройки» ----------
         self.right_panel = SettingsPanel(self.base, p,
@@ -514,6 +627,7 @@ class EnglishTeacherApp:
         # «Держать кнопку»: отпускание мыши в ЛЮБОМ месте останавливает запись
         # (иначе, уведя курсор и отпустив вне кнопки, запись зависла бы).
         self.window.bind("<ButtonRelease-1>", self._on_global_release, add="+")
+        self._ui_ready = True      # с этого момента реагируем на смену вкладок
 
     def _build_hero(self):
         """Шапка — ОДНА картинка: градиент, заголовок, подпись и пилюля статуса.
@@ -532,6 +646,114 @@ class EnglishTeacherApp:
         self.hero_bg = ctk.CTkLabel(self.hero, text="", fg_color="transparent",
                                     bg_color=p["hero_a"])
         self.hero_bg.place(x=0, y=0, relwidth=1, relheight=1)
+
+    # =====================================================
+    # Вкладки: карта и профиль
+    # =====================================================
+    def _build_map_tab(self):
+        """Вкладка «Карта»: интерактивная карта локации «Пустыня»."""
+        self.map_view = MapView(self.map_tab, self.palette,
+                                location_id="desert",
+                                on_point_click=self.on_point_click,
+                                map_obj=self.progress_map)
+        self.map_view.pack(fill="both", expand=True, padx=4, pady=4)
+        self.map_view.set_active(False)      # стартовая вкладка — «Чат»
+
+    def _build_profile_tab(self):
+        """Вкладка «Профиль»: краткая сводка прогресса ученика."""
+        import customtkinter as _ctk
+        self.profile_box = _ctk.CTkScrollableFrame(self.profile_tab,
+                                                   fg_color="transparent")
+        self.profile_box.pack(fill="both", expand=True, padx=4, pady=4)
+        self._refresh_profile_tab()
+
+    def _active_profile(self):
+        """Прогресс активного ученика. Ошибки наружу не пробрасываем."""
+        try:
+            return profile_store.load((self.current_user or {}).get("id"))
+        except Exception:
+            return {}
+
+    def _refresh_profile_tab(self, profile=None):
+        """Пересобрать сводку профиля (уровень, ошибки, слабые темы…)."""
+        box = getattr(self, "profile_box", None)
+        if box is None:
+            return
+        for child in box.winfo_children():
+            child.destroy()
+        if profile is None:
+            profile = self._active_profile()
+        try:
+            done, total = self.progress_map.get_location_progress("desert", profile)
+        except Exception:
+            done, total = (0, 0)
+        p = self.palette
+        for heading, value in profile_summary(self.current_user, profile, (done, total)):
+            ctk.CTkLabel(box, text=heading, anchor="w",
+                         font=theme.FONT_SECTION,
+                         text_color=p["muted"]).pack(anchor="w", padx=6, pady=(10, 0))
+            ctk.CTkLabel(box, text=str(value), anchor="w", justify="left",
+                         wraplength=520, font=theme.FONT_UI,
+                         text_color=p["text"]).pack(anchor="w", padx=6)
+
+    def _refresh_side_views(self):
+        """Обновить «Карту» и «Профиль» (после смены ученика и т. п.)."""
+        try:
+            profile = self._active_profile()
+            if getattr(self, "map_view", None) is not None:
+                self.map_view.refresh(profile)
+            self._refresh_profile_tab(profile)
+        except Exception as exc:
+            print(f"⚠️ Карта/профиль не обновились: {exc}")
+
+    def _on_tab_changed(self, *_args):
+        """Переключение вкладок: пауза робота и «пробуждение» карты.
+
+        Вызывается и как command (по клику), и через trace переменной
+        сегмента (программное переключение); лишние аргументы игнорируем.
+        """
+        if not getattr(self, "_ui_ready", False):
+            return
+        try:
+            name = self.tabs.get()
+        except Exception:
+            return
+        on_chat = (name == "Чат")
+        if getattr(self, "character", None) is not None:
+            try:
+                # робот «дышит» только на вкладке «Чат» (карта — без анимаций)
+                self.character.start_idle() if on_chat else self.character.stop_idle()
+            except Exception:
+                pass
+        if getattr(self, "map_view", None) is not None:
+            # карта рисуется и пульсирует ТОЛЬКО когда её видно
+            self.map_view.set_active(name == "Карта")
+            if name == "Карта":
+                self.map_view.refresh(self._active_profile())
+        if name == "Профиль":
+            self._refresh_profile_tab()
+
+    def on_point_click(self, point_id):
+        """Клик по кружку карты (Этап 1): строка в чат + окно блока уроков."""
+        try:
+            point = self.progress_map.get_point(point_id) or {}
+        except Exception:
+            point = {}
+        number = point.get("number")
+        title = str(point.get("block_title") or "").strip()
+        label = ("Блок %s" % number) if number is not None else "Блок"
+        if title:
+            label += ": %s" % title
+        self.add_message("Джейн", "🧭 %s — скоро" % label)
+        location_title = ""
+        try:
+            location_title = (self.progress_map.get_location("desert") or {}).get("title") or ""
+        except Exception:
+            pass
+        try:
+            BlockPanel.ask(self.window, self.palette, point, location_title)
+        except Exception as exc:
+            print("⚠️ Окно блока не открылось: %s" % exc)
 
     # =====================================================
     # Фон-градиент и раскладка
@@ -1007,6 +1229,22 @@ class EnglishTeacherApp:
         self.info_bar.apply_theme(p)
         self.right_panel.apply_theme(p)
         self.users_panel.apply_theme(p)
+
+        # вкладки и «Карта» красятся вручную (у них свои цвета сегментов)
+        try:
+            self.tabs.configure(
+                fg_color=p["surface"],
+                segmented_button_fg_color=p["btn"],
+                segmented_button_selected_color=p["accent"],
+                segmented_button_selected_hover_color=p["accent_hover"],
+                segmented_button_unselected_color=p["btn"],
+                segmented_button_unselected_hover_color=p["btn_hover"],
+                text_color=p["text"])
+        except Exception:
+            pass
+        if getattr(self, "map_view", None) is not None:
+            self.map_view.apply_theme(p)
+        self._refresh_profile_tab()
 
         self._on_server_state(self.server_state, "")
         self._redraw()                            # фон + шапка + раскладка
