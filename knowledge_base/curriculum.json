@@ -1,0 +1,251 @@
+{
+  "version": 1,
+  "locations": [
+    {
+      "id": "desert",
+      "title": "Пустыня",
+      "level": "A0",
+      "image": "assets/map/desert.jpg",
+      "size": [
+        1248,
+        832
+      ],
+      "points": [
+        {
+          "id": "point_1",
+          "number": 1,
+          "point": [
+            252,
+            676
+          ],
+          "block_title": "Greetings & Hello",
+          "lessons": [
+            {
+              "id": "1.1",
+              "title": "Hello / Hi",
+              "type": "speaking"
+            },
+            {
+              "id": "1.2",
+              "title": "Good morning / Good evening",
+              "type": "speaking"
+            },
+            {
+              "id": "1.3",
+              "title": "How are you?",
+              "type": "chat"
+            }
+          ]
+        },
+        {
+          "id": "point_2",
+          "number": 2,
+          "point": [
+            235,
+            530
+          ],
+          "block_title": "Introducing Yourself",
+          "lessons": [
+            {
+              "id": "2.1",
+              "title": "My name is…",
+              "type": "speaking"
+            },
+            {
+              "id": "2.2",
+              "title": "I'm from…",
+              "type": "speaking"
+            },
+            {
+              "id": "2.3",
+              "title": "Nice to meet you",
+              "type": "chat"
+            }
+          ]
+        },
+        {
+          "id": "point_3",
+          "number": 3,
+          "point": [
+            637,
+            623
+          ],
+          "block_title": "Numbers 0–10",
+          "lessons": [
+            {
+              "id": "3.1",
+              "title": "Counting 1–10",
+              "type": "speaking"
+            },
+            {
+              "id": "3.2",
+              "title": "How many?",
+              "type": "speaking"
+            },
+            {
+              "id": "3.3",
+              "title": "Phone numbers",
+              "type": "chat"
+            }
+          ]
+        },
+        {
+          "id": "point_4",
+          "number": 4,
+          "point": [
+            910,
+            646
+          ],
+          "block_title": "Numbers 11–100 & Age",
+          "lessons": [
+            {
+              "id": "4.1",
+              "title": "11–20",
+              "type": "speaking"
+            },
+            {
+              "id": "4.2",
+              "title": "Tens: 20–100",
+              "type": "speaking"
+            },
+            {
+              "id": "4.3",
+              "title": "How old are you?",
+              "type": "chat"
+            }
+          ]
+        },
+        {
+          "id": "point_5",
+          "number": 5,
+          "point": [
+            1024,
+            542
+          ],
+          "block_title": "Colours",
+          "lessons": [
+            {
+              "id": "5.1",
+              "title": "Basic colours",
+              "type": "speaking"
+            },
+            {
+              "id": "5.2",
+              "title": "What colour is it?",
+              "type": "speaking"
+            },
+            {
+              "id": "5.3",
+              "title": "Colours I like",
+              "type": "chat"
+            }
+          ]
+        },
+        {
+          "id": "point_6",
+          "number": 6,
+          "point": [
+            860,
+            414
+          ],
+          "block_title": "Objects & This is…",
+          "lessons": [
+            {
+              "id": "6.1",
+              "title": "This is a pen",
+              "type": "speaking"
+            },
+            {
+              "id": "6.2",
+              "title": "Classroom objects",
+              "type": "speaking"
+            },
+            {
+              "id": "6.3",
+              "title": "My things",
+              "type": "chat"
+            }
+          ]
+        },
+        {
+          "id": "point_7",
+          "number": 7,
+          "point": [
+            482,
+            321
+          ],
+          "block_title": "Family & People",
+          "lessons": [
+            {
+              "id": "7.1",
+              "title": "This is my mother",
+              "type": "speaking"
+            },
+            {
+              "id": "7.2",
+              "title": "He / She is…",
+              "type": "speaking"
+            },
+            {
+              "id": "7.3",
+              "title": "Who is this?",
+              "type": "chat"
+            }
+          ]
+        },
+        {
+          "id": "point_8",
+          "number": 8,
+          "point": [
+            237,
+            288
+          ],
+          "block_title": "Days & Time",
+          "lessons": [
+            {
+              "id": "8.1",
+              "title": "Days of the week",
+              "type": "speaking"
+            },
+            {
+              "id": "8.2",
+              "title": "What's the time?",
+              "type": "speaking"
+            },
+            {
+              "id": "8.3",
+              "title": "Today is…",
+              "type": "chat"
+            }
+          ]
+        },
+        {
+          "id": "point_9",
+          "number": 9,
+          "point": [
+            311,
+            159
+          ],
+          "block_title": "Likes & My Day (Present Simple)",
+          "lessons": [
+            {
+              "id": "9.1",
+              "title": "I like tea",
+              "type": "speaking"
+            },
+            {
+              "id": "9.2",
+              "title": "Do you like…?",
+              "type": "speaking"
+            },
+            {
+              "id": "9.3",
+              "title": "My day: I get up at 7",
+              "type": "chat"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
