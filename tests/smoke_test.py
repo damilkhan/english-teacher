@@ -205,6 +205,18 @@ def test_prompt_unchanged():
           "LESSON PLAN" in p_plan and "Past Simple" in p_plan)
     check("без плана промпт не меняется", "LESSON PLAN" not in p_without)
 
+    # идущее занятие (карта прогресса) — блок тоже ТОЛЬКО когда задано
+    p_lesson = prompt_builder.build_system_prompt(
+        "lesson", base, "en",
+        lesson={"title": "Hello / Hi", "type": "speaking", "topic": "greetings"})
+    check("блок идущего занятия добавляется в промпт",
+          "CURRENT LESSON" in p_lesson and "Hello / Hi" in p_lesson)
+    check("без занятия промпт не меняется", "CURRENT LESSON" not in p_without)
+    p_lesson_str = prompt_builder.build_system_prompt("lesson", base, "en",
+                                                      lesson="Numbers 1-10")
+    check("занятие строкой тоже принимается",
+          "CURRENT LESSON" in p_lesson_str and "Numbers 1-10" in p_lesson_str)
+
 
 def test_clean_response():
     print("\n[2] Чистка ответа модели")

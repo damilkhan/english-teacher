@@ -161,6 +161,34 @@ def _knowledge_block(context):
     return KNOWLEDGE_BLOCK_TEMPLATE.format(context=context)
 
 
+# ---------- идущее занятие (карта прогресса, lesson.py) ----------
+# Готовую подпись урока собирает приложение (ui/app.py) и передаёт словарём
+# {"title", "type", "topic"}. ВАЖНО: при lesson=None блок НЕ добавляется —
+# вывод build_system_prompt не меняется (обратная совместимость,
+# см. tests/smoke_test.test_prompt_unchanged).
+LESSON_BLOCK_TEMPLATE = """
+\n\U0001F3EB CURRENT LESSON: {title}
+The student just started this lesson. Topic: {topic}.
+Run THIS lesson now: keep the student talking, ask one short question at a time,
+let the student answer, and gently correct mistakes. Adapt if the student
+struggles, and do not switch to another topic on your own.
+"""
+
+
+def _lesson_block(lesson):
+    """Блок «идёт занятие». Пусто, если занятия нет (обратная совместимость)."""
+    if not lesson:
+        return ""
+    if isinstance(lesson, dict):
+        title = str(lesson.get("title") or lesson.get("topic") or "").strip()
+        topic = str(lesson.get("topic") or lesson.get("title") or "").strip()
+    else:
+        title = topic = str(lesson).strip()
+    if not title:
+        return ""
+    return LESSON_BLOCK_TEMPLATE.format(title=title, topic=topic or title)
+
+
 def detect_language(text):
     """Есть кириллица → 'ru', иначе 'en'."""
     return "ru" if any(c in _RUSSIAN_CHARS for c in (text or "").lower()) else "en"
@@ -211,7 +239,7 @@ def _mistake_line(err):
         text = str(err.get("jane_response") or "")
     return text[:50]
 
-def build_system_prompt(mode, profile, lang="en", level=None, student=None, context=None, plan=None):
+def build_system_prompt(mode, profile, lang="en", level=None, student=None, context=None, plan=None, lesson=None):
     """Собирает system-промпт (персона + профиль ученика).
 
     mode:    'lesson' | 'free'
@@ -222,6 +250,8 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
     context: методические заметки (RAG) — необязательно;
              None/пусто → блок не добавляется (обратная совместимость)
     plan:    текст плана урока (Планировщик) — необязательно;
+             None/пусто → блок не добавляется (обратная совместимость)
+    lesson:  словарь идущего занятия {"title","type","topic"} — необязательно;
              None/пусто → блок не добавляется (обратная совместимость)
     """
     language_rule = language_instruction(lang)
@@ -267,6 +297,7 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
     """
     return (prompt + _level_block(profile, level)
             + _weak_topics_block(profile) + _student_block(student)
+            + _lesson_block(lesson)
             + _plan_block(plan) + _knowledge_block(context))
 
 

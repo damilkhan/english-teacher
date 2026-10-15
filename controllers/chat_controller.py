@@ -59,6 +59,13 @@ class ChatController:
         self._plan_text = ""
         self._plan_started = False
 
+        # идущее ЗАНЯТИЕ по карте (lesson.py): {"title","type","topic"} или None.
+        # В промпт подмешивается отдельным блоком (prompt_builder._lesson_block).
+        self._lesson = None
+        # True, пока Джейн отвечает на служебную реплику-затравку в начале
+        # занятия: её нельзя считать ответом ученика (ни разбор, ни прогресс).
+        self._opening = False
+
         # --- колбэки, которые выставляет интерфейс ---
         self.on_message = None    # (sender, text)      — добавить сообщение в чат
         self.on_status = None     # (text, color_key)   — статус-бейдж
@@ -83,8 +90,37 @@ class ChatController:
     def set_language(self, lang):
         self.current_lang = lang
 
+    def set_lesson(self, lesson=None):
+        """Задать идущее занятие (словарь {"title","type","topic"} или None).
+
+        Только влияет на промпт Учителя: логика занятия живёт в app.py и
+        lesson.py, контроллер остаётся «переговорщиком» с моделью.
+        """
+        self._lesson = dict(lesson) if isinstance(lesson, dict) else (
+            {"title": str(lesson)} if lesson else None)
+
+    def begin_lesson(self, lesson=None):
+        """Джейн начинает занятие ПЕРВОЙ (служебная реплика, не ответ ученика).
+
+        Ученик только что открыл урок и ещё не сказал ни слова — без этого
+        он не знал бы, что делать. Затравка НЕ попадает ни в разбор Аналитика,
+        ни в прогресс, ни в историю диалога (см. _opening).
+        """
+        if self.busy:
+            return False
+        if lesson is not None:
+            self.set_lesson(lesson)
+        title = (self._lesson or {}).get("title") or "the lesson"
+        self._opening = True
+        return self.send(
+            "[START OF LESSON] Topic: %s. Greet the student warmly in English "
+            "and give the FIRST small task of this lesson (one thing at a time)."
+            % title)
+
     def clear_history(self):
         self.history = []
+        self._lesson = None
+        self._opening = False
         self._reset_plan()
 
     def _reset_plan(self):
@@ -144,9 +180,11 @@ class ChatController:
         context = self._rag_context(user_text) if self.mode == "lesson" else ""
         # план читаем БЕЗ ожидания: если он ещё строится — отвечаем без него
         plan_text = self._plan_text if self.mode == "lesson" else ""
+        lesson_block = self._lesson if self.mode == "lesson" else None
         system_prompt = prompt_builder.build_system_prompt(
             self.mode, profile_store.load(self.user_id), lang,
-            level=level, student=student, context=context, plan=plan_text)
+            level=level, student=student, context=context, plan=plan_text,
+            lesson=lesson_block)
         messages = prompt_builder.build_messages(system_prompt, self.history, user_text)
 
         print(f"📤 Язык ответа: {'РУССКИЙ' if lang == 'ru' else 'ENGLISH'}")
@@ -224,6 +262,8 @@ class ChatController:
 
     def _safe_analyze(self, user_text, reply):
         """Разбор реплики Аналитиком. Любая проблема → None (без исключений)."""
+        if self._opening:            # служебная затравка — это не ответ ученика
+            return None
         if self.analyst is None or self.mode != "lesson":
             return None
         try:
@@ -251,6 +291,17 @@ class ChatController:
         # Разбор пишем в профиль, но служебные заметки в чат НЕ показываем:
         # ученику не нужны строки вида «📝 *Разбор: A/P · ошибок 3*» между
         # репликами Джейн. Хочешь вывести — подпишись на on_analysis.
+        opening = self._opening
+        self._opening = False
+        if opening:
+            # начало занятия: ни разбора, ни прогресса, ни «грязной» истории
+            self._emit(self.on_analysis, None)
+            self.history.append(f"Assistant: {response}")
+            if len(self.history) > 10:
+                self.history = self.history[-8:]
+            self._emit(self.on_status, "● Готов", "ok")
+            return
+
         notes = self._record(user_text, response, analysis)
         if notes:
             _log.debug("прогресс: %s", notes)
