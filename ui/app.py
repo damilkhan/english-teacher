@@ -30,6 +30,7 @@ import audio_vad
 import character
 import commands
 import config
+import lesson as lesson_mod
 import model_registry
 import profile_store
 import progress_map
@@ -41,6 +42,8 @@ import tts
 import user_manager
 from controllers.chat_controller import ChatController
 from controllers.dispatcher import Dispatcher
+from controllers.lesson_controller import LessonController
+from controllers.server_waiter import ServerWaiter
 from controllers.level_test_controller import LevelTestController
 from controllers.recording_controller import RecordingController
 from controllers.server_monitor import ServerMonitor
@@ -58,6 +61,7 @@ from ui.widgets.chat_view import ChatView
 from ui.widgets.control_bar import ControlBar
 from ui.widgets.info_bar import InfoBar
 from ui.widgets.input_bar import InputBar
+from ui.widgets.lesson_bar import LessonBar
 from ui.widgets.map_view import MapView
 from ui.widgets.visualizer import AudioVisualizer
 
@@ -264,6 +268,20 @@ class EnglishTeacherApp:
             on_recognized=self._on_recognized,
         )
 
+        # ---------- занятие по карте ----------
+        # Держит текущую сессию урока (lesson.LessonSession); логика правил —
+        # в lesson.py, интерфейс — здесь.
+        self.lesson = LessonController(
+            dispatch=self._dispatch,
+            on_started=self._on_lesson_started,
+            on_reply=self._on_lesson_reply,
+            on_finished=self._on_lesson_finished,
+            on_aborted=self._on_lesson_aborted,
+        )
+        self._pending_lesson = None      # урок, ждущий готовности распознавания
+        # Отложенное действие, ждущее LLM-сервер (см. _run_when_server_ready)
+        self._server_task = None
+
         # ---------- карта прогресса ----------
         # curriculum.json читаем ОДИН раз: карта и вкладка «Профиль»
         # берут данные отсюда (см. progress_map.ProgressMap)
@@ -424,6 +442,11 @@ class EnglishTeacherApp:
         user = user_manager.get_user(user_id)
         if not user:
             return
+        if self.lesson.is_active:
+            # занятие принадлежит прошлому ученику — прерываем, не засчитывая
+            self._pending_lesson = None
+            self.lesson.abort()
+            self.lesson.reset()
         self.current_user = user
         self.profile_ready = user_manager.is_complete(user)
         user_manager.set_last_user(user_id)
@@ -582,6 +605,12 @@ class EnglishTeacherApp:
         # прячется, пока данных нет, поэтому при старте её не видно.
         self.info_bar = InfoBar(self.chat_tab, p, before=self.chat_view)
 
+        # ---------- полоса идущего занятия ----------
+        # «🎓 Урок 1.1 · Hello / Hi · говорение · 4/12  [Выйти]» — над полем
+        # ввода (pack before=chat_view), сама прячется, когда урока нет.
+        self.lesson_bar = LessonBar(self.chat_tab, p, on_exit=self.exit_lesson,
+                                    before=self.chat_view)
+
         self._build_hero()
 
         # Порядок упаковки важен! pack отдаёт место СНАЧАЛА упакованным,
@@ -734,26 +763,251 @@ class EnglishTeacherApp:
             self._refresh_profile_tab()
 
     def on_point_click(self, point_id):
-        """Клик по кружку карты (Этап 1): строка в чат + окно блока уроков."""
+        """Клик по кружку карты: окно блока уроков → старт выбранного урока."""
         try:
             point = self.progress_map.get_point(point_id) or {}
         except Exception:
             point = {}
-        number = point.get("number")
-        title = str(point.get("block_title") or "").strip()
-        label = ("Блок %s" % number) if number is not None else "Блок"
-        if title:
-            label += ": %s" % title
-        self.add_message("Джейн", "🧭 %s — скоро" % label)
         location_title = ""
         try:
             location_title = (self.progress_map.get_location("desert") or {}).get("title") or ""
         except Exception:
             pass
+        chosen = None
         try:
-            BlockPanel.ask(self.window, self.palette, point, location_title)
+            chosen = BlockPanel.ask(self.window, self.palette, point, location_title)
         except Exception as exc:
             print("⚠️ Окно блока не открылось: %s" % exc)
+        if chosen:
+            self.start_lesson(chosen, point_id)
+
+    # =====================================================
+    # ЗАНЯТИЕ по карте (lesson.py + LessonController)
+    # =====================================================
+    def start_lesson(self, lesson_id, point_id=None):
+        """Начать занятие по уроку с карты (после выбора в окне блока)."""
+        if not self.profile_ready:
+            self.add_message("Джейн", SETUP_HINT)
+            return None
+        if self.lesson.is_active:
+            self.add_message("Джейн", "⚠️ Сначала заверши текущий урок — кнопка «Выйти».")
+            return None
+
+        data = self._lesson_data(lesson_id, point_id)
+        if data is None:
+            self.add_message("Джейн", "⚠️ Не нашёл этот урок в учебном плане.")
+            return None
+
+        # урок «голосом» невозможен без микрофона и без распознавания
+        if lesson_mod.needs_microphone(data["type"]):
+            ready, message = self._microphone_ready()
+            if not ready:
+                self.add_message("Джейн", message)
+                if self.stt_state == "loading":
+                    # распознавание ещё грузится — запомним урок и начнём,
+                    # как только Whisper будет готов (см. _apply_stt_state)
+                    self._pending_lesson = (lesson_id, point_id)
+                    self._set_status("● Готовлю распознавание…", "warn")
+                return None
+
+        self._pending_lesson = None
+        return self._begin_lesson(data)
+
+    def _lesson_data(self, lesson_id, point_id=None):
+        """Данные урока и его блока из учебного плана (или None)."""
+        try:
+            lesson = self.progress_map.get_lesson(lesson_id) or {}
+        except Exception:
+            lesson = {}
+        if not lesson:
+            return None
+        if not point_id:
+            point_id = self._point_of_lesson(lesson_id)
+        point = {}
+        if point_id:
+            try:
+                point = self.progress_map.get_point(point_id) or {}
+            except Exception:
+                point = {}
+        block_title = str(point.get("block_title") or "").strip()
+        title = str(lesson.get("title") or lesson_id).strip()
+        topic = " — ".join(x for x in (block_title, title) if x) or title
+        return {
+            "id": str(lesson.get("id") or lesson_id),
+            "title": title,
+            "type": lesson.get("type"),
+            "topic": topic,
+            "point_id": point_id,
+            "block_number": point.get("number"),
+            "block_title": block_title,
+        }
+
+    def _point_of_lesson(self, lesson_id):
+        """В каком блоке лежит урок (по данным карты)."""
+        try:
+            for point in self.progress_map.points_of("desert"):
+                for item in self.progress_map.lessons_of(str(point.get("id"))):
+                    if str(item.get("id")) == str(lesson_id):
+                        return str(point.get("id"))
+        except Exception:
+            pass
+        return None
+
+    def _microphone_ready(self):
+        """(готово?, сообщение) для уроков, где нужно говорить."""
+        try:
+            has_mic = self.vad.has_input_device()
+        except Exception:
+            has_mic = False
+        if not has_mic:
+            return (False, "🎤 Микрофон не найден — урок «говорение» сейчас недоступен.")
+        if self.stt_ready:
+            return (True, "")
+        if self.stt_state == "loading":
+            return (False, "⏳ Готовлю распознавание — начну урок через несколько секунд.")
+        return (False, "❌ Распознавание речи недоступно — перезапусти приложение.")
+
+    def _begin_lesson(self, data):
+        """Создать сессию занятия, настроить интерфейс и начать диалог."""
+        session = self.lesson.start(
+            lesson_id=data["id"], point_id=data.get("point_id"),
+            lesson_type=data.get("type"), title=data.get("title"),
+            topic=data.get("topic"), block_number=data.get("block_number"),
+            block_title=data.get("block_title"))
+        if session is None:
+            return None
+
+        # занятие — это учёба: режим Джейн «урок» (без служебной строки в чат)
+        self.mode = "lesson"
+        self.chat.set_mode("lesson")
+        try:
+            self.right_panel.set_values(mode="lesson")
+        except Exception:
+            pass
+
+        lesson_payload = {"title": data.get("title"), "type": data.get("type"),
+                          "topic": data.get("topic")}
+        try:
+            self.chat.set_lesson(lesson_payload)
+        except Exception:
+            pass
+        self.info_bar.clear()
+        self.add_message("Джейн", "🎓 Начинаем %s (%s)."
+                         % (session.label(), lesson_mod.type_label(data.get("type"))))
+        try:
+            self.tabs.set("Чат")          # урок идёт в чате — покажем его
+        except Exception:
+            pass
+        self.lesson_bar.set_lesson(session.label(),
+                                   lesson_mod.type_label(data.get("type")),
+                                   session.progress_text())
+        self._apply_lesson_input_state(session)
+        self._lesson_state("thinking")
+        if self.server_ready:
+            self._open_lesson_dialog(lesson_payload)
+        else:
+            # сервер молчит — ждём его («ожидание»), занятие пока «на паузе»
+            self._run_when_server_ready(
+                lambda: self._open_lesson_dialog(lesson_payload),
+                on_timeout=self._lesson_server_timeout)
+        return session
+
+    def _open_lesson_dialog(self, lesson_payload):
+        """Дать Джейн начать занятие (первая реплика урока)."""
+        try:
+            self.chat.begin_lesson(lesson_payload)
+        except Exception as exc:
+            print("⚠️ Не удалось начать занятие в чате: %s" % exc)
+
+    def _lesson_server_timeout(self):
+        """Сервер не ответил за отведённое время — занятие придётся закрыть."""
+        if self.lesson.is_active:
+            self.lesson.abort()
+
+    def _apply_lesson_input_state(self, session):
+        """Включить/выключить текст и запись по типу урока."""
+        if session is None or not session.is_active:
+            self.input_bar.set_locked(False)
+            self.control_bar.set_record_enabled(True)
+            return
+        if session.allows_text():
+            self.input_bar.set_locked(False)
+        else:
+            self.input_bar.set_locked(True, lesson_mod.locked_hint(session.lesson_type))
+        self.control_bar.set_record_enabled(session.allows_voice())
+
+    def _lesson_state(self, state):
+        """Состояние робота во время занятия (пока заглушка — только лог)."""
+        if getattr(self, "character", None) is None:
+            return
+        try:
+            self.character.set_state(state)
+        except Exception:
+            pass
+
+    # ---------- колбэки занятия ----------
+    def _on_lesson_started(self, session):
+        self.lesson_bar.set_lesson(session.label(),
+                                   lesson_mod.type_label(session.lesson_type),
+                                   session.progress_text())
+
+    def _on_lesson_reply(self, state):
+        if state:
+            self.lesson_bar.set_progress("%d/%d" % (state["replies"], state["target"]))
+
+    def _on_lesson_finished(self, session):
+        """Урок доигран до конца: засчитываем и обновляем карту."""
+        user_id = (self.current_user or {}).get("id")
+        try:
+            profile_store.record_lesson_completed(session.lesson_id, user_id)
+        except Exception as exc:
+            print("⚠️ Не удалось засчитать урок: %s" % exc)
+
+        text = "🎉 Урок %s пройден!" % session.lesson_id
+        try:
+            profile = self._active_profile()
+            if (session.point_id
+                    and self.progress_map.get_point_state(session.point_id, profile)
+                    == progress_map.COMPLETED):
+                text += " Блок «%s» пройден целиком!" % (session.block_title or session.point_id)
+        except Exception:
+            pass
+        self.add_message("Джейн", text)
+        self._end_lesson()
+        self._refresh_side_views()
+        self._lesson_state("happy")
+
+    def _on_lesson_aborted(self, session):
+        """Ученик вышел раньше: урок не засчитан (прогресс уже записан)."""
+        self.add_message("Джейн", "⏸ Урок прерван — он не засчитан. Ошибки из разбора сохранены.")
+        self._end_lesson()
+
+    def exit_lesson(self):
+        """Кнопка «Выйти»: прервать занятие и вернуть обычный ввод."""
+        session = self.lesson.current()
+        if session is None or not session.is_active:
+            self._end_lesson()
+            return
+        self.lesson.abort()
+
+    def _end_lesson(self):
+        """Свернуть интерфейс занятия (полоса, блокировка, тема промпта)."""
+        self._server_task = None        # занятие закрыто — ожидание сервера не нужно
+        self.lesson_bar.clear()
+        self.input_bar.set_locked(False)
+        self.control_bar.set_record_enabled(True)
+        try:
+            self.chat.set_lesson(None)
+        except Exception:
+            pass
+
+    def _register_lesson_reply(self):
+        """Учесть реплику ученика в занятии (голос и текст — одинаково)."""
+        if self.lesson.is_active:
+            try:
+                self.lesson.register_reply()
+            except Exception as exc:
+                print("⚠️ Счёт занятия сбился: %s" % exc)
 
     # =====================================================
     # Фон-градиент и раскладка
@@ -907,7 +1161,14 @@ class EnglishTeacherApp:
         self.input_bar.set_busy(busy)
 
     def _on_response(self, user_text, response):
-        """Ответ получен: озвучиваем, гасим эквалайзер, готовим повтор."""
+        """Ответ получен: озвучиваем, гасим эквалайзер, готовим повтор.
+
+        Здесь же закрываем занятие, если ученик набрал нужное число реплик —
+        делаем это ПОСЛЕ ответа Джейн, чтобы последняя реплика успела прозвучать.
+        """
+        session = self.lesson.current()
+        if session is not None and session.is_active and session.should_finish:
+            self.lesson.finish()
         mark = self._jane_mark
         if mark:
             # кнопку «прослушать повторно» показываем ТОЛЬКО после того,
@@ -1030,6 +1291,11 @@ class EnglishTeacherApp:
         self.stt_state = state
         self.stt_ready = (state == "ready")
         self._refresh_status()
+        # урок «говорение», который ждал готовности распознавания, можно начинать
+        if self.stt_ready and self._pending_lesson:
+            lesson_id, point_id = self._pending_lesson
+            self._pending_lesson = None
+            self.window.after(200, lambda: self.start_lesson(lesson_id, point_id))
 
     def _refresh_status(self):
         """Единая точка выбора текста бейджа: сервер + распознавание.
@@ -1051,6 +1317,9 @@ class EnglishTeacherApp:
     def send_text(self):
         text = self.input_bar.get_text()
         if not text:
+            return
+        if self.input_bar.is_locked:
+            self.add_message("Джейн", "🎤 На этом уроке говори в микрофон — текст отключён.")
             return
         self.input_bar.clear_text()
         self.add_message("Вы", text)
@@ -1077,17 +1346,80 @@ class EnglishTeacherApp:
                 self._say(commands.GREETINGS.get(mode))
             return
 
-        if not self._require_server():
+        if self.server_ready:
+            self._send_to_teacher(text)
             return
+        # сервер молчит: сначала «ожидание», и только если долго — «не отвечает»
+        self._run_when_server_ready(lambda: self._send_to_teacher(text))
+
+    def _send_to_teacher(self, text):
+        """Отправить реплику учителю (в занятии — учесть её в счёте)."""
+        self._register_lesson_reply()
         self.chat.send(text)
 
-    def _require_server(self):
-        """True, если сервер готов. Иначе объясняем причину в чате."""
+    def _run_when_server_ready(self, action, on_timeout=None):
+        """Выполнить действие, когда LLM-сервер ответит.
+
+        Сначала проверяем сервер СРАЗУ (одним запросом), дальше «тикаем» по
+        таймеру и читаем уже готовое состояние (монитор обновляет его в фоне).
+        Сообщения: тишина → «ожидание» → (если долго) «не отвечает».
+        """
         if self.server_ready:
-            return True
-        state = self.check_server()
-        self.add_message("Джейн", NOT_READY_LOADING if state == "loading" else NOT_READY_OFFLINE)
-        return False
+            self._safe_call(action)
+            return
+        try:
+            if self.check_server() == "ready":
+                self._safe_call(action)
+                return
+        except Exception as exc:
+            print("⚠️ Не удалось опросить сервер: %s" % exc)
+
+        if self._server_task is not None:
+            return                      # ожидание уже идёт — не плодим их
+        self._server_task = {
+            "action": action,
+            "on_timeout": on_timeout,
+            "waiter": ServerWaiter(
+                getattr(config, "SERVER_WAIT_SECONDS", 15.0),
+                getattr(config, "SERVER_WAIT_POLL_MS", 800),
+                getattr(config, "SERVER_ANNOUNCE_AFTER", 1.5)),
+        }
+        self._poll_server_task()
+
+    def _poll_server_task(self):
+        """Шаг ожидания сервера (вызывается по таймеру)."""
+        task = self._server_task
+        if task is None:
+            return
+        status = task["waiter"].step(bool(self.server_ready))
+        if status == ServerWaiter.READY:
+            self._server_task = None
+            self._safe_call(task["action"])
+            return
+        if status == ServerWaiter.TIMEOUT:
+            self._server_task = None
+            self.add_message("Джейн", NOT_READY_OFFLINE)
+            self._set_status("● Сервер не отвечает", "err")
+            if task.get("on_timeout") is not None:
+                self._safe_call(task["on_timeout"])
+            return
+        if status == ServerWaiter.ANNOUNCE:
+            self._set_status("● Ожидаю сервер…", "warn")
+            self.add_message("Джейн", "⏳ Ожидаю LLM-сервер…")
+        try:
+            self.window.after(int(task["waiter"].poll_ms), self._poll_server_task)
+        except Exception:
+            self._server_task = None
+
+    @staticmethod
+    def _safe_call(fn):
+        """Вызвать fn, не давая исключению сломать окно."""
+        if fn is None:
+            return
+        try:
+            fn()
+        except Exception as exc:
+            print("⚠️ Отложенное действие не выполнилось: %s" % exc)
 
     def _start_recording(self):
         """Нажали «Запись»: пишем, пока кнопка нажата (push-to-talk)."""
@@ -1114,9 +1446,15 @@ class EnglishTeacherApp:
             self._start_recording()
 
     def clear_chat(self):
+        if self.lesson.is_active:
+            self.lesson.abort()
+            self.lesson.reset()
         self.chat_view.clear()
         self.chat.clear_history()
         self.info_bar.clear()
+        self.lesson_bar.clear()
+        self.input_bar.set_locked(False)
+        self.control_bar.set_record_enabled(True)
 
     def _show_panel(self, name):
         """Показать правую панель: только одну из двух."""
@@ -1227,6 +1565,7 @@ class EnglishTeacherApp:
         self.input_bar.apply_theme(p)
         self.control_bar.apply_theme(p)
         self.info_bar.apply_theme(p)
+        self.lesson_bar.apply_theme(p)
         self.right_panel.apply_theme(p)
         self.users_panel.apply_theme(p)
 
