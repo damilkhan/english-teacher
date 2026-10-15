@@ -1,14 +1,17 @@
 # -*- coding: utf-8 -*-
-"""ui.panels.block_panel — окно блока уроков (заглушка Этапа 1).
+"""ui.panels.block_panel — окно блока уроков (запуск занятия).
 
 Открывается по клику на кружок карты. Показывает заголовок блока
-(«Блок 1: Greetings») и ПРЕДПРОСМОТР уроков из curriculum.json.
-Интерактивное дерево уроков (запуск/фильтры/ветвление) — следующий этап,
-поэтому список здесь только для чтения.
+(«Блок 1: Greetings & Hello») и список уроков. Каждый урок можно НАЧАТЬ
+кнопкой «▶» — окно закрывается и возвращает id выбранного урока, а
+приложение запускает занятие (см. ui/app.py → on_point_click).
 
 Устроено как BootPanel: модальное CTkToplevel, transient + grab_set,
 центрирование относительно родителя и classmethod ask() — так его удобно
 глушить в тестах (BlockPanel.ask = staticmethod(lambda *a, **k: None)).
+
+Типы уроков: speaking (говорение), chat (текст), listening (аудирование).
+mixed в интерфейсе не используется.
 """
 
 from __future__ import annotations
@@ -24,11 +27,13 @@ TYPE_LABELS = {
     "speaking": "говорение",
     "chat": "текст",
     "listening": "аудирование",
-    "mixed": "смешанный",
 }
 
-WIDTH = 470
-HEIGHT = 430
+# Значок кнопки запуска (текстовый: ▶ рисуется шрифтом, эмодзи тут не нужны).
+START_ICON = "▶"
+
+WIDTH = 480
+HEIGHT = 440
 
 
 def block_title(point: Optional[Dict[str, Any]]) -> str:
@@ -40,37 +45,45 @@ def block_title(point: Optional[Dict[str, Any]]) -> str:
     return "%s: %s" % (head, title) if title else head
 
 
-def lesson_rows(point: Optional[Dict[str, Any]]) -> List[tuple]:
-    """Строки предпросмотра уроков: [(номер, название, подпись типа)].
+def lesson_items(point: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Список уроков блока: [{"id","title","type","kind","depth"}, …].
 
-    Вложенные `sublessons` показываются с отступом в номере (1.1.1).
+    Вложенные `sublessons` идут с depth=1 (показываются с отступом).
     """
-    rows: List[tuple] = []
-    for lesson in (point or {}).get("lessons") or []:
+    items: List[Dict[str, Any]] = []
+
+    def add(lesson: Dict[str, Any], depth: int) -> None:
         if not isinstance(lesson, dict):
-            continue
-        rows.append((str(lesson.get("id") or ""),
-                     str(lesson.get("title") or ""),
-                     TYPE_LABELS.get(str(lesson.get("type") or ""),
-                                     str(lesson.get("type") or ""))))
+            return
+        ltype = str(lesson.get("type") or "")
+        items.append({
+            "id": str(lesson.get("id") or ""),
+            "title": str(lesson.get("title") or ""),
+            "type": ltype,
+            "kind": TYPE_LABELS.get(ltype, ltype),
+            "depth": depth,
+        })
         for sub in lesson.get("sublessons") or []:
-            if not isinstance(sub, dict):
-                continue
-            rows.append((str(sub.get("id") or ""),
-                         str(sub.get("title") or ""),
-                         TYPE_LABELS.get(str(sub.get("type") or ""),
-                                         str(sub.get("type") or ""))))
-    return rows
+            add(sub, depth + 1)
+
+    for lesson in (point or {}).get("lessons") or []:
+        add(lesson, 0)
+    return items
+
+
+def lesson_rows(point: Optional[Dict[str, Any]]) -> List[tuple]:
+    """Совместимость: строки [(id, title, подпись типа)] (см. lesson_items)."""
+    return [(it["id"], it["title"], it["kind"]) for it in lesson_items(point)]
 
 
 class BlockPanel(ctk.CTkToplevel):
-    """Модальное окно блока: заголовок + предпросмотр уроков."""
+    """Модальное окно блока: заголовок + список уроков с кнопками запуска."""
 
     def __init__(self, parent, palette, point=None, location_title=""):
         super().__init__(parent)
         self.palette = palette
         self.point = point or {}
-        self.result = None
+        self.result = None            # id выбранного урока (или None)
         self._closed = False
 
         self.title(block_title(self.point))
@@ -85,10 +98,10 @@ class BlockPanel(ctk.CTkToplevel):
         card.pack(fill="both", expand=True, padx=16, pady=16)
 
         head = block_title(self.point)
-        subtitle = str(location_title or "").strip()
-        rows = lesson_rows(self.point)
-        subtitle = " · ".join(x for x in (subtitle, "%d %s" % (
-            len(rows), _lessons_word(len(rows)))) if x)
+        items = lesson_items(self.point)
+        subtitle = " · ".join(x for x in (
+            str(location_title or "").strip(),
+            "%d %s" % (len(items), _lessons_word(len(items)))) if x)
 
         ctk.CTkLabel(card, text=head, anchor="w",
                      font=(theme.FONT_PANEL_TITLE[0], 17, "bold"),
@@ -97,42 +110,64 @@ class BlockPanel(ctk.CTkToplevel):
                      font=theme.FONT_SMALL,
                      text_color=p["muted"]).pack(anchor="w", padx=16, pady=(2, 10))
 
-        # --- предпросмотр уроков (только чтение) ---
+        # --- уроки блока (можно начать любой) ---
         box = ctk.CTkFrame(card, fg_color=p["surface_alt"],
                            corner_radius=theme.R["block"])
         box.pack(fill="both", expand=True, padx=16, pady=(0, 10))
-        if rows:
-            for num, title, kind in rows:
-                row = ctk.CTkFrame(box, fg_color="transparent")
-                row.pack(fill="x", padx=12, pady=3)
-                ctk.CTkLabel(row, text=num, width=54, anchor="w",
-                             font=theme.FONT_SMALL,
-                             text_color=p["muted"]).pack(side="left")
-                ctk.CTkLabel(row, text=title, anchor="w",
-                             font=theme.FONT_UI,
-                             text_color=p["text"]).pack(side="left", padx=(4, 0))
-                if kind:
-                    ctk.CTkLabel(row, text=kind, anchor="e",
-                                 font=theme.FONT_SMALL,
-                                 text_color=p["cyan"]).pack(side="right")
+        if items:
+            for item in items:
+                self._lesson_row(box, item, p)
         else:
             ctk.CTkLabel(box, text="Содержание появится позже.",
                          font=theme.FONT_UI, text_color=p["muted"]).pack(pady=22)
 
-        ctk.CTkLabel(card, text="Скоро: интерактивное дерево уроков и запуск занятия.",
+        ctk.CTkLabel(card, text="Выбери урок — занятие начнётся в чате.",
                      anchor="w", font=theme.FONT_SMALL,
                      text_color=p["muted"]).pack(anchor="w", padx=16, pady=(0, 8))
 
-        ctk.CTkButton(card, text="Понятно", command=self._close,
-                      fg_color=p["accent"], hover_color=p["accent_hover"],
-                      text_color="#FFFFFF", height=38, cursor="hand2",
-                      font=theme.FONT_UI, corner_radius=theme.R["button"]
+        ctk.CTkButton(card, text="Закрыть", command=self._close,
+                      fg_color=p["btn"], hover_color=p["btn_hover"],
+                      text_color=p["text"], height=38, cursor="hand2",
+                      font=theme.FONT_UI, corner_radius=theme.R["button"],
+                      border_width=1, border_color=p["border"]
                       ).pack(fill="x", padx=16, pady=(0, 16))
 
         self.after(80, self._grab)
         self.bind("<Escape>", lambda _e: self._close())
 
     # -----------------------------------------------------
+    def _lesson_row(self, parent, item: Dict[str, Any], p) -> None:
+        """Строка одного урока: номер · название · тип · кнопка «Начать»."""
+        row = ctk.CTkFrame(parent, fg_color="transparent")
+        row.pack(fill="x", padx=10, pady=3)
+
+        start_btn = ctk.CTkButton(
+            row, text="%s  Начать" % START_ICON, width=104, height=28,
+            fg_color=p["accent"], hover_color=p["accent_hover"],
+            text_color="#FFFFFF", cursor="hand2",
+            corner_radius=theme.R["button"], font=theme.FONT_SMALL,
+            command=lambda lid=item["id"]: self._pick(lid))
+        start_btn.pack(side="right", padx=(8, 0))
+
+        if item.get("kind"):
+            ctk.CTkLabel(row, text=item["kind"], anchor="e",
+                         font=theme.FONT_SMALL,
+                         text_color=p["cyan"]).pack(side="right", padx=(8, 0))
+
+        title_lbl = ctk.CTkLabel(row, text=item.get("title") or "", anchor="w",
+                                 font=theme.FONT_UI, text_color=p["text"])
+        title_lbl.pack(side="left", padx=(4 + 14 * int(item.get("depth") or 0), 0))
+
+        ctk.CTkLabel(row, text=item.get("id") or "", width=58, anchor="w",
+                     font=theme.FONT_SMALL,
+                     text_color=p["muted"]).pack(side="left")
+
+    # -----------------------------------------------------
+    def _pick(self, lesson_id: str) -> None:
+        """Выбран урок: запомнить и закрыть окно."""
+        self.result = str(lesson_id or "") or None
+        self._close()
+
     def _center(self, parent, w, h):
         try:
             parent.update_idletasks()
@@ -162,7 +197,7 @@ class BlockPanel(ctk.CTkToplevel):
     # -----------------------------------------------------
     @classmethod
     def ask(cls, parent, palette, point=None, location_title=""):
-        """Показать окно блока и дождаться закрытия. Возвращает None."""
+        """Показать окно и дождаться закрытия. Возвращает id урока или None."""
         panel = cls(parent, palette, point=point, location_title=location_title)
         try:
             parent.wait_window(panel)

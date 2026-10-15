@@ -152,6 +152,13 @@ class ControlBar(ctk.CTkFrame):
             if image is not None:
                 self.record_btn.configure(image=image, compound="left")
 
+    def set_record_enabled(self, enabled):
+        """Включить/выключить кнопку записи (в chat-уроке микрофон не нужен)."""
+        try:
+            self.record_btn.configure(state="normal" if enabled else "disabled")
+        except Exception:
+            pass
+
     # ---------- оформление ----------
     def apply_theme(self, palette):
         self.palette = palette

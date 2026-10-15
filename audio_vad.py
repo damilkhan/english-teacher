@@ -22,6 +22,27 @@ class AudioVAD:
     def set_stop_callback(self, callback):
         self.stop_callback = callback
 
+    def has_input_device(self):
+        """Есть ли в системе устройство ВВОДА звука (микрофон).
+
+        Нужно ЗАРАНЕЕ, чтобы урок «говорение» не начинался там, где говорить
+        физически нечем. Исключения не пробрасываем: нет ответа — считаем,
+        что микрофон недоступен (лучше честно сказать ученику).
+        """
+        try:
+            import sounddevice as sd
+            devices = sd.query_devices()
+        except Exception as exc:
+            print(f"⚠️ Микрофон: не удалось опросить устройства ({exc})")
+            return False
+        try:
+            for d in devices:
+                if int(d.get("max_input_channels", 0)) > 0:
+                    return True
+        except Exception:
+            return False
+        return False
+
     def _find_input_device(self):
         """Находит первый доступный входной микрофон"""
         try:

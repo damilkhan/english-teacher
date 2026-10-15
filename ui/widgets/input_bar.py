@@ -33,6 +33,10 @@ import theme
 
 PLACEHOLDER = "Напиши сообщение…"
 SEND_TEXT = "Отправить"
+# Подсказка в поле, когда идёт урок «только голосом» — текст запрещён.
+LOCK_HINT = "🔒 Говорите в микрофон"
+# Подпись кнопки отправки, пока текст заблокирован занятием.
+LOCK_BUTTON_TEXT = "🎤 Голосом"
 
 # Клавиши, после которых подсказка обязана уйти: печатающие символы плюс те,
 # что меняют содержимое (Backspace/Delete) и вставку из буфера (Ctrl+V).
@@ -48,6 +52,8 @@ class InputBar(ctk.CTkFrame):
         self._placeholder_on = False
         self._enabled = True      # разрешена ли отправка (профиль/сервер)
         self._busy = False        # идёт ответ Джейн
+        self._locked = False      # занятие запрещает текстовый ввод (урок «голосом»)
+        self._lock_hint = LOCK_HINT
         self._hint = ""           # почему отправка недоступна
 
         self.textbox = ctk.CTkTextbox(
@@ -100,16 +106,16 @@ class InputBar(ctk.CTkFrame):
 
     def clear_text(self):
         self._placeholder_on = False
-        self.textbox.delete("0.0", "end")
+        self._replace_field_text("", self.palette["text"])
+        if self._locked:
+            self._show_placeholder(self._lock_hint)
         # если поле не в фокусе — снова показываем подсказку
-        if not self._is_focused():
+        elif not self._is_focused():
             self._show_placeholder()
 
     def set_text(self, text):
         self._placeholder_on = False
-        self.textbox.delete("0.0", "end")
-        self.textbox.insert("0.0", text)
-        self.textbox.configure(text_color=self.palette["text"])
+        self._replace_field_text(str(text), self.palette["text"])
 
     def set_busy(self, busy):
         self._busy = bool(busy)
@@ -125,14 +131,50 @@ class InputBar(ctk.CTkFrame):
         self._hint = hint or ""
         self._apply_state()
 
+    def set_locked(self, locked, hint=""):
+        """Мягко заблокировать ТЕКСТОВЫЙ ввод (урок «только голосом»).
+
+        Не выключаем виджет насовсем: поле показывает подсказку-замок и не
+        принимает символы, но остаётся на месте (плейсхолдер и фокус не
+        ломаются). Гейт «профиль/сервер» живёт отдельно — состояния
+        сводятся вместе в _apply_state, поэтому они не «перетирают» друг друга.
+        """
+        self._locked = bool(locked)
+        self._lock_hint = hint or LOCK_HINT
+        self._apply_state()
+
+    @property
+    def is_locked(self):
+        return self._locked
+
     def _apply_state(self):
-        """Кнопка отправки: «Думаю…» > причина блокировки > норма."""
-        if self._busy:
-            self.send_btn.configure(state="disabled", text="Думаю…")
-        elif not self._enabled:
+        """Единая точка состояния поля и кнопки.
+
+        Приоритет: гейт (нет профиля/сервера) > «Думаю…» > блокировка урока.
+        Поле редактируемо только когда НЕТ блокировки урока.
+        """
+        if not self._enabled:
             self.send_btn.configure(state="disabled", text=(self._hint or "Недоступно"))
+        elif self._busy:
+            self.send_btn.configure(state="disabled", text="Думаю…")
+        elif self._locked:
+            self.send_btn.configure(state="disabled", text=LOCK_BUTTON_TEXT)
         else:
             self.send_btn.configure(state="normal", text=SEND_TEXT)
+
+        self._set_editable(not self._locked)
+        if self._locked:
+            self._show_placeholder(self._lock_hint)
+        elif self._placeholder_on or not self._real_text().strip():
+            # снимаем «замок»: на экране была подсказка — вернём обычную
+            self._show_placeholder()
+
+    def _set_editable(self, editable):
+        """Разрешить/запретить РУЧНОЙ ввод (программный текст всё равно пишем)."""
+        try:
+            self._field.configure(state="normal" if editable else "disabled")
+        except Exception:
+            pass
 
     def focus_input(self):
         try:
@@ -159,13 +201,35 @@ class InputBar(ctk.CTkFrame):
             return False
         return focused in (self.textbox, self._field)
 
-    def _show_placeholder(self):
-        if self._placeholder_on:
-            return
+    def _replace_field_text(self, text, color):
+        """Записать текст в поле, ВРЕМЕННО снимая «disabled».
+
+        ГРАБЛЯ Tk: у выключенного текстового виджета команды delete/insert
+        молча НИЧЕГО не делают (без исключения!) — поэтому подсказку-замок
+        иначе не поставить. Включаем, пишем, возвращаем состояние обратно.
+        """
+        state = None
+        try:
+            state = str(self._field.cget("state"))
+            if state == "disabled":
+                self._field.configure(state="normal")
+            self.textbox.delete("0.0", "end")
+            self.textbox.insert("0.0", text)
+            self.textbox.configure(text_color=color)
+        except Exception:
+            pass
+        finally:
+            if state == "disabled":
+                try:
+                    self._field.configure(state="disabled")
+                except Exception:
+                    pass
+
+    def _show_placeholder(self, text=None):
+        """Показать подсказку (обычную или «замок»)."""
+        text = PLACEHOLDER if text is None else str(text)
         self._placeholder_on = True
-        self.textbox.delete("0.0", "end")
-        self.textbox.insert("0.0", PLACEHOLDER)
-        self.textbox.configure(text_color=self.palette["muted"])
+        self._replace_field_text(text, self.palette["muted"])
 
     def _drop_placeholder(self):
         """Убирает подсказку, если она сейчас на экране.
@@ -178,14 +242,14 @@ class InputBar(ctk.CTkFrame):
         if not self._placeholder_on:
             return False
         self._placeholder_on = False
-        self.textbox.delete("0.0", "end")
-        self.textbox.configure(text_color=self.palette["text"])
+        self._replace_field_text("", self.palette["text"])
         return True
 
     # ---------- события ----------
     def _on_focus_in(self, _event=None):
         self.textbox.configure(border_color=self.palette["accent"])
-        self._drop_placeholder()
+        if not self._locked:
+            self._drop_placeholder()
 
     def _on_focus_out(self, _event=None):
         self.textbox.configure(border_color=self.palette["border"])
@@ -193,6 +257,8 @@ class InputBar(ctk.CTkFrame):
             self._show_placeholder()
 
     def _on_key_press(self, event=None):
+        if self._locked:
+            return None
         if not self._placeholder_on:
             return None
         # Shift и стрелки подсказку не трогают: иначе она пропадала бы от
@@ -206,7 +272,10 @@ class InputBar(ctk.CTkFrame):
 
     def _on_click_in_field(self, _event=None):
         # клик по полю с подсказкой: поле должно стать обычным пустым полем,
-        # курсор встанет в начало — клик дальше Tk обработает сам
+        # курсор встанет в начало — клик дальше Tk обработает сам.
+        # При блокировке урока подсказка-замок остаётся на месте.
+        if self._locked:
+            return None
         self._drop_placeholder()
         return None
 
