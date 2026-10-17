@@ -18,9 +18,21 @@ class AudioVAD:
         self.max_seconds = max_seconds
         self._start_time = None
         self.stop_callback = None
+        # уровень громкости микрофона 0..100 (для эквалайзера и губ робота).
+        # Пишется из аудио-потока, читается из главного — гонки безобидны.
+        self.level = 0.0
+        self.level_at = 0.0
+        self.level_stale = 0.25
 
     def set_stop_callback(self, callback):
         self.stop_callback = callback
+
+    def get_level(self):
+        """Текущая громкость микрофона 0..100 (0.0, если давно тишина)."""
+        import time as _time
+        if _time.monotonic() - self.level_at > self.level_stale:
+            return 0.0
+        return self.level
 
     def has_input_device(self):
         """Есть ли в системе устройство ВВОДА звука (микрофон).
@@ -61,6 +73,7 @@ class AudioVAD:
         self.current_audio = b""
         self.silence_counter = 0
         self._start_time = time.time()
+        self.level = 0.0
         device = self._find_input_device()
         self.stream = sd.RawInputStream(
             samplerate=self.sample_rate,
@@ -78,6 +91,7 @@ class AudioVAD:
         if not self.is_recording:
             return
         self.is_recording = False
+        self.level = 0.0
         if self.stream:
             self.stream.stop()
             self.stream.close()
@@ -112,6 +126,9 @@ class AudioVAD:
             self.current_audio += bytes(indata)
             audio_array = np.frombuffer(bytes(indata), dtype=np.int16)
             volume = np.abs(audio_array).mean()
+            # тот же масштаб, что у озвучки: речь ~1500..4000 → 37..100
+            self.level = max(0.0, min(100.0, float(volume) / 40.0))
+            self.level_at = time.monotonic()
             if volume > 100:
                 self.silence_counter = 0
             else:

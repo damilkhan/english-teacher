@@ -243,6 +243,37 @@ def split_by_language(text):
 # ---------------------------------------------------------
 # Состояние (модуль-уровень: сериализация, прерывание, кэш)
 # ---------------------------------------------------------
+# --- уровень громкости для «эквалайзера» и рта робота ---
+# Пишется из потока озвучки, читается из главного потока (простая переменная:
+# гонки здесь безобидны — значение живёт миллисекунды).
+_level = 0.0                 # 0..100
+_level_at = 0.0              # время последнего обновления (monotonic)
+LEVEL_STALE = 0.25           # дольше — считаем, что звука нет
+
+
+def _report_level(mean_abs: float) -> None:
+    """Обновить уровень по средней амплитуде буфера (int16)."""
+    global _level, _level_at
+    try:
+        # средняя амплитуда речи ~1500..4000 → 37..100 по шкале 0..100
+        _level = max(0.0, min(100.0, float(mean_abs) / 40.0))
+    except (TypeError, ValueError):
+        _level = 0.0
+    _level_at = time.monotonic()
+
+
+def get_level() -> float:
+    """Текущая громкость озвучки 0..100 (0.0, если звука нет)."""
+    if time.monotonic() - _level_at > LEVEL_STALE:
+        return 0.0
+    return _level
+
+
+def _reset_level() -> None:
+    global _level
+    _level = 0.0
+
+
 _lock = threading.Lock()            # один синтез + одно проигрывание за раз
 _stop = threading.Event()           # запрос прервать текущее проигрывание
 _gen = 0                            # номер последней ЗАПРОШЕННОЙ озвучки
@@ -269,6 +300,7 @@ def stop() -> None:
     ничего не играет и когда звуковая карта недоступна).
     """
     _stop.set()
+    _reset_level()
     try:
         if pygame.mixer.get_init():
             pygame.mixer.music.stop()
@@ -317,6 +349,7 @@ def speak(text: str, name=None, name_latin=None) -> None:
         if _streaming_enabled():
             try:
                 if _stream_play_segments(segments, my_gen):
+                    _reset_level()
                     return
             except Exception as exc:           # noqa: BLE001 — вернёмся к запасному
                 _log.warning("TTS: сегментный путь не сработал (%s)", exc)
@@ -547,6 +580,10 @@ def _stream_once(text: str, voice: str, my_gen: int) -> bool:
                 arr = _np.column_stack([arr, arr])
             out.write(_np.ascontiguousarray(arr))
             played = True
+            try:                      # громкость → эквалайзер и губы робота
+                _report_level(float(_np.abs(arr).mean()))
+            except Exception:         # noqa: BLE001 — измерение не должно мешать звуку
+                pass
             if _stop.is_set() or my_gen != _current_generation():
                 return False
         return True
@@ -620,6 +657,10 @@ def _decode_into(out, data, samplerate, channels, my_gen) -> bool:
                 arr = _np.column_stack([arr, arr])
             out.write(_np.ascontiguousarray(arr))
             played = True
+            try:                      # громкость → эквалайзер и губы робота
+                _report_level(float(_np.abs(arr).mean()))
+            except Exception:         # noqa: BLE001 — измерение не должно мешать звуку
+                pass
 
     try:
         for frame in container.decode(audio=0):
@@ -662,6 +703,10 @@ def _decode_stream_into(out, text, voice, samplerate, channels, my_gen) -> bool:
                 arr = _np.column_stack([arr, arr])
             out.write(_np.ascontiguousarray(arr))
             played = True
+            try:                      # громкость → эквалайзер и губы робота
+                _report_level(float(_np.abs(arr).mean()))
+            except Exception:         # noqa: BLE001 — измерение не должно мешать звуку
+                pass
 
     try:
         for frame in container.decode(audio=0):

@@ -34,6 +34,7 @@ import lesson as lesson_mod
 import model_registry
 import profile_store
 import progress_map
+import reactions
 import server_manager
 import settings_store
 import stt_engine
@@ -195,6 +196,10 @@ class EnglishTeacherApp:
         self.stt_state = "loading"      # loading | ready | error
         self.stt_ready = False
         self._status_text, self._status_color = INITIAL_STATUS
+        self._last_speaker = "jane"     # чей цвет на эквалайцере
+        self.reactions = reactions.ReactionTracker()   # 3 промаха → похвала
+        self._mood_plan = None          # план эмоций текущей реплики
+        self._mood_at = 0.0             # сколько реплики уже прозвучало
         self._hero_fonts = {}      # заполним ниже, после создания окна
 
         # ---------- окно ----------
@@ -305,6 +310,7 @@ class EnglishTeacherApp:
         self.monitor.start()
         self.stt.preload()                      # Whisper — в фоне, окно не ждёт
         self.window.after(60, self._redraw)     # первая отрисовка после раскладки
+        self.window.after(120, self._visual_tick)   # эквалайзер: кто говорит
         self._refresh_input_state()             # чат закрыт, пока нет профиля/модели
         # неполный профиль → обязательная форма; иначе (нет уровня) — тест
         self.window.after(200, self._first_run_flow)
@@ -453,6 +459,10 @@ class EnglishTeacherApp:
         profile_store.set_active_user(user_id)
         profile_store.ensure_profile(user_id)
         self.chat.set_user(user_id)         # сброс истории диалога
+        try:
+            self.reactions.reset()          # у нового ученика свой счёт
+        except Exception:
+            pass
         self.chat_view.clear()
         self.info_bar.clear()
         self.add_message("Джейн", self._greeting())
@@ -832,14 +842,18 @@ class EnglishTeacherApp:
         block_title = str(point.get("block_title") or "").strip()
         title = str(lesson.get("title") or lesson_id).strip()
         topic = " — ".join(x for x in (block_title, title) if x) or title
+        lesson_type = lesson.get("type")
         return {
             "id": str(lesson.get("id") or lesson_id),
             "title": title,
-            "type": lesson.get("type"),
+            "type": lesson_type,
             "topic": topic,
             "point_id": point_id,
             "block_number": point.get("number"),
             "block_title": block_title,
+            # что Джейн делает в начале: для listening — рассказывает историю
+            "task": lesson_mod.opening_task(lesson_type),
+            "story": lesson_mod.is_story_lesson(lesson_type),
         }
 
     def _point_of_lesson(self, lesson_id):
@@ -886,14 +900,21 @@ class EnglishTeacherApp:
             pass
 
         lesson_payload = {"title": data.get("title"), "type": data.get("type"),
-                          "topic": data.get("topic")}
+                          "topic": data.get("topic"), "task": data.get("task")}
         try:
             self.chat.set_lesson(lesson_payload)
         except Exception:
             pass
         self.info_bar.clear()
-        self.add_message("Джейн", "🎓 Начинаем %s (%s)."
-                         % (session.label(), lesson_mod.type_label(data.get("type"))))
+        opening = "🎓 Начинаем %s (%s)." % (
+            session.label(), lesson_mod.type_label(data.get("type")))
+        if data.get("story"):
+            opening += "\n🎧 Слушай историю, а потом перескажи её — по-русски или по-английски."
+        try:
+            self.reactions.reset()          # новый урок — новый счёт стараний
+        except Exception:
+            pass
+        self.add_message("Джейн", opening)
         try:
             self.tabs.set("Чат")          # урок идёт в чате — покажем его
         except Exception:
@@ -1159,6 +1180,143 @@ class EnglishTeacherApp:
     def _set_busy(self, busy):
         self.busy = busy
         self.input_bar.set_busy(busy)
+        if busy:
+            self._character_state("thinking")      # «думает»: прищур и форма рта
+        elif self._character_state() == "thinking":
+            self._character_state("idle")
+
+    # -----------------------------------------------------
+    # Лицо робота: эмоции и реакции
+    # -----------------------------------------------------
+    def _character_state(self, state=None):
+        """Поставить/прочитать состояние лица робота."""
+        char = getattr(self, "character", None)
+        if char is None or not getattr(char, "available", False):
+            return None
+        if state is None:
+            return getattr(char, "state", None)
+        try:
+            char.set_state(state)
+        except Exception as exc:
+            print("⚠️ Робот: состояние не сменилось (%s)" % exc)
+        return getattr(char, "state", None)
+
+    def _start_mood_play(self, response):
+        """Начать «игру лицом» по тексту ответа: настроение по предложениям."""
+        try:
+            import mood as mood_mod
+            plan = mood_mod.plan_reply(response)
+        except Exception as exc:
+            print("⚠️ Настроение не разобрано: %s" % exc)
+            plan = None
+        self._mood_plan = plan
+        self._mood_at = 0.0
+        if plan is None or not plan.segments:
+            self._character_state("speak_story")
+            return
+        self._character_state(self._mood_state(plan, 0))
+
+    @staticmethod
+    def _mood_state(plan, index):
+        """Состояние лица для куска плана."""
+        try:
+            import character_face as cf
+            segment = plan.segments[min(index, len(plan.segments) - 1)]
+            return cf.state_for_mood(segment.mood, story=plan.story)
+        except Exception:
+            return "speaking"
+
+    def _mood_tick(self):
+        """Во время озвучки менять лицо по ходу рассказа (по времени)."""
+        plan = self._mood_plan
+        if plan is None or not plan.segments:
+            return
+        try:
+            import tts
+            level = float(tts.get_level())
+        except Exception:
+            level = 0.0
+        # время «звучания» накапливаем, пока есть звук
+        if level > 2.0:
+            self._mood_at += 0.1
+        index = 0
+        left = self._mood_at
+        for i, seg in enumerate(plan.segments):
+            if left < seg.seconds:
+                index = i
+                break
+            left -= seg.seconds
+            index = i
+        state = self._mood_state(plan, index)
+        char = getattr(self, "character", None)
+        if char is not None and getattr(char, "available", False):
+            try:
+                char.set_level(level, speaking=(level > 2.0))
+                if getattr(char, "state", None) != state:
+                    char.set_state(state)
+            except Exception:
+                pass
+
+    def _react_to_analysis(self, result):
+        """Реакция на разбор Аналитика: 3 промаха → верный ответ → похвала.
+
+        Сначала УДИВЛЕНИЕ (1.5 с), потом ОДОБРИТЕЛЬНАЯ УЛЫБКА — как договорились.
+        """
+        try:
+            correct = reactions.answer_is_correct(result)
+            reaction = self.reactions.record(correct)
+        except Exception as exc:
+            print("⚠️ Реакция не сработала: %s" % exc)
+            return
+        if reaction:
+            char = getattr(self, "character", None)
+            if char is not None and getattr(char, "available", False):
+                try:
+                    char.play_sequence(reaction.steps)
+                except Exception as exc:
+                    print("⚠️ Сценарий реакции не запустился: %s" % exc)
+
+    # -----------------------------------------------------
+    # Эквалайзер «кто говорит»
+    # -----------------------------------------------------
+    def _visual_tick(self):
+        """Опрос громкости: 0..100 от озвучки Джейн и от микрофона ученика.
+
+        Виджет только рисует — сигнал берём из tts.get_level() (Джейн) и
+        vad.get_level() (ученик). Цвет эквалайзера показывает говорящего.
+        """
+        try:
+            jane = 0.0
+            user = 0.0
+            try:
+                jane = float(tts.get_level())
+            except Exception:
+                jane = 0.0
+            try:
+                if self.recorder.is_recording:
+                    user = float(self.vad.get_level())
+            except Exception:
+                user = 0.0
+
+            if user > 2.0 and user >= jane:
+                speaker, level = "user", user
+            elif jane > 2.0:
+                speaker, level = "jane", jane
+            else:
+                speaker, level = self._last_speaker, 0.0
+            self._last_speaker = speaker
+            self.visualizer.update_level(level, speaker)
+            char = getattr(self, "character", None)
+            if char is not None and getattr(char, "available", False):
+                char.set_level(level, speaking=(speaker == "jane" and level > 2.0))
+            if speaker == "jane":
+                self._mood_tick()
+        except Exception as exc:
+            print("⚠️ Эквалайзер: %s" % exc)
+        try:
+            self.window.after(60, self._visual_tick)
+        except Exception:
+            pass
 
     def _on_response(self, user_text, response):
         """Ответ получен: озвучиваем, гасим эквалайзер, готовим повтор.
@@ -1169,6 +1327,9 @@ class EnglishTeacherApp:
         session = self.lesson.current()
         if session is not None and session.is_active and session.should_finish:
             self.lesson.finish()
+
+        # «актёрская игра»: настроение её собственного текста
+        self._start_mood_play(response)
         mark = self._jane_mark
         if mark:
             # кнопку «прослушать повторно» показываем ТОЛЬКО после того,
@@ -1187,8 +1348,9 @@ class EnglishTeacherApp:
     # «Учительский» вид: разбор Аналитика и план урока
     # =====================================================
     def _on_analysis(self, result):
-        """Разбор Аналитика → тонкая строка (не в чат)."""
+        """Разбор Аналитика → тонкая строка (не в чат) + реакция робота."""
         self.info_bar.set_analysis(self._analysis_text(result))
+        self._react_to_analysis(result)
 
     @staticmethod
     def _analysis_text(result):
@@ -1258,6 +1420,8 @@ class EnglishTeacherApp:
 
     def _on_recording_changed(self, recording):
         self.control_bar.set_recording(recording)
+        # слушает ученика: улыбка, кивки, моргание
+        self._character_state("listening" if recording else "idle")
 
     def _on_recognized(self, text, lang):
         self.current_lang = lang
