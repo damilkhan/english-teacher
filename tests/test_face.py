@@ -219,6 +219,49 @@ def main():
         t_e += dt_b
     check("story_end длится ~3 с", 2.7 <= held <= 3.5, round(held, 2))
     check("после story_end — покой", e.state == cf.IDLE, e.state)
+    # ---------- 10. Глаза не выглядят закрытыми во время речи ----------
+    print("\n[10] Во время речи глаза ОТКРЫТЫ")
+    # Слои eyes_smile (19 px) и eyes_scorn (24 px) — тонкие дуги: на теле они
+    # выглядят как ЗАКРЫТЫЕ глаза. В длинной речи их быть не должно, иначе
+    # ученик думает, что Джейн зажмурилась надолго.
+    speaking_states = (cf.SPEAKING, cf.SPEAK_HAPPY, cf.SPEAK_SAD,
+                       cf.SPEAK_SURPRISED, cf.SPEAK_THINKING, cf.SPEAK_STORY)
+    squint_in_speech = [name for name in speaking_states
+                        if cf.STATES[name].eyes in cf.SQUINT_EYES]
+    check("ни одно говорящее состояние не прищуривается", not squint_in_speech,
+          squint_in_speech)
+    check("радость в речи — открытые глаза",
+          cf.STATES[cf.SPEAK_HAPPY].eyes not in cf.SQUINT_EYES,
+          cf.STATES[cf.SPEAK_HAPPY].eyes)
+    check("реакции-улыбки короткие (<= 1.7 с)",
+          cf.STATES[cf.HAPPY].transient <= 1.7 and cf.STATES[cf.SMILE].transient <= 1.7,
+          (cf.STATES[cf.HAPPY].transient, cf.STATES[cf.SMILE].transient))
+
+    # ---------- 11. Нет длинных промежуточных кадров ----------
+    print("\n[11] Смена глаз без «полузакрытых» промежуточных кадров")
+    check("переход короче 0.06 с (иначе 2-3 кадра с прищуром)",
+          cf.EYES_FADE <= 0.06, cf.EYES_FADE)
+    f_anim = cf.FaceAnimator(seed=3)
+    f_anim.set_state(cf.SPEAKING)
+    f_anim.set_state(cf.SPEAK_HAPPY)
+    blended = 0
+    for _ in range(12):
+        frame = f_anim.tick(1 / 11.0, level=60.0, speaking=True)
+        if frame.eyes_from and 0.0 < frame.eyes_mix < 1.0:
+            blended += 1
+    check("смешанных кадров не больше одного", blended <= 1, blended)
+
+    # ---------- 12. Радостный текст говорит с открытыми глазами ----------
+    print("\n[12] Радостный текст (эмодзи) — глаза открыты")
+    import mood as mood_mod
+    happy_plan = mood_mod.plan_reply(
+        "Hello! 😊 How are you this evening? Planning anything fun? ✨")
+    bad = []
+    for seg in happy_plan.segments:
+        state = cf.state_for_mood(seg.mood, story=happy_plan.story)
+        if cf.STATES[state].eyes in cf.SQUINT_EYES:
+            bad.append((seg.mood, state, cf.STATES[state].eyes))
+    check("ни один кусок не даёт прищура", not bad, bad)
     print("\n" + "=" * 60)
     if FAILED:
         print(f"ПРОВАЛЕНО: {len(FAILED)} → {FAILED}")

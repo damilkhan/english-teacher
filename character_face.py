@@ -85,7 +85,11 @@ GAZE_HOLD = 0.75           # сколько смотрим в сторону
 # в одну точку).
 GAZE_MAX_HOLD = 1.1
 
-EYES_FADE = 0.12           # плавность смены глаз (эмоции, взгляд)
+# Переход между слоями глаз. Короткий намеренно: при плавном (0.12 с)
+# получалось 2-3 промежуточных кадра с «полузакрытыми» глазами — ученик
+# воспринимал это как долгое прищуривание. 0.05 с — глазу почти незаметно,
+# но дёрганья нет.
+EYES_FADE = 0.05
 STORY_END_HOLD = 3.0       # в конце рассказа — «закрыла глаза» на 3 с
 MOUTH_RATE = 6.2           # «слогов» в секунду во время речи
 MOUTH_SILENCE = 0.12       # тишина дольше — рот закрывается
@@ -157,12 +161,12 @@ STATES: Dict[str, StateConfig] = {
     # радость (урок пройден / похвала) — держится подольше
     HAPPY: StateConfig(eyes="eyes_happy", mouth_closed=_M_SMILE[0],
                        static_mouth=_M_SMILE[0], blink=False, gaze=False,
-                       transient=2.6),
+                       transient=1.6),
 
     # тёплая улыбка (мягкая похвала)
     SMILE: StateConfig(eyes="eyes_smile", mouth_closed=_M_SMILE[0],
                        static_mouth=_M_SMILE[0], blink=False, gaze=False,
-                       transient=2.2),
+                       transient=1.2),
 
     # грусть — наигранная: держится 1.5 с и СМЕНЯЕТСЯ УЛЫБКОЙ
     # (именно переход в улыбку и делает её «слегка наигранной»)
@@ -186,7 +190,10 @@ STATES: Dict[str, StateConfig] = {
                        transient=1.5),
 
     # ---------- «говорящие» варианты (рот двигается по громкости) ----------
-    SPEAK_HAPPY: StateConfig(eyes="eyes_smile", mouth_closed=_M_SMILE[0],
+    # ГОВОРЯЩАЯ радость: глаза ОБЫЧНЫЕ ОТКРЫТЫЕ, а радуется РОТ.
+    # (Слой eyes_smile — тонкая дуга 19 px, он ВЫГЛЯДИТ как закрытые глаза,
+    #  поэтому для длинной речи он не годится: ученик видит «зажмурилась».)
+    SPEAK_HAPPY: StateConfig(eyes="eyes_normal_open", mouth_closed=_M_SMILE[0],
                              mouth_half=_M_SMILE[1], mouth_open=_M_SMILE[1],
                              blink=True, gaze=True, talk=True),
     SPEAK_SAD: StateConfig(eyes="eyes_sad", mouth_closed=_M_SAD[0],
@@ -208,6 +215,11 @@ STATES: Dict[str, StateConfig] = {
                            static_mouth=_M_SMILE[0], blink=False, gaze=False,
                            transient=STORY_END_HOLD, transient_to=IDLE),
 }
+
+
+# Слои глаз, которые ВЫГЛЯДЯТ закрытыми (тонкая дуга или прищур):
+# в длинной речи их нельзя использовать — ученик решит, что Джейн зажмурилась.
+SQUINT_EYES = ("eyes_closed", "eyes_closed_shut", "eyes_smile", "eyes_scorn")
 
 
 # Настроение текста (mood.py) → «говорящее» состояние лица.

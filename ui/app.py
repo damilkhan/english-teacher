@@ -220,6 +220,7 @@ class EnglishTeacherApp:
         self.reactions = reactions.ReactionTracker()   # 3 промаха → похвала
         self._mood_plan = None          # план эмоций текущей реплики
         self._mood_at = 0.0             # сколько реплики уже прозвучало
+        self._mood_last = 0.0           # метка времени прошлого такта
         self._hero_fonts = {}      # заполним ниже, после создания окна
 
         # ---------- окно ----------
@@ -1235,6 +1236,7 @@ class EnglishTeacherApp:
             plan = None
         self._mood_plan = plan
         self._mood_at = 0.0
+        self._mood_last = time.monotonic()
         if plan is None or not plan.segments:
             self._character_state("speak_story")
             return
@@ -1260,11 +1262,17 @@ class EnglishTeacherApp:
             level = float(tts.get_level())
         except Exception:
             level = 0.0
+        now = time.monotonic()
+        if self._mood_last <= 0.0:
+            self._mood_last = now
+        # время «звучания» считаем по РЕАЛЬНЫМ часам, а не «по тику»:
+        # такт может приходить с разной частотой, и фиксированный шаг
+        # ускорял бы смену настроения (куски кончались раньше речи).
+        elapsed = now - self._mood_last
+        self._mood_last = now
         if level <= 2.0:
             return              # тишина: лицо не трогаем (пусть доигрывает своё)
-        # время «звучания» накапливаем, пока есть звук
-        if level > 2.0:
-            self._mood_at += 0.1
+        self._mood_at += max(0.0, min(0.5, elapsed))
         index = 0
         left = self._mood_at
         for i, seg in enumerate(plan.segments):
@@ -1380,6 +1388,12 @@ class EnglishTeacherApp:
             except Exception:
                 pass
         if not story:
+            # обычный ответ досказан: возвращаем спокойное лицо, иначе
+            # робот остаётся с радостным выражением до следующего события
+            plan = self._mood_plan
+            if plan is not None and any(s.mood != "neutral" for s in plan.segments):
+                self._mood_plan = None
+                self._character_state("idle")
             return
         # досказала историю — закрывает глаза на пару секунд (STORY_END).
         # Защита от повтора: колбэк окончания речи может прийти дважды
