@@ -195,8 +195,8 @@ def main():
     longest_blink = max(episodes) if episodes else 0.0
     print("   эпизодов: %d, самый долгий %.2f с" % (len(episodes), longest_blink))
     check("моргания были", bool(episodes), len(episodes))
-    check("моргание не дольше 0.2 с (с переходами)",
-          longest_blink <= 0.2, round(longest_blink, 3))
+    check("моргание не дольше 0.18 с (с переходами)",
+          longest_blink <= 0.18, round(longest_blink, 3))
     check("переход моргания резкий (BLINK_FADE мал)",
           cf.BLINK_FADE <= 0.05, cf.BLINK_FADE)
 

@@ -67,12 +67,15 @@ STORY_END = "story_end"
 # ---------------------------------------------------------
 BLINK_MIN = 2.8            # пауза между морганиями (по умолчанию)
 BLINK_MAX = 6.0
-BLINK_DURATION = 0.07      # сколько держим закрытые глаза (быстро, как живое)
-BLINK_SHUT_CHANCE = 0.22   # шанс «крепко зажмуриться»
-BLINK_SHUT_DURATION = 0.12
+BLINK_DURATION = 0.05      # сколько держим закрытые глаза (быстро, как живое)
+BLINK_SHUT_CHANCE = 0.18   # шанс «крепко зажмуриться»
+BLINK_SHUT_DURATION = 0.08
 # Моргание делаем РЕЗКИМ: плавный переход (0.12 с) растягивал его почти
 # втрое — глаза выглядели «сонными». Для блинка переход почти мгновенный.
-BLINK_FADE = 0.03
+BLINK_FADE = 0.02
+# Жёсткий предел: даже если кадры приходят редко, моргание не длится дольше
+# (иначе на медленном кадре «закрытые глаза» висят заметно долго).
+BLINK_MAX_VISIBLE = 0.14
 
 GAZE_MIN = 1.6             # пауза между «взглядами в сторону»
 GAZE_MAX = 3.4
@@ -262,6 +265,7 @@ class FaceAnimator:
         self._t = 0.0                 # общее время (для фазы рта)
         self._next_blink = 0.0
         self._blink_left = 0.0        # сколько ещё держать закрытые глаза
+        self._blink_elapsed = 0.0     # сколько моргание уже длится (жёсткий предел)
 
         self._next_gaze = 0.0
         self._gaze_left = 0.0
@@ -305,6 +309,7 @@ class FaceAnimator:
         # больше нуля, а у новой эмоции blink=False — и оно больше никогда не
         # уменьшается. В итоге замирали и моргание, и блуждание взгляда.
         self._blink_left = 0.0
+        self._blink_elapsed = 0.0
         self._gaze_left = 0.0
         self._gaze_eyes = ""
         self._gaze_time = 0.0
@@ -420,7 +425,11 @@ class FaceAnimator:
         # оно могло «замереть» с закрытыми глазами (и блокировать взгляд)
         if self._blink_left > 0.0:
             self._blink_left -= dt
-            if self._blink_left <= 0.0:
+            self._blink_elapsed += dt
+            # жёсткий предел: на редких кадрах моргание не должно «зависать»
+            if self._blink_left <= 0.0 or self._blink_elapsed >= BLINK_MAX_VISIBLE:
+                self._blink_left = 0.0
+                self._blink_elapsed = 0.0
                 self._change_eyes(self._gaze_eyes or self._cfg.eyes, fade=BLINK_FADE)
                 # моргнул → чуть позже кивнёт 1-2 раза (живой NPC)
                 if self._cfg.nod:
@@ -432,6 +441,7 @@ class FaceAnimator:
             # иногда «крепко зажмуривается» — это делает моргание живым
             shut = self._rnd.random() < BLINK_SHUT_CHANCE
             self._blink_left = BLINK_SHUT_DURATION if shut else BLINK_DURATION
+            self._blink_elapsed = 0.0
             self._change_eyes("eyes_closed_shut" if shut else "eyes_closed",
                               fade=BLINK_FADE)
             self._schedule_blink(self._t)

@@ -22,6 +22,7 @@
 # =========================================================
 
 import threading
+import time
 import tkinter as tk
 
 import customtkinter as ctk
@@ -158,6 +159,18 @@ def profile_summary(user, profile, map_progress=(0, 0)):
     return out
 
 
+# Просьба рассказать историю/сказку — включает «режим рассказа» (в конце
+# Джейн закрывает глаза на пару секунд). Ищем и по-русски, и по-английски.
+import re as _re
+
+_STORY_RE = _re.compile(r"\b(story|stories|tale|fairytale|fairy\s*tale|"
+                         r"сказк|истори|расскаж|поведа)", _re.IGNORECASE)
+
+
+def _asks_for_story(text):
+    """Просит ли ученик рассказать историю/сказку."""
+    return bool(_STORY_RE.search(str(text or "")))
+
 class _Tabview(ctk.CTkTabview):
     """CTkTabview, который зовёт command и при ПРОГРАММНОМ set().
 
@@ -199,6 +212,11 @@ class EnglishTeacherApp:
         self._last_speaker = "jane"     # чей цвет на эквалайзере
         self._last_char_level = -1.0    # последний уровень, отданный лицу
         self._last_char_speaker = ""
+        self._story_end_at = 0.0      # когда закончили рассказ (защита от повтора)
+        # «Сейчас идёт рассказ»: включается уроком-аудированием ИЛИ просьбой
+        # ученика («расскажи историю»). Только тогда в конце речи Джейн
+        # закрывает глаза на 3 с — иначе это делал бы любой длинный ответ.
+        self._story_context = False
         self.reactions = reactions.ReactionTracker()   # 3 промаха → похвала
         self._mood_plan = None          # план эмоций текущей реплики
         self._mood_at = 0.0             # сколько реплики уже прозвучало
@@ -465,6 +483,7 @@ class EnglishTeacherApp:
             self.reactions.reset()          # у нового ученика свой счёт
         except Exception:
             pass
+        self._story_context = False
         self.chat_view.clear()
         self.info_bar.clear()
         self.add_message("Джейн", self._greeting())
@@ -917,6 +936,7 @@ class EnglishTeacherApp:
             self.reactions.reset()          # новый урок — новый счёт стараний
         except Exception:
             pass
+        self._story_context = bool(data.get("story"))   # урок-аудирование
         self.add_message("Джейн", opening)
         try:
             self.tabs.set("Чат")          # урок идёт в чате — покажем его
@@ -1017,6 +1037,7 @@ class EnglishTeacherApp:
     def _end_lesson(self):
         """Свернуть интерфейс занятия (полоса, блокировка, тема промпта)."""
         self._server_task = None        # занятие закрыто — ожидание сервера не нужно
+        self._story_context = False     # рассказ был частью урока
         self.lesson_bar.clear()
         self.input_bar.set_locked(False)
         self.control_bar.set_record_enabled(True)
@@ -1339,7 +1360,10 @@ class EnglishTeacherApp:
 
         # «актёрская игра»: настроение её собственного текста
         self._start_mood_play(response)
-        is_story = bool(self._mood_plan is not None and self._mood_plan.story)
+        # «конец рассказа» — ТОЛЬКО в контексте рассказа (не любой длинный ответ)
+        is_story = bool(self._story_context
+                        and self._mood_plan is not None
+                        and self._mood_plan.story)
         mark = self._jane_mark
         def _after_speech(m=mark, story=is_story):
             # «доиграла»: для рассказа — закрыть глаза на 3 с (конец истории)
@@ -1355,10 +1379,21 @@ class EnglishTeacherApp:
                 self.chat_view.enable_replay(mark)
             except Exception:
                 pass
-        if story:
-            # досказала историю — закрывает глаза на пару секунд (STORY_END)
-            self._mood_plan = None          # план больше не нужен
-            self._character_state("story_end")
+        if not story:
+            return
+        # досказала историю — закрывает глаза на пару секунд (STORY_END).
+        # Защита от повтора: колбэк окончания речи может прийти дважды
+        # (например, при повторном прослушивании) — иначе 3 секунды
+        # запускались бы заново.
+        now = time.monotonic()
+        char = getattr(self, "character", None)
+        if char is not None and getattr(char, "state", None) == "story_end":
+            return
+        if now - self._story_end_at < 6.0:
+            return
+        self._story_end_at = now
+        self._mood_plan = None              # план больше не нужен
+        self._character_state("story_end")
 
     def _replay_reply(self, text):
         """Кнопка «прослушать повторно»: озвучить ту же реплику заново."""
@@ -1560,6 +1595,8 @@ class EnglishTeacherApp:
                 self._say(commands.GREETINGS.get(mode))
             return
 
+        if _asks_for_story(text):
+            self._story_context = True      # ученик просит историю/сказку
         if self.server_ready:
             self._send_to_teacher(text)
             return
