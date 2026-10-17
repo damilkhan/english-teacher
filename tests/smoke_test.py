@@ -217,6 +217,21 @@ def test_prompt_unchanged():
     check("занятие строкой тоже принимается",
           "CURRENT LESSON" in p_lesson_str and "Numbers 1-10" in p_lesson_str)
 
+    # дата и время — блок ТОЛЬКО когда передано «сейчас»
+    from datetime import datetime
+    p_now = prompt_builder.build_system_prompt("lesson", base, "en",
+                                               now=datetime(2026, 10, 17, 22, 35))
+    check("блок «сейчас» добавляется с датой и временем",
+          "RIGHT NOW" in p_now and "17 October 2026" in p_now and "22:35" in p_now)
+    check("без времени промпт не меняется", "RIGHT NOW" not in p_without)
+
+    # разнообразие беседы — блок ТОЛЬКО когда запрошен
+    p_var = prompt_builder.build_system_prompt("lesson", base, "en", variety=True)
+    check("блок разнообразия добавляется",
+          "MAKE THE CONVERSATION FRESH" in p_var and "breakfast" in p_var)
+    check("без разнообразия промпт не меняется",
+          "MAKE THE CONVERSATION FRESH" not in p_without)
+
 
 def test_clean_response():
     print("\n[2] Чистка ответа модели")

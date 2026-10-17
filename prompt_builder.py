@@ -194,6 +194,53 @@ def _lesson_block(lesson):
                                         task_line=task_line)
 
 
+# ---------- дата и время (необязательно) ----------
+# Джейн должна знать, какой сегодня день, — иначе она путается в «доброе
+# утро / добрый вечер» и не может поговорить о планах. ВАЖНО: при now=None
+# блок НЕ добавляется — вывод build_system_prompt не меняется
+# (см. tests/smoke_test.test_prompt_unchanged).
+NOW_BLOCK_TEMPLATE = """
+\n\U0001F552 RIGHT NOW: {text}
+Use this only when it matters (greetings, small talk about the day, plans).
+Never invent another date or time. Do not state exact minutes unless the
+student asks; «today», «this evening» is usually enough.
+"""
+
+
+def _now_block(now=None):
+    """Блок «сейчас такое-то время». Пусто, если время не передано."""
+    if now is None:
+        return ""
+    try:
+        text = now.strftime("%A, %d %B %Y, %H:%M")
+    except Exception:
+        return ""
+    return NOW_BLOCK_TEMPLATE.format(text=text)
+
+
+# ---------- разнообразие беседы (необязательно) ----------
+# Жалоба ученика: Джейн при каждом знакомстве спрашивает одно и то же
+# («что ты ел на завтрак»). Блок прямо запрещает заезженный small talk и
+# подсказывает темы. При variety=False блок не добавляется — база промпта
+# остаётся прежней (см. tests/smoke_test).
+VARIETY_BLOCK_TEMPLATE = """
+\n\U0001F501 MAKE THE CONVERSATION FRESH:
+- Never ask a question you have already asked in this dialogue.
+- Do NOT use the default textbook small talk: breakfast, food you ate,
+  "how are you", "what is the weather". Only talk about them if the STUDENT
+  starts it.
+- Pick a different topic each time and build on what the student just said.
+- Use the student's name sometimes, not in every sentence.
+Topic ideas: family, friends, school, hobbies, music, films, games, books,
+sport, pets, travel, dreams, favourite places, funny stories.
+"""
+
+
+def _variety_block(variety=False):
+    """Блок против повторов. Пусто, если не запрошен."""
+    return VARIETY_BLOCK_TEMPLATE if variety else ""
+
+
 def detect_language(text):
     """Есть кириллица → 'ru', иначе 'en'."""
     return "ru" if any(c in _RUSSIAN_CHARS for c in (text or "").lower()) else "en"
@@ -244,7 +291,7 @@ def _mistake_line(err):
         text = str(err.get("jane_response") or "")
     return text[:50]
 
-def build_system_prompt(mode, profile, lang="en", level=None, student=None, context=None, plan=None, lesson=None):
+def build_system_prompt(mode, profile, lang="en", level=None, student=None, context=None, plan=None, lesson=None, now=None, variety=False):
     """Собирает system-промпт (персона + профиль ученика).
 
     mode:    'lesson' | 'free'
@@ -258,6 +305,8 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
              None/пусто → блок не добавляется (обратная совместимость)
     lesson:  словарь идущего занятия {"title","type","topic"} — необязательно;
              None/пусто → блок не добавляется (обратная совместимость)
+    now:     datetime «сейчас» — необязательно; None → блок не добавляется
+    variety: True → добавить блок против повторов в беседе
     """
     language_rule = language_instruction(lang)
 
@@ -302,7 +351,8 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
     """
     return (prompt + _level_block(profile, level)
             + _weak_topics_block(profile) + _student_block(student)
-            + _lesson_block(lesson)
+            + _lesson_block(lesson) + _now_block(now)
+            + _variety_block(variety)
             + _plan_block(plan) + _knowledge_block(context))
 
 

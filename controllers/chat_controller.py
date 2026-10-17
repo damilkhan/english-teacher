@@ -21,6 +21,7 @@
 
 import logging
 import threading
+from datetime import datetime
 
 import config
 import profile_store
@@ -181,10 +182,12 @@ class ChatController:
         # план читаем БЕЗ ожидания: если он ещё строится — отвечаем без него
         plan_text = self._plan_text if self.mode == "lesson" else ""
         lesson_block = self._lesson if self.mode == "lesson" else None
+        # «сейчас» и «не повторяйся» — так Джейн знает дату/время и не задаёт
+        # один и тот же вопрос про завтрак при каждом знакомстве
         system_prompt = prompt_builder.build_system_prompt(
             self.mode, profile_store.load(self.user_id), lang,
             level=level, student=student, context=context, plan=plan_text,
-            lesson=lesson_block)
+            lesson=lesson_block, now=datetime.now(), variety=True)
         messages = prompt_builder.build_messages(system_prompt, self.history, user_text)
 
         print(f"📤 Язык ответа: {'РУССКИЙ' if lang == 'ru' else 'ENGLISH'}")
