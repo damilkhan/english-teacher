@@ -69,9 +69,13 @@ BLINK_DURATION = 0.11      # сколько держим закрытые гла
 BLINK_SHUT_CHANCE = 0.22   # шанс «крепко зажмуриться»
 BLINK_SHUT_DURATION = 0.20
 
-GAZE_MIN = 2.2             # пауза между «взглядами в сторону»
-GAZE_MAX = 4.5
-GAZE_HOLD = 1.1            # сколько смотрим в сторону
+GAZE_MIN = 1.6             # пауза между «взглядами в сторону»
+GAZE_MAX = 3.4
+GAZE_HOLD = 0.75           # сколько смотрим в сторону
+# Жёсткий предел: дольше этого взгляд НЕ задерживается ни при каких условиях
+# (страховка от «залипания»: ученик не должен видеть робота, уставившегося
+# в одну точку).
+GAZE_MAX_HOLD = 1.1
 
 EYES_FADE = 0.12           # плавность смены глаз (cross-fade)
 MOUTH_RATE = 6.2           # «слогов» в секунду во время речи
@@ -178,7 +182,7 @@ STATES: Dict[str, StateConfig] = {
                              blink=True, gaze=True, talk=True),
     SPEAK_SAD: StateConfig(eyes="eyes_sad", mouth_closed=_M_SAD[0],
                            mouth_half=_M_SAD[1], mouth_open=_M_SAD[1],
-                           blink=True, gaze=False, talk=True),
+                           blink=True, gaze=True, talk=True),
     SPEAK_SURPRISED: StateConfig(eyes="eyes_surprised", mouth_closed=_M_NEUTRAL[0],
                                  mouth_half=_M_NEUTRAL[1], mouth_open=_M_NEUTRAL[2],
                                  blink=False, gaze=False, talk=True),
@@ -251,6 +255,7 @@ class FaceAnimator:
         self._next_gaze = 0.0
         self._gaze_left = 0.0
         self._gaze_eyes = ""
+        self._gaze_time = 0.0     # сколько длится текущий взгляд
 
         self._next_nod = 0.0
         self._nod_left = 0.0
@@ -283,6 +288,18 @@ class FaceAnimator:
         self._state = state
         self._cfg = STATES[state]
         self._state_time = 0.0
+        # ВАЖНО: сбрасываем «временные» состояния. Иначе моргание или взгляд,
+        # начатые в прошлой эмоции, «замерзают»: например, blink_left остаётся
+        # больше нуля, а у новой эмоции blink=False — и оно больше никогда не
+        # уменьшается. В итоге замирали и моргание, и блуждание взгляда.
+        self._blink_left = 0.0
+        self._gaze_left = 0.0
+        self._gaze_eyes = ""
+        self._gaze_time = 0.0
+        self._nod_left = 0.0
+        self._nod_queue = 0
+        self._nod_delay = 0.0
+        self._nod_gap = 0.0
         self._change_eyes(self._cfg.eyes)
 
     @property
@@ -382,36 +399,58 @@ class FaceAnimator:
         talk = self._cfg.talk and (speaking is not False)
 
         # ----- моргание -----
-        if self._cfg.blink and self._blink_allowed and self._nod_left <= 0.0:
-            if self._blink_left > 0.0:
-                self._blink_left -= dt
-                if self._blink_left <= 0.0:
-                    self._change_eyes(self._gaze_eyes or self._cfg.eyes)
-                    # моргнул → чуть позже кивнёт 1-2 раза (живой NPC)
-                    if self._cfg.nod:
-                        self._queue_nods(
-                            self._rnd.randint(NOD_AFTER_BLINK_MIN, NOD_AFTER_BLINK_MAX),
-                            delay=NOD_DELAY_AFTER_BLINK)
-            elif self._t >= self._next_blink:
-                # иногда «крепко зажмуривается» — это делает моргание живым
-                shut = self._rnd.random() < BLINK_SHUT_CHANCE
-                self._blink_left = BLINK_SHUT_DURATION if shut else BLINK_DURATION
-                self._change_eyes("eyes_closed_shut" if shut else "eyes_closed")
-                self._schedule_blink(self._t)
-
+        # уже начатое моргание ВСЕГДА доигрывается: иначе при смене эмоции
+        # оно могло «замереть» с закрытыми глазами (и блокировать взгляд)
+        if self._blink_left > 0.0:
+            self._blink_left -= dt
+            if self._blink_left <= 0.0:
+                self._change_eyes(self._gaze_eyes or self._cfg.eyes)
+                # моргнул → чуть позже кивнёт 1-2 раза (живой NPC)
+                if self._cfg.nod:
+                    self._queue_nods(
+                        self._rnd.randint(NOD_AFTER_BLINK_MIN, NOD_AFTER_BLINK_MAX),
+                        delay=NOD_DELAY_AFTER_BLINK)
+        elif (self._cfg.blink and self._blink_allowed and self._nod_left <= 0.0
+              and self._t >= self._next_blink):
+            # иногда «крепко зажмуривается» — это делает моргание живым
+            shut = self._rnd.random() < BLINK_SHUT_CHANCE
+            self._blink_left = BLINK_SHUT_DURATION if shut else BLINK_DURATION
+            self._change_eyes("eyes_closed_shut" if shut else "eyes_closed")
+            self._schedule_blink(self._t)
         # ----- блуждание взгляда (только если разрешено эмоцией) -----
         if self._cfg.gaze and self._gaze_allowed and self._blink_left <= 0.0:
             if self._gaze_left > 0.0:
                 self._gaze_left -= dt
-                if self._gaze_left <= 0.0:
+                # ЖЁСТКИЙ ПРЕДЕЛ: даже если счётчик почему-то не истёк,
+                # взгляд не держится дольше GAZE_MAX_HOLD — иначе робот
+                # «залипает», уставившись в одну точку.
+                self._gaze_time += dt
+                if self._gaze_left <= 0.0 or self._gaze_time >= GAZE_MAX_HOLD:
                     self._gaze_eyes = ""
+                    self._gaze_left = 0.0
+                    self._gaze_time = 0.0
                     self._change_eyes(self._cfg.eyes)
+                    self._schedule_gaze(self._t)
+            elif self._gaze_eyes:
+                # страховка: направление задано, а счётчик уже истёк —
+                # возвращаем глаза, чтобы они не остались «навсегда вбок»
+                self._gaze_eyes = ""
+                self._gaze_left = 0.0
+                self._gaze_time = 0.0
+                self._change_eyes(self._cfg.eyes)
             elif self._t >= self._next_gaze:
                 self._gaze_eyes = "eyes_%s" % self._rnd.choice(
                     ("left", "right", "upstairs", "down"))
                 self._gaze_left = GAZE_HOLD
+                self._gaze_time = 0.0
                 self._change_eyes(self._gaze_eyes)
                 self._schedule_gaze(self._t)
+        elif self._gaze_eyes:
+            # эмоция больше не разрешает блуждание — возвращаем глаза
+            self._gaze_eyes = ""
+            self._gaze_left = 0.0
+            self._gaze_time = 0.0
+            self._change_eyes(self._cfg.eyes)
 
         # ----- паузы в речи ученика: «услышала → кивнула» -----
         if self._cfg.nod and level is not None:
