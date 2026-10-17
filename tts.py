@@ -248,6 +248,11 @@ def split_by_language(text):
 # гонки здесь безобидны — значение живёт миллисекунды).
 _level = 0.0                 # 0..100
 _level_at = 0.0              # время последнего обновления (monotonic)
+
+# Последний сбой озвучки: "" — всё хорошо, иначе короткая причина для UI.
+# Нужен, чтобы «Джейн молчит» не было загадкой: интерфейс может показать
+# подсказку (edge-tts иногда отвечает 403 — это внешняя проблема сервиса).
+last_failure = ""
 LEVEL_STALE = 0.25           # дольше — считаем, что звука нет
 
 
@@ -316,8 +321,11 @@ def clear_cache() -> None:
 # ---------------------------------------------------------
 # Публичный вход
 # ---------------------------------------------------------
-def speak(text: str, name=None, name_latin=None) -> None:
+def speak(text: str, name=None, name_latin=None) -> bool:
     """Озвучить текст. Блокирующая: вызывать из фонового потока.
+
+    Возвращает True, если что-то прозвучало (False — не удалось озвучить,
+    например edge-tts ответил 403; причина остаётся в tts.last_failure).
 
     name / name_latin: имя ученика в двух формах. Для КАЖДОГО куска имя
     подставляется НА ЯЗЫКЕ куска (ru → кириллица, en → латиница): в русском
@@ -327,10 +335,10 @@ def speak(text: str, name=None, name_latin=None) -> None:
     голос, английские — английский. Новая реплика важнее текущей.
     """
     if not text or not str(text).strip():
-        return
+        return False
     clean_text = clean_for_speech(str(text))
     if not clean_text:
-        return
+        return False
 
     segments = split_by_language(clean_text)
     if not segments:                       # только цифры/знаки
@@ -339,6 +347,7 @@ def speak(text: str, name=None, name_latin=None) -> None:
     segments = [(lang, _apply_name(chunk, lang, name, name_latin))
                 for lang, chunk in segments]
 
+    global last_failure
     my_gen = _bump_generation()
     stop()                                     # новая реплика прерывает старую
     with _lock:
@@ -346,32 +355,37 @@ def speak(text: str, name=None, name_latin=None) -> None:
         # Основной путь: СЕГМЕНТНЫЙ поток — один звуковой выход на всю реплику
         # и предзагрузка кусков. Между языками нет пауз (раньше каждый кусок
         # открывал свой поток и качался по очереди — отсюда «задумчивость»).
+        played = False
         if _streaming_enabled():
             try:
                 if _stream_play_segments(segments, my_gen):
                     _reset_level()
-                    return
+                    last_failure = ""
+                    return True
             except Exception as exc:           # noqa: BLE001 — вернёмся к запасному
                 _log.warning("TTS: сегментный путь не сработал (%s)", exc)
         # Запасной путь: по кускам (поток/скачивание, с повторами).
         for lang, chunk in segments:
             if _stop.is_set() or my_gen != _current_generation():
-                return                         # прервали / пришла более новая
-            _speak_chunk(chunk, voice_for(lang), my_gen)
+                return played                  # прервали / пришла более новая
+            if _speak_chunk(chunk, voice_for(lang), my_gen):
+                played = True
+        last_failure = "" if played else "edge-tts не ответил (проверь интернет)"
+        return played
 
 
-def _speak_chunk(text: str, voice: str, my_gen: int) -> None:
-    """Озвучить ОДИН кусок: сначала потоком, при неудаче — запасным путём."""
+def _speak_chunk(text: str, voice: str, my_gen: int) -> bool:
+    """Озвучить ОДИН кусок. True — что-то прозвучало."""
     print(f"🔊 Озвучка: {voice} — {text[:48]!r}")
     # Основной путь: ПОТОК (звучим по первым байтам; повторы — внутри).
     if _streaming_enabled():
         try:
             if _stream_play(text, voice, my_gen):
-                return
+                return True
         except Exception as exc:               # noqa: BLE001 — вернёмся к запасному
             _log.warning("TTS: потоковый путь не сработал (%s)", exc)
     if _stop.is_set() or my_gen != _current_generation():
-        return
+        return False
     # Запасной путь: скачать mp3 целиком и проиграть (pygame; повторы внутри).
     try:
         data = _synthesize(text, voice)
@@ -379,8 +393,9 @@ def _speak_chunk(text: str, voice: str, my_gen: int) -> None:
         print(f"⚠️ TTS ошибка синтеза: {exc}")
         data = None
     if not data or my_gen != _current_generation():
-        return                                 # синтез устарел/не удался — не играем
+        return False                           # синтез устарел/не удался — не играем
     _play(data, my_gen)
+    return True
 
 
 # ---------------------------------------------------------

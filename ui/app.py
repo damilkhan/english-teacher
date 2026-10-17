@@ -1344,6 +1344,31 @@ class EnglishTeacherApp:
         """Кнопка «прослушать повторно»: озвучить ту же реплику заново."""
         self._say(text)
 
+    # -----------------------------------------------------
+    # Озвучка недоступна (edge-tts иногда отвечает 403)
+    # -----------------------------------------------------
+    def _notify_no_voice(self):
+        """Один раз сообщить, что озвучка не работает, — чтобы не было загадки."""
+        if getattr(self, "_voice_warned", False):
+            return
+        self._voice_warned = True
+        reason = ""
+        try:
+            reason = tts.last_failure or ""
+        except Exception:
+            reason = ""
+        hint = "🔇 Озвучка не работает (%s). Текст и уроки — в порядке." % (
+            reason or "нет ответа от edge-tts")
+        self.info_bar.set_analysis(hint)
+        self._set_status("● Без озвучки", "warn")
+
+    def _clear_no_voice(self):
+        """Озвучка снова работает — снять предупреждение."""
+        if getattr(self, "_voice_warned", False):
+            self._voice_warned = False
+            self.info_bar.set_analysis("")
+            self._refresh_status()
+
     # =====================================================
     # «Учительский» вид: разбор Аналитика и план урока
     # =====================================================
@@ -1406,7 +1431,12 @@ class EnglishTeacherApp:
 
         def _worker():
             try:
-                tts.speak(text, name=name, name_latin=name_latin)
+                ok = tts.speak(text, name=name, name_latin=name_latin)
+                if ok is False:
+                    # Джейн не смогла озвучить (например, edge-tts ответил 403)
+                    self._dispatch(self._notify_no_voice)
+                else:
+                    self._dispatch(self._clear_no_voice)
             finally:
                 if on_done:
                     try:
