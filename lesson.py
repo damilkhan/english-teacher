@@ -93,6 +93,31 @@ def type_label(lesson_type: Any) -> str:
     return TYPE_LABELS.get(normalize_type(lesson_type), TYPE_LABELS[DEFAULT_TYPE])
 
 
+# Что Джейн делает в САМОМ НАЧАЛЕ урока — зависит от типа.
+# Для listening это «режим рассказа»: короткая история на уровне ученика,
+# а потом просьба пересказать её (по-русски или по-английски).
+OPENING_TASKS = {
+    SPEAKING: ("Greet the student and give the FIRST small speaking task "
+               "(one thing at a time)."),
+    CHAT: ("Greet the student and ask the FIRST small written question "
+           "(the student answers by typing)."),
+    LISTENING: ("Tell a SHORT, simple story (5-7 short sentences) that fits "
+                "the topic and the student's level. Tell it warmly, with a "
+                "beginning and an ending. Then ask the student to RETELL what "
+                "they heard — in Russian or in English, as they prefer."),
+}
+
+
+def opening_task(lesson_type: Any) -> str:
+    """Инструкция для первой реплики урока (пусто для неизвестного типа)."""
+    return OPENING_TASKS.get(normalize_type(lesson_type), "")
+
+
+def is_story_lesson(lesson_type: Any) -> bool:
+    """Урок-рассказ (аудирование): слушаем историю и пересказываем."""
+    return normalize_type(lesson_type) == LISTENING
+
+
 def locked_hint(lesson_type: Any) -> str:
     """Подсказка в поле ввода, когда текст заблокирован (single source)."""
     name = normalize_type(lesson_type)

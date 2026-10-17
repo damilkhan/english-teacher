@@ -169,7 +169,7 @@ def _knowledge_block(context):
 LESSON_BLOCK_TEMPLATE = """
 \n\U0001F3EB CURRENT LESSON: {title}
 The student just started this lesson. Topic: {topic}.
-Run THIS lesson now: keep the student talking, ask one short question at a time,
+{task_line}Run THIS lesson now: keep the student talking, ask one short question at a time,
 let the student answer, and gently correct mistakes. Adapt if the student
 struggles, and do not switch to another topic on your own.
 """
@@ -179,14 +179,19 @@ def _lesson_block(lesson):
     """Блок «идёт занятие». Пусто, если занятия нет (обратная совместимость)."""
     if not lesson:
         return ""
+    task = ""
     if isinstance(lesson, dict):
         title = str(lesson.get("title") or lesson.get("topic") or "").strip()
         topic = str(lesson.get("topic") or lesson.get("title") or "").strip()
+        task = str(lesson.get("task") or "").strip()
     else:
         title = topic = str(lesson).strip()
     if not title:
         return ""
-    return LESSON_BLOCK_TEMPLATE.format(title=title, topic=topic or title)
+    # пустая задача не добавляет ничего — вывод блока не меняется
+    task_line = ("Do this first: %s\n" % task) if task else ""
+    return LESSON_BLOCK_TEMPLATE.format(title=title, topic=topic or title,
+                                        task_line=task_line)
 
 
 def detect_language(text):
