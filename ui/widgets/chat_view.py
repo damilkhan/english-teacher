@@ -59,6 +59,16 @@ class ChatView(ctk.CTkFrame):
         self._msg_seq = 0
         self._replay_icon = None     # держим ссылку на PhotoImage (иначе пропадёт)
 
+        # --- обтекание робота ---
+        # Робот стоит ПОВЕРХ чата в правом нижнем углу. Раньше под него
+        # отнимали высоту у всего поля (pady снизу) — из-за этого пропадала
+        # половина чата. Теперь поле занимает всё место, а сужаются только
+        # те сообщения, которые попадают на «полосу» робота.
+        self._robot_w = 0            # ширина полосы робота, px
+        self._robot_h = 0            # высота полосы робота, px
+        self._avoid_tags = []        # теги сообщений (для пересчёта обтекания)
+        self._avoid_job = None
+
         # область текста внутри карточки
         self.text = tk.Text(
             self,
@@ -90,7 +100,8 @@ class ChatView(ctk.CTkFrame):
             button_hover_color=palette["btn_hover"],
         )
         self.scrollbar.pack(side="right", fill="y", padx=(0, SCROLL_PAD_X), pady=SCROLL_PAD_Y)
-        self.text.configure(yscrollcommand=self.scrollbar.set)
+        self.text.configure(yscrollcommand=self._on_yscroll)
+        self.text.bind("<Configure>", self._on_text_resize, add="+")
 
         # --- цветные эмодзи ---
         # Tk не умеет цветные шрифты, поэтому эмодзи подменяются картинками.
@@ -124,21 +135,27 @@ class ChatView(ctk.CTkFrame):
         header = f"{sender}  {DOT}  {stamp}" if stamp else sender
 
         self.text.configure(state="normal")
+        # уникальный тег на всё сообщение — по нему включается обтекание
+        msg_tag = "msg_%d" % self._msg_seq
+        self._msg_seq += 1
+        start = self.text.index("end-1c")
         self.text.insert("end", header, head_tag)
         mark = None
         if not is_user:
             # метка «end» после имени с гравитацией влево: следующая вставка
             # (\n) уйдёт ВПРАВО от неё, и точка останется сразу после имени
-            mark = "replay_%d" % self._msg_seq
-            self._msg_seq += 1
+            mark = "replay_%s" % msg_tag
             self.text.mark_set(mark, "end-1c")   # СРАЗУ после имени (не за \n)
             self.text.mark_gravity(mark, tk.LEFT)
             self._msg_text[mark] = text
         self.text.insert("end", "\n", head_tag)
         self._insert_text(text, body_tag)
         self.text.insert("end", "\n", body_tag)
+        self.text.tag_add(msg_tag, start, "end-1c")
+        self._avoid_tags.append(msg_tag)
         self.text.configure(state="disabled")
         self.text.see("end")
+        self._schedule_avoid()
         return mark
 
     def enable_replay(self, mark):
@@ -166,31 +183,86 @@ class ChatView(ctk.CTkFrame):
         self._replay_marks.add(mark)
         self._msg_widgets[mark] = widget
 
-    def set_character_reserve(self, bottom=0):
-        """Освободить место под персонажа внизу области чата.
+    def set_character_reserve(self, width=0, height=0):
+        """Робот занимает правый нижний угол: текст его ОБТЕКАЕТ слева.
 
-        Робот стоит в правом нижнем углу области чата, но ПОВЕРХ неё: полоса
-        прокрутки остаётся у правого края (и не режет чат пополам), а текст
-        просто заканчивается выше робота — реплики его не задевают. Ширину
-        текста НЕ сужаем: он идёт во всю ширину области, потому что робот
-        находится ниже полосы текста.
+        Поле чата при этом занимает ВСЁ своё место (высоту не отнимаем).
+        Сообщение, которое попадает на «полосу» робота, получает правый
+        отступ — и текст огибает робота, а не уходит под него.
 
-        Почему это внешний pad-отступ упаковки, а не padx/pady самого tk.Text:
-        в Tk 8.6 у Text они принимают ТОЛЬКО одно число, поэтому «снизу 181»
-        иначе не задать.
+        width, height — сколько места занимает робот (в пикселях окна).
         """
-        bottom = max(0, int(bottom))
         try:
+            self._robot_w = max(0, int(width))
+            self._robot_h = max(0, int(height))
             # Узкая «запрошенная» ширина: фактическую даёт expand. Иначе запрос
             # текста в 80 символов мог бы влиять на раскладку карточки.
             self.text.configure(width=20)
-            self.text.pack_configure(pady=(0, bottom))
-            # Полосу прокрутки подрезаем снизу по тексту: она заканчивается
-            # над роботом и не заходит на картинку.
-            self.scrollbar.pack_configure(pady=(SCROLL_PAD_Y,
-                                                SCROLL_PAD_Y + bottom))
+            self._configure_avoid_tag()
+            self._schedule_avoid()
         except Exception as exc:
-            print("⚠️ Место под персонажа не зарезервировано: %s" % exc)
+            print("⚠️ Обтекание робота не настроено: %s" % exc)
+
+    # ---------- обтекание робота ----------
+    def _configure_avoid_tag(self):
+        """Правый отступ для сообщений, попавших на полосу робота."""
+        try:
+            self.text.tag_configure(
+                "avoid_robot", rmargin=self._robot_w + 12 if self._robot_w else 14)
+        except Exception as exc:
+            print("⚠️ Отступ обтекания не задан: %s" % exc)
+
+    def _on_yscroll(self, first, last):
+        """Прокрутка: обновить полосу прокрутки и пересчитать обтекание."""
+        try:
+            self.scrollbar.set(first, last)
+        except Exception:
+            pass
+        self._schedule_avoid()
+
+    def _on_text_resize(self, _event=None):
+        self._schedule_avoid()
+
+    def _schedule_avoid(self):
+        """Пересчёт обтекания — не чаще одного раза за кадр."""
+        if self._avoid_job is not None:
+            return
+        try:
+            self._avoid_job = self.after(30, self._apply_avoid)
+        except Exception:
+            self._avoid_job = None
+
+    def _apply_avoid(self):
+        """Пометить сообщения, попадающие на полосу робота.
+
+        Идём по сообщениям С КОНЦА (они у нижнего края), пока их последняя
+        видимая строка ниже начала полосы робота. Так обтекание не «дёргает»
+        всё поле и считается за один проход.
+        """
+        self._avoid_job = None
+        if not self._robot_w or not self._avoid_tags:
+            return
+        try:
+            height = self.text.winfo_height()
+            if height < 40:
+                return
+            band_top = height - self._robot_h - 6
+            for tag in self._avoid_tags:
+                ranges = self.text.tag_ranges(tag)
+                if not ranges:
+                    continue
+                start, end = ranges[0], ranges[-1]
+                info = self.text.dlineinfo("%s-1c" % end)
+                if info is None:          # строка не видна — полоса не важна
+                    self.text.tag_remove("avoid_robot", start, end)
+                    continue
+                y = info[1]
+                if y + info[3] > band_top:
+                    self.text.tag_add("avoid_robot", start, end)
+                else:
+                    self.text.tag_remove("avoid_robot", start, end)
+        except Exception as exc:
+            print("⚠️ Обтекание не пересчитано: %s" % exc)
 
     def _mark_exists(self, mark):
         try:

@@ -594,9 +594,10 @@ class EnglishTeacherApp:
                                                  width=CHARACTER_WIDTH,
                                                  dispatch=self._dispatch)
             if self.character.available:
-                # нижний отступ: робот ниже полосы текста, ширину не трогаем
-                _, reserve_bottom = self.character.reserve
-                self.chat_view.set_character_reserve(reserve_bottom)
+                # робот занимает правый нижний угол: чат занимает ВСЁ поле,
+                # а сообщения на полосе робота обтекают его слева
+                reserve_w, reserve_h = self.character.reserve
+                self.chat_view.set_character_reserve(reserve_w, reserve_h)
                 self.character.start_idle()
         except Exception as exc:
             print("⚠️ Робот-персонаж не подключился: %s" % exc)
