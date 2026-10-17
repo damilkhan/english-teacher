@@ -119,7 +119,10 @@ class AudioVAD:
                 self.stop_recording()
                 break
 
-    def _audio_callback(self, indata, frames, time, status):
+    def _audio_callback(self, indata, frames, time_info, status):
+        # ВАЖНО: параметр назывался «time» и ПЕРЕКРЫВАЛ модуль time —
+        # time.monotonic() внутри падал с AttributeError (PortAudio передаёт
+        # сюда структуру времени, а не модуль). Теперь он time_info.
         if status:
             print(f"Ошибка микрофона: {status}")
         if self.is_recording:
@@ -128,7 +131,7 @@ class AudioVAD:
             volume = np.abs(audio_array).mean()
             # тот же масштаб, что у озвучки: речь ~1500..4000 → 37..100
             self.level = max(0.0, min(100.0, float(volume) / 40.0))
-            self.level_at = time.monotonic()
+            self.level_at = time.monotonic()   # модуль time (не параметр)
             if volume > 100:
                 self.silence_counter = 0
             else:
