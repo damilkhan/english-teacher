@@ -38,7 +38,8 @@ FALLBACK_IMAGE = os.path.join(CHARACTER_DIR, "robot_base.png")
 IDLE_STATE = "idle"
 KNOWN_STATES = ("idle", "listening", "thinking", "speaking", "happy", "smile",
                 "sad", "surprised", "scorn", "angry", "speak_happy",
-                "speak_sad", "speak_surprised", "speak_thinking", "speak_story")
+                "speak_sad", "speak_surprised", "speak_thinking", "speak_story",
+                "story_end")
 
 
 class Character:

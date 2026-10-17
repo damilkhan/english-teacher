@@ -174,6 +174,51 @@ def main():
     check("рассказ умеет гулять взглядом",
           cf.STATES[cf.SPEAK_STORY].gaze is True)
 
+    # ---------- 8. Моргание короткое ----------
+    print("\n[8] Моргание не затянутое")
+    d = cf.FaceAnimator(seed=9)
+    d.set_state(cf.SPEAK_STORY)
+    dt_b = 1 / 22.0                      # как в приложении
+    episodes, start, t_b = [], None, 0.0
+    while t_b < 20.0:
+        f = d.tick(dt_b, level=60.0, speaking=True)
+        closed_layer = f.eyes.startswith("eyes_closed")
+        fading = bool(f.eyes_from and f.eyes_mix < 1.0 and
+                      (closed_layer or f.eyes_from.startswith("eyes_closed")))
+        visible = closed_layer or fading
+        if visible and start is None:
+            start = t_b
+        elif not visible and start is not None:
+            episodes.append(t_b - start)
+            start = None
+        t_b += dt_b
+    longest_blink = max(episodes) if episodes else 0.0
+    print("   эпизодов: %d, самый долгий %.2f с" % (len(episodes), longest_blink))
+    check("моргания были", bool(episodes), len(episodes))
+    check("моргание не дольше 0.2 с (с переходами)",
+          longest_blink <= 0.2, round(longest_blink, 3))
+    check("переход моргания резкий (BLINK_FADE мал)",
+          cf.BLINK_FADE <= 0.05, cf.BLINK_FADE)
+
+    # ---------- 9. Конец рассказа ----------
+    print("\n[9] Конец рассказа: глаза закрыты ~3 с, потом покой")
+    check("состояние story_end есть в таблице", cf.STORY_END in cf.STATES)
+    cfg_end = cf.STATES[cf.STORY_END]
+    check("в story_end глаза закрыты", cfg_end.eyes.startswith("eyes_closed"),
+          cfg_end.eyes)
+    check("держит около 3 с", abs(cfg_end.transient - 3.0) < 0.01, cfg_end.transient)
+    check("после — возврат в покой", cfg_end.transient_to == cf.IDLE,
+          cfg_end.transient_to)
+
+    e = cf.FaceAnimator(seed=4)
+    e.set_state(cf.STORY_END)
+    held, t_e = 0.0, 0.0
+    while e.state == cf.STORY_END and t_e < 6.0:
+        e.tick(dt_b, level=0.0, speaking=False)
+        held += dt_b
+        t_e += dt_b
+    check("story_end длится ~3 с", 2.7 <= held <= 3.5, round(held, 2))
+    check("после story_end — покой", e.state == cf.IDLE, e.state)
     print("\n" + "=" * 60)
     if FAILED:
         print(f"ПРОВАЛЕНО: {len(FAILED)} → {FAILED}")

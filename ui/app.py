@@ -1239,6 +1239,8 @@ class EnglishTeacherApp:
             level = float(tts.get_level())
         except Exception:
             level = 0.0
+        if level <= 2.0:
+            return              # тишина: лицо не трогаем (пусть доигрывает своё)
         # время «звучания» накапливаем, пока есть звук
         if level > 2.0:
             self._mood_at += 0.1
@@ -1337,15 +1339,26 @@ class EnglishTeacherApp:
 
         # «актёрская игра»: настроение её собственного текста
         self._start_mood_play(response)
+        is_story = bool(self._mood_plan is not None and self._mood_plan.story)
         mark = self._jane_mark
-        if mark:
-            # кнопку «прослушать повторно» показываем ТОЛЬКО после того,
-            # как реплика впервые озвучена до конца (on_done из фонового потока)
-            self._say(response, on_done=lambda m=mark: self._dispatch(
-                lambda: self.chat_view.enable_replay(m)))
-        else:
-            self._say(response)
+        def _after_speech(m=mark, story=is_story):
+            # «доиграла»: для рассказа — закрыть глаза на 3 с (конец истории)
+            self._dispatch(lambda: self._finish_speech(m, story))
+
+        self._say(response, on_done=_after_speech)
         self.visualizer.reset()
+
+    def _finish_speech(self, mark, story):
+        """Речь Джейн закончилась: кнопка повтора и «конец рассказа»."""
+        if mark:
+            try:
+                self.chat_view.enable_replay(mark)
+            except Exception:
+                pass
+        if story:
+            # досказала историю — закрывает глаза на пару секунд (STORY_END)
+            self._mood_plan = None          # план больше не нужен
+            self._character_state("story_end")
 
     def _replay_reply(self, text):
         """Кнопка «прослушать повторно»: озвучить ту же реплику заново."""

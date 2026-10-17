@@ -59,15 +59,20 @@ SPEAK_SAD = "speak_sad"
 SPEAK_SURPRISED = "speak_surprised"
 SPEAK_THINKING = "speak_thinking"
 SPEAK_STORY = "speak_story"
+# Конец рассказа: Джейн закрывает глаза на пару секунд, потом покой.
+STORY_END = "story_end"
 
 # ---------------------------------------------------------
 # Тайминги (секунды) — одна точка настройки «живости»
 # ---------------------------------------------------------
 BLINK_MIN = 2.8            # пауза между морганиями (по умолчанию)
 BLINK_MAX = 6.0
-BLINK_DURATION = 0.11      # сколько держим закрытые глаза
+BLINK_DURATION = 0.07      # сколько держим закрытые глаза (быстро, как живое)
 BLINK_SHUT_CHANCE = 0.22   # шанс «крепко зажмуриться»
-BLINK_SHUT_DURATION = 0.20
+BLINK_SHUT_DURATION = 0.12
+# Моргание делаем РЕЗКИМ: плавный переход (0.12 с) растягивал его почти
+# втрое — глаза выглядели «сонными». Для блинка переход почти мгновенный.
+BLINK_FADE = 0.03
 
 GAZE_MIN = 1.6             # пауза между «взглядами в сторону»
 GAZE_MAX = 3.4
@@ -77,7 +82,8 @@ GAZE_HOLD = 0.75           # сколько смотрим в сторону
 # в одну точку).
 GAZE_MAX_HOLD = 1.1
 
-EYES_FADE = 0.12           # плавность смены глаз (cross-fade)
+EYES_FADE = 0.12           # плавность смены глаз (эмоции, взгляд)
+STORY_END_HOLD = 3.0       # в конце рассказа — «закрыла глаза» на 3 с
 MOUTH_RATE = 6.2           # «слогов» в секунду во время речи
 MOUTH_SILENCE = 0.12       # тишина дольше — рот закрывается
 
@@ -193,6 +199,11 @@ STATES: Dict[str, StateConfig] = {
     SPEAK_STORY: StateConfig(eyes="eyes_normal_open", mouth_closed=_M_NEUTRAL[0],
                              mouth_half=_M_NEUTRAL[1], mouth_open=_M_NEUTRAL[2],
                              blink=True, gaze=True, talk=True),
+
+    # конец рассказа: закрыла глаза на 3 с (как «досказала»), потом покой
+    STORY_END: StateConfig(eyes="eyes_closed", mouth_closed=_M_SMILE[0],
+                           static_mouth=_M_SMILE[0], blink=False, gaze=False,
+                           transient=STORY_END_HOLD, transient_to=IDLE),
 }
 
 
@@ -269,6 +280,7 @@ class FaceAnimator:
         self._eyes = self._cfg.eyes
         self._eyes_from = ""
         self._fade_left = 0.0
+        self._fade_max = EYES_FADE
 
         # сценарий реакции (например, «удивилась → улыбнулась»)
         self._seq: list = []          # [[состояние, осталось секунд], ...]
@@ -339,13 +351,18 @@ class FaceAnimator:
         self.set_state(prepared[0][0])
         self._seq[0][1] = prepared[0][1]
 
-    def _change_eyes(self, eyes: str) -> None:
-        """Сменить слой глаз с плавным переходом."""
+    def _change_eyes(self, eyes: str, fade: float = None) -> None:
+        """Сменить слой глаз с плавным переходом.
+
+        fade — длительность перехода; для моргания он почти мгновенный
+        (BLINK_FADE), иначе глаза «плывут» и блинк выглядит медленным.
+        """
         if eyes == self._eyes:
             return
         self._eyes_from = self._eyes
         self._eyes = eyes
-        self._fade_left = EYES_FADE
+        self._fade_max = EYES_FADE if fade is None else max(0.0, float(fade))
+        self._fade_left = self._fade_max
 
     # -----------------------------------------------------
     # Планирование
@@ -404,7 +421,7 @@ class FaceAnimator:
         if self._blink_left > 0.0:
             self._blink_left -= dt
             if self._blink_left <= 0.0:
-                self._change_eyes(self._gaze_eyes or self._cfg.eyes)
+                self._change_eyes(self._gaze_eyes or self._cfg.eyes, fade=BLINK_FADE)
                 # моргнул → чуть позже кивнёт 1-2 раза (живой NPC)
                 if self._cfg.nod:
                     self._queue_nods(
@@ -415,7 +432,8 @@ class FaceAnimator:
             # иногда «крепко зажмуривается» — это делает моргание живым
             shut = self._rnd.random() < BLINK_SHUT_CHANCE
             self._blink_left = BLINK_SHUT_DURATION if shut else BLINK_DURATION
-            self._change_eyes("eyes_closed_shut" if shut else "eyes_closed")
+            self._change_eyes("eyes_closed_shut" if shut else "eyes_closed",
+                              fade=BLINK_FADE)
             self._schedule_blink(self._t)
         # ----- блуждание взгляда (только если разрешено эмоцией) -----
         if self._cfg.gaze and self._gaze_allowed and self._blink_left <= 0.0:
@@ -486,7 +504,8 @@ class FaceAnimator:
         # ----- плавный переход между слоями глаз -----
         if self._fade_left > 0.0:
             self._fade_left = max(0.0, self._fade_left - dt)
-            mix = 1.0 - (self._fade_left / EYES_FADE if EYES_FADE else 1.0)
+            span = self._fade_max or 1.0
+            mix = 1.0 - (self._fade_left / span)
         else:
             mix = 1.0
             self._eyes_from = ""
