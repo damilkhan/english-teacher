@@ -58,6 +58,7 @@ class Character:
         self._photo = None
         self._frame_key = None       # ключ показанного кадра (чтобы не перерисовывать)
         self._image_cache = {}       # ключ → готовая картинка нужного размера
+        self._photo_cache = {}       # ключ → готовый PhotoImage (без работы в Tk)
         self._frame_id = 0
         self._pending = False
         self._started = 0.0
@@ -296,8 +297,16 @@ class Character:
             if key is not None and key == self._frame_key and self._item is not None:
                 return                    # кадр не изменился — перерисовка не нужна
             self._frame_key = key
-            from PIL import ImageTk
-            self._photo = ImageTk.PhotoImage(image, master=self.canvas)
+            # PhotoImage тоже кэшируем: его создание — самая дорогая часть
+            # кадра (несколько миллисекунд), а набор кадров у робота небольшой
+            photo = self._photo_cache.get(key)
+            if photo is None:
+                from PIL import ImageTk
+                photo = ImageTk.PhotoImage(image, master=self.canvas)
+                if len(self._photo_cache) > 400:
+                    self._photo_cache.clear()
+                self._photo_cache[key] = photo
+            self._photo = photo
             if self._item is None:
                 cx = self._canvas_size[0] / 2.0
                 cy = self._canvas_size[1] / 2.0

@@ -196,7 +196,9 @@ class EnglishTeacherApp:
         self.stt_state = "loading"      # loading | ready | error
         self.stt_ready = False
         self._status_text, self._status_color = INITIAL_STATUS
-        self._last_speaker = "jane"     # чей цвет на эквалайцере
+        self._last_speaker = "jane"     # чей цвет на эквалайзере
+        self._last_char_level = -1.0    # последний уровень, отданный лицу
+        self._last_char_speaker = ""
         self.reactions = reactions.ReactionTracker()   # 3 промаха → похвала
         self._mood_plan = None          # план эмоций текущей реплики
         self._mood_at = 0.0             # сколько реплики уже прозвучало
@@ -1309,13 +1311,17 @@ class EnglishTeacherApp:
             self.visualizer.update_level(level, speaker)
             char = getattr(self, "character", None)
             if char is not None and getattr(char, "available", False):
-                char.set_level(level, speaking=(speaker == "jane" and level > 2.0))
-            if speaker == "jane":
+                # не дёргаем лицо, если уровень почти не изменился
+                if abs(level - self._last_char_level) > 1.5 or speaker != self._last_char_speaker:
+                    self._last_char_level = level
+                    self._last_char_speaker = speaker
+                    char.set_level(level, speaking=(speaker == "jane" and level > 2.0))
+            if speaker == "jane" and self._mood_plan is not None:
                 self._mood_tick()
         except Exception as exc:
             print("⚠️ Эквалайзер: %s" % exc)
         try:
-            self.window.after(60, self._visual_tick)
+            self.window.after(45, self._visual_tick)   # ~22 кадра/с (дёшево)
         except Exception:
             pass
 
