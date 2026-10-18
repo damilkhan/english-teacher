@@ -331,6 +331,9 @@ def test_gui(e2e=False):
           gui.EnglishTeacherApp is EnglishTeacherApp)
 
     app = EnglishTeacherApp()
+    # окно «Повторение» в тесте не открываем: модальное окно перехватило бы
+    # клики и ждало бы ученика (как и остальные модальные окна в тестах)
+    app.maybe_review_vocabulary = lambda: None
     for _ in range(30):
         app.window.update()
         time.sleep(0.02)
@@ -387,20 +390,24 @@ def test_gui(e2e=False):
         check(f"при окне {geo} чат не схлопнулся",
               app.chat_view.winfo_height() > 120, app.chat_view.winfo_height())
 
-    # команда смены режима должна работать локально, без сервера
+    # Русская фраза — НЕ команда смены режима: она уходит в подсказку перевода.
+    # (голосовые команды «урок/перерыв/друг» убраны как рудимент консольной
+    # версии: в окне режим ставят урок и панель «Настройки»)
+    mode_before = app.chat.mode
     app.input_bar.set_text("перерыв")
     app.input_bar.on_send()
     for _ in range(10):
         app.window.update()
-    check("команда «перерыв» включает свободный режим", app.chat.mode == "free", app.chat.mode)
-
-    app.input_bar.set_text("урок")
-    app.input_bar.on_send()
-    for _ in range(10):
-        app.window.update()
-    check("команда «урок» возвращает режим урока", app.chat.mode == "lesson", app.chat.mode)
-    check("панель настроек показывает новый режим",
-          app.right_panel.mode_var.get() == "lesson", app.right_panel.mode_var.get())
+    check("русская фраза уходит в подсказку перевода",
+          app.hint_bar.visible and "Перевожу" in app.hint_bar.text, app.hint_bar.text)
+    check("от русской фразы режим не меняется",
+          app.chat.mode == mode_before, app.chat.mode)
+    check("русская фраза в чат не пишется",
+          "перерыв" not in app.chat_view.get_text().lower(),
+          repr(app.chat_view.get_text()[-120:]))
+    check("панель настроек показывает текущий режим",
+          app.right_panel.mode_var.get() == app.chat.mode,
+          app.right_panel.mode_var.get())
 
     if e2e:
         print("\n[6] Живой диалог с llama-server")

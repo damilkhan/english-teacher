@@ -51,6 +51,7 @@ from controllers.server_waiter import ServerWaiter
 from controllers.level_test_controller import LevelTestController
 from controllers.recording_controller import RecordingController
 from controllers.server_monitor import ServerMonitor
+from controllers.vocabulary_controller import VocabularyController
 from llm_client import LLMClient
 from roles.analyst import Analyst
 from roles.planner import Planner
@@ -62,6 +63,7 @@ from ui.panels.boot_panel import BootPanel
 from ui.panels.level_test_panel import LevelTestPanel
 from ui.panels.settings_panel import SettingsPanel
 from ui.panels.users_panel import UsersPanel
+from ui.panels.vocab_panel import VocabPanel
 from ui.widgets.chat_view import ChatView
 from ui.widgets.control_bar import ControlBar
 from ui.widgets.info_bar import InfoBar
@@ -316,6 +318,13 @@ class EnglishTeacherApp:
         # ---------- тест уровня (адаптивный, любой активной моделью) ----------
         self.level_test = LevelTestController(dispatch=self._dispatch)
 
+        # ---------- повторение слов (окно «Повторение», этап B) ----------
+        # Заход собирает VocabularyController (без Tk), окно только показывает.
+        # Открывает его сама Джейн при запуске — см. maybe_review_vocabulary.
+        self.vocab = VocabularyController(user_id=self.current_user["id"])
+        self.vocab_panel = None        # открытое окно повторения (или None)
+        self._vocab_wanted = False     # повторение ждёт готовности распознавания
+
         self.recorder = RecordingController(
             vad=self.vad, stt=self.stt, dispatch=self._dispatch,
             on_status=self._set_status,
@@ -406,7 +415,20 @@ class EnglishTeacherApp:
             BootPanel.ask(self.window, self.palette, self.check_server)
         self._refresh_input_state()
         if self.server_ready and not (self.current_user or {}).get("level"):
-            self.window.after(300, lambda: self.run_level_test(self.current_user["id"]))
+            self.window.after(300, lambda: self._level_test_then_vocab())
+        else:
+            self.window.after(300, lambda: self.maybe_review_vocabulary())
+
+    def _level_test_then_vocab(self):
+        """Порядок запуска: вводный тест уровня → повторение слов.
+
+        Тест модальный (wait_window), поэтому строка после него выполняется
+        только когда окно теста закрыто — два окна не наложатся.
+        """
+        try:
+            self.run_level_test((self.current_user or {}).get("id"))
+        finally:
+            self.maybe_review_vocabulary()
 
     def _prompt_profile_setup(self):
         """Обязательная форма: без имени и пола общение с Джейн запрещено."""
@@ -431,6 +453,7 @@ class EnglishTeacherApp:
         profile_store.set_active_user(target)
         profile_store.ensure_profile(target)
         self.chat.set_user(target)
+        self.vocab.user_id = target       # слова копятся у нового профиля
         self.chat_view.clear()
         self.info_bar.clear()
         self.add_message("Джейн", self._greeting())
@@ -515,6 +538,8 @@ class EnglishTeacherApp:
         except Exception:
             pass
         self._story_context = False
+        self._vocab_wanted = False
+        self.vocab.user_id = user_id      # слова следующего ученика — его
         self.chat_view.clear()
         self.info_bar.clear()
         self.add_message("Джейн", self._greeting())
@@ -1356,6 +1381,81 @@ class EnglishTeacherApp:
             print("📚 «%s» → уровень %s" % (en, card.get("level")))
 
     # -----------------------------------------------------
+    # Окно «Повторение» (этап B): открывает сама Джейн
+    # -----------------------------------------------------
+    def maybe_review_vocabulary(self):
+        """Открыть окно повторения, если сегодня ещё не было и есть слова.
+
+        Порядок при запуске: профиль → модель → тест уровня → повторение.
+        Окно НЕ открываем: без микрофона, во время урока, поверх теста,
+        второй раз за день и когда повторять нечего.
+        """
+        if not getattr(config, "VOCAB_ENABLED", True):
+            return
+        if not getattr(config, "VOCAB_REVIEW_ON_START", True):
+            return
+        if not self.profile_ready:
+            return
+        if self.lesson.is_active:
+            return                      # идёт урок — повторение перенесём
+        if self.vocab_panel is not None:
+            return
+        user_id = (self.current_user or {}).get("id")
+        try:
+            if vocabulary.session_today(profile_store.vocab_last_session(user_id)):
+                return                  # сегодня уже повторяли — не чаще раза в день
+            cards = profile_store.vocabulary_cards(user_id)
+        except Exception as exc:
+            print("⚠️ Слова для повторения не прочитаны: %s" % exc)
+            return
+        due = vocabulary.due_cards(cards)
+        if not due:
+            return                      # повторять нечего — и строки в чат нет
+        ready, _message = self._microphone_ready()
+        if not ready:
+            if self.stt_state == "loading":
+                self._vocab_wanted = True    # начнём, когда Whisper будет готов
+            return
+        self._vocab_wanted = False
+        self.add_message("Джейн", "📚 Давай повторим %d слов." % len(due))
+        self._open_vocab_panel()
+
+    def _open_vocab_panel(self):
+        """Показать окно повторения (модальное, поверх главного окна)."""
+        try:
+            self.vocab.start()
+        except Exception as exc:
+            print("⚠️ Заход повторения не собрался: %s" % exc)
+            return None
+        if not self.vocab.is_active:
+            return None
+        try:
+            self.vocab_panel = VocabPanel(
+                self.window, self.palette, self.vocab,
+                on_record_start=self._vocab_record_start,
+                on_record_stop=self._vocab_record_stop,
+                on_say=self._say,
+                on_finish=self._vocab_finished)
+        except Exception as exc:
+            print("⚠️ Окно повторения не открылось: %s" % exc)
+            self.vocab_panel = None
+            return None
+        return self.vocab_panel
+
+    def _vocab_record_start(self):
+        """«Запись» в окне повторения: тот же push-to-talk, что и в чате."""
+        self._start_recording()
+
+    def _vocab_record_stop(self):
+        self._stop_recording()
+
+    def _vocab_finished(self, summary):
+        """Окно повторения закрылось: обновить «Профиль» и забыть окно."""
+        self.vocab_panel = None
+        print("📚 Повторение закончено: %s" % (summary or {}))
+        self._refresh_side_views()
+
+    # -----------------------------------------------------
     # Сверка произношения (см. pronunciation.py)
     # -----------------------------------------------------
     def _remember_pron_reference(self, result, single=False):
@@ -1729,6 +1829,13 @@ class EnglishTeacherApp:
     # Примечание: _say объявлен выше (в блоке обратной связи), здесь пусто.
 
     def _on_recording_changed(self, recording):
+        # запись идёт из окна повторения — подсветить кнопку и там
+        panel = self.vocab_panel
+        if panel is not None:
+            try:
+                panel.set_recording(recording)
+            except Exception:
+                pass
         self.control_bar.set_recording(recording)
         # слушает ученика: улыбка, кивки, моргание
         self._character_state("listening" if recording else "idle")
@@ -1736,6 +1843,11 @@ class EnglishTeacherApp:
     def _on_recognized(self, text, lang):
         self.current_lang = lang
         self.chat.set_language(lang)
+        # открыто окно повторения — сказанное идёт В НЕГО, а не в чат
+        panel = self.vocab_panel
+        if panel is not None and panel.is_open:
+            panel.accept_text(text)
+            return
         # сказал по-русски — тоже показываем подсказку, а не пишем в чат
         if self._wants_translation(text):
             self._show_translation_hint(text)
@@ -1777,6 +1889,10 @@ class EnglishTeacherApp:
             lesson_id, point_id = self._pending_lesson
             self._pending_lesson = None
             self.window.after(200, lambda: self.start_lesson(lesson_id, point_id))
+        # повторение слов ждало микрофон — теперь можно открыть окно
+        if self.stt_ready and self._vocab_wanted:
+            self._vocab_wanted = False
+            self.window.after(200, lambda: self.maybe_review_vocabulary())
 
     def _refresh_status(self):
         """Единая точка выбора текста бейджа: сервер + распознавание.
@@ -1824,13 +1940,11 @@ class EnglishTeacherApp:
         # пользователь что-то делает — гасим текущую речь Джейн
         tts.stop()
 
-        mode = commands.parse_mode_command(text)
-        if mode is not None:
-            changed = (mode != self.mode)
-            self._switch_mode(mode)
-            if changed:
-                self._say(commands.GREETINGS.get(mode))
-            return
+        # Голосовых команд режима («урок», «перерыв», «друг») здесь больше нет:
+        # это рудимент консольной версии. В окне режим ставят сами — урок
+        # включает его в _begin_lesson, а вручную переключают в «Настройках».
+        # Заодно русская фраза больше не перехватывается: слово «друг»
+        # спокойно переводится в подсказке, как и любое другое.
 
         if _asks_for_story(text):
             self._story_context = True      # ученик просит историю/сказку

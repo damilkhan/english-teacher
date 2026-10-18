@@ -399,8 +399,8 @@ class VocabPanel(ctk.CTkToplevel):
         if not self._open:
             return
         self._open = False
-        if self._on_finish is not None and not self._finished:
-            # закрыли раньше конца — отдаём приложению сводку для «Профиля»
+        if self._on_finish is not None:
+            # отдаём приложению сводку: обновить «Профиль» (и после конца тоже)
             try:
                 self._on_finish(self.controller.summary())
             except Exception:
