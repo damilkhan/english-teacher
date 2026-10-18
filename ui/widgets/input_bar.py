@@ -113,6 +113,51 @@ class InputBar(ctk.CTkFrame):
         elif not self._is_focused():
             self._show_placeholder()
 
+    def insert_at_cursor(self, text):
+        """Вставить текст В МЕСТО КУРСОРА, не стирая уже набранное.
+
+        Нужно экспресс-переводчику: ученик начал писать "I want to ",
+        перевёл слово и вставляет его посреди фразы. Каретка (insert mark)
+        сохраняется, даже когда фокус ушёл на кнопку подсказки, поэтому
+        вставка попадает именно туда, где ученик остановился.
+
+        Возвращает True, если вставка удалась.
+        """
+        text = str(text or "")
+        if not text or self._locked:
+            return False
+        try:
+            if self._placeholder_on:
+                self._drop_placeholder()          # подсказку убираем ДО вставки
+            content = self._real_text()
+            # ВАЖНО: считаем позицию по ВНУТРЕННЕМУ tk.Text — у CTkTextbox
+            # (обёртки) нет метода count(), из-за чего вставка уходила в конец.
+            field = self._field
+            try:
+                index = field.index("insert")
+            except Exception:
+                index = "end-1c"
+            try:
+                offset = int(field.count("1.0", index, "chars")[0])
+            except Exception:
+                offset = len(content)
+            offset = max(0, min(len(content), offset))
+            before, after = content[:offset], content[offset:]
+            prefix = "" if (not before or before[-1].isspace()) else " "
+            suffix = "" if (not after or after[0].isspace()) else " "
+            new_text = before + prefix + text + suffix + after
+            self.textbox.delete("1.0", "end")
+            self.textbox.insert("1.0", new_text)
+            caret = len(before) + len(prefix) + len(text)
+            field.mark_set("insert", "1.0+%dc" % caret)
+            self._placeholder_on = False
+            self.textbox.configure(text_color=self.palette["text"])
+            self.focus_input()
+            return True
+        except Exception as exc:
+            print("⚠️ Вставка в поле не удалась: %s" % exc)
+            return False
+
     def set_text(self, text):
         self._placeholder_on = False
         self._replace_field_text(str(text), self.palette["text"])

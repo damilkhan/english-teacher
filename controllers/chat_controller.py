@@ -187,7 +187,8 @@ class ChatController:
         system_prompt = prompt_builder.build_system_prompt(
             self.mode, profile_store.load(self.user_id), lang,
             level=level, student=student, context=context, plan=plan_text,
-            lesson=lesson_block, now=datetime.now(), variety=True)
+            lesson=lesson_block, now=datetime.now(), variety=True,
+            english_only=bool(getattr(config, "ENGLISH_ONLY", False)))
         messages = prompt_builder.build_messages(system_prompt, self.history, user_text)
 
         print(f"📤 Язык ответа: {'РУССКИЙ' if lang == 'ru' else 'ENGLISH'}")

@@ -241,6 +241,25 @@ def _variety_block(variety=False):
     return VARIETY_BLOCK_TEMPLATE if variety else ""
 
 
+# ---------- ответ ТОЛЬКО по-английски (необязательно) ----------
+# Голос Джейн на английском звучит заметно лучше русского, поэтому в
+# обучении полезно полное погружение. ВАЖНО: блок добавляется только при
+# english_only=True — без него промпт прежний (см. tests/smoke_test).
+ENGLISH_ONLY_BLOCK = """
+\n\U0001F1EC\U0001F1E7 ALWAYS ANSWER IN ENGLISH:
+Reply in English ONLY, in every message, even if the student writes in Russian.
+If the student switches to Russian, answer in simple English anyway — they
+need the English input. If you must clarify something, use very simple English
+with a short example the student can repeat. Never explain that you are
+speaking English — just speak it.
+"""
+
+
+def _english_only_block(english_only=False):
+    """Блок «только по-английски». Пусто, если не запрошен."""
+    return ENGLISH_ONLY_BLOCK if english_only else ""
+
+
 def detect_language(text):
     """Есть кириллица → 'ru', иначе 'en'."""
     return "ru" if any(c in _RUSSIAN_CHARS for c in (text or "").lower()) else "en"
@@ -291,7 +310,7 @@ def _mistake_line(err):
         text = str(err.get("jane_response") or "")
     return text[:50]
 
-def build_system_prompt(mode, profile, lang="en", level=None, student=None, context=None, plan=None, lesson=None, now=None, variety=False):
+def build_system_prompt(mode, profile, lang="en", level=None, student=None, context=None, plan=None, lesson=None, now=None, variety=False, english_only=False):
     """Собирает system-промпт (персона + профиль ученика).
 
     mode:    'lesson' | 'free'
@@ -307,6 +326,7 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
              None/пусто → блок не добавляется (обратная совместимость)
     now:     datetime «сейчас» — необязательно; None → блок не добавляется
     variety: True → добавить блок против повторов в беседе
+    english_only: True → отвечать ТОЛЬКО по-английски (полное погружение)
     """
     language_rule = language_instruction(lang)
 
@@ -352,7 +372,7 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
     return (prompt + _level_block(profile, level)
             + _weak_topics_block(profile) + _student_block(student)
             + _lesson_block(lesson) + _now_block(now)
-            + _variety_block(variety)
+            + _variety_block(variety) + _english_only_block(english_only)
             + _plan_block(plan) + _knowledge_block(context))
 
 

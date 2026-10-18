@@ -37,6 +37,7 @@ import profile_store
 import progress_map
 import reactions
 import server_manager
+import translate
 import settings_store
 import stt_engine
 import theme
@@ -63,6 +64,7 @@ from ui.widgets.chat_view import ChatView
 from ui.widgets.control_bar import ControlBar
 from ui.widgets.info_bar import InfoBar
 from ui.widgets.input_bar import InputBar
+from ui.widgets.hint_bar import HintBar
 from ui.widgets.lesson_bar import LessonBar
 from ui.widgets.map_view import MapView
 from ui.widgets.visualizer import AudioVisualizer
@@ -118,7 +120,7 @@ def profile_summary(user, profile, map_progress=(0, 0)):
     out = []
 
     name = str(user.get("name") or "").strip() or "Ученик"
-    avatar = user.get("avatar") or "🙂"
+    avatar = user_manager.display_avatar(user.get("avatar"))
     out.append(("Ученик", "%s %s" % (avatar, name)))
     out.append(("Уровень", user_manager.level_label(user.get("level"))))
     try:
@@ -267,6 +269,9 @@ class EnglishTeacherApp:
         self.stt = stt_engine.STTEngine(on_state=self._on_stt_state,
                                         hotwords_provider=self._stt_hotwords)
         self.llm = LLMClient()
+        # перевод RU→EN для подсказки (наша же модель: ~0.3 с на фразу)
+        self.translator = translate.Translator(
+            self.llm, max_tokens=getattr(config, "TRANSLATE_MAX_TOKENS", 90))
 
         # ---------- контроллеры ----------
         # роль-Аналитик: разбирает реплики ученика в режиме урока
@@ -433,7 +438,8 @@ class EnglishTeacherApp:
 
     def _greeting(self):
         u = self.current_user or {}
-        text = (f"{u.get('avatar', '🙂')} Привет, {u.get('name') or 'друг'}! "
+        text = (f"{user_manager.display_avatar(u.get('avatar'))} Привет, "
+                f"{u.get('name') or 'друг'}! "
                 f"Я Джейн, твой преподаватель английского.\n"
                 f"Я буду запоминать твои ошибки и подстраивать уроки под тебя.")
         level = u.get("level")
@@ -450,7 +456,7 @@ class EnglishTeacherApp:
         name = str(u.get("name") or "").strip()
         if not name:
             return SUBTITLE_TEXT
-        sub = "%s %s" % (u.get("avatar") or "🙂", name)
+        sub = "%s %s" % (user_manager.display_avatar(u.get("avatar")), name)
         sub += " · уровень %s" % user_manager.level_label(u.get("level"))
         return sub
 
@@ -643,6 +649,14 @@ class EnglishTeacherApp:
         # ввода (pack before=chat_view), сама прячется, когда урока нет.
         self.lesson_bar = LessonBar(self.chat_tab, p, on_exit=self.exit_lesson,
                                     before=self.chat_view)
+
+        # ---------- подсказка перевода (RU → EN) ----------
+        # English-вариант фразы ученика. В режиме "suggest" — только текст и
+        # 🔊, ученик сам решает; в "hybrid" — ещё кнопка «Отправить».
+        self.hint_bar = HintBar(self.chat_tab, p,
+                                on_insert=self._hint_insert,
+                                on_listen=self._hint_listen,
+                                before=self.chat_view)
 
         self._build_hero()
 
@@ -1211,6 +1225,61 @@ class EnglishTeacherApp:
             self._character_state("idle")
 
     # -----------------------------------------------------
+    # Подсказка перевода (RU → EN)
+    # -----------------------------------------------------
+    def _wants_translation(self, text):
+        """Нужна ли подсказка: есть русские буквы и перевод включён."""
+        if not getattr(config, "TRANSLATE_ENABLED", True):
+            return False
+        return translate.has_cyrillic(text)
+
+    def _show_translation_hint(self, text):
+        """Перевести слово/фразу в фоне и показать подсказку."""
+        self.hint_bar.show_status("💡 Перевожу…")
+        threading.Thread(target=self._translate_worker, args=(text,),
+                         daemon=True).start()
+
+    def _translate_worker(self, text):
+        """Фон: перевод коротким вызовом модели (~0.3 с).
+
+        Одно слово → до трёх значений с примерами; фраза → одна строка.
+        """
+        single = translate.is_single_word(text)
+        try:
+            if single:
+                ok, result = self.translator.translate_word(text)
+            else:
+                ok, result = self.translator.translate(text)
+        except Exception as exc:
+            print("⚠️ Перевод не удался: %s" % exc)
+            ok, result = False, ["перевод недоступен"] if single else "перевод недоступен"
+        self._dispatch(lambda: self._apply_translation(text, ok, result, single))
+
+    def _apply_translation(self, source, ok, result, single=False):
+        """Главный поток: показать перевод или понятную ошибку."""
+        if not ok:
+            reason = result[0] if isinstance(result, list) and result else result
+            self.hint_bar.show_status(
+                "💡 Не удалось перевести: %s. Попробуй иначе." % reason)
+            return
+        if single:
+            self.hint_bar.show_meanings(result, source)
+        else:
+            self.hint_bar.show_translation(result, source)
+        self._character_state("thinking")
+
+    def _hint_insert(self, english):
+        """Кнопка ↺: вставить перевод в поле ввода В МЕСТО КУРСОРА.
+
+        Ничего не отправляем: ученик может дописать фразу, поправить её
+        или сказать вслух. Набранный текст сохраняется.
+        """
+        return self.input_bar.insert_at_cursor(english)
+
+    def _hint_listen(self, english):
+        """Кнопка 🔊: послушать, как фраза звучит по-английски."""
+        self._say(english)
+    # -----------------------------------------------------
     # Лицо робота: эмоции и реакции
     # -----------------------------------------------------
     def _character_state(self, state=None):
@@ -1525,6 +1594,10 @@ class EnglishTeacherApp:
     def _on_recognized(self, text, lang):
         self.current_lang = lang
         self.chat.set_language(lang)
+        # сказал по-русски — тоже показываем подсказку, а не пишем в чат
+        if self._wants_translation(text):
+            self._show_translation_hint(text)
+            return
         self.add_message("Вы (голос)", text)
         self._handle_text(text)
 
@@ -1585,10 +1658,15 @@ class EnglishTeacherApp:
             self.add_message("Джейн", "🎤 На этом уроке говори в микрофон — текст отключён.")
             return
         self.input_bar.clear_text()
+        # Русская фраза НЕ пишется в чат: она уходит в подсказку перевода
+        # (решение ученика — переписать, произнести или отправить как есть).
+        if self._wants_translation(text):
+            self._show_translation_hint(text)
+            return
         self.add_message("Вы", text)
         self._handle_text(text)
 
-    def _handle_text(self, text):
+    def _handle_text(self, text, skip_translate=False):
         """Ввод пользователя — текстом или голосом (разницы нет).
 
         Сначала проверяем команду смены режима («урок», «перерыв»…):
@@ -1718,6 +1796,7 @@ class EnglishTeacherApp:
         self.chat.clear_history()
         self.info_bar.clear()
         self.lesson_bar.clear()
+        self.hint_bar.clear()
         self.input_bar.set_locked(False)
         self.control_bar.set_record_enabled(True)
 
@@ -1831,6 +1910,7 @@ class EnglishTeacherApp:
         self.control_bar.apply_theme(p)
         self.info_bar.apply_theme(p)
         self.lesson_bar.apply_theme(p)
+        self.hint_bar.apply_theme(p)
         self.right_panel.apply_theme(p)
         self.users_panel.apply_theme(p)
 
