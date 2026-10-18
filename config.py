@@ -92,6 +92,22 @@ def model_is_available(model_id):
 
 
 
+# ---------- шрифт ЧАТА (пиксельный) ----------
+# Чат можно рисовать пиксельным шрифтом — он в одном стиле с роботом и
+# LED-эквалайзером. Шрифт подключается ИЗ ФАЙЛА, без установки в систему
+# (см. ui/fonts.py). Если файла нет или Tk его не видит — чат спокойно
+# остаётся на Segoe UI (ничего не падает).
+#   CHAT_PIXEL_FONT — False, чтобы выключить и вернуть обычный шрифт;
+#   CHAT_FONT_FAMILY / CHAT_FONT_SIZE — что включать;
+#   CHAT_FONT_FILE — файл в assets/fonts.
+# Размер 16 — «родной» и самый чёткий для этого шрифта (проверено
+# пиксельно: чёткие 8, 15, 16, 24, 32).
+CHAT_PIXEL_FONT = True
+CHAT_FONT_FAMILY = "Undertale Battle Font"
+CHAT_FONT_SIZE = 16
+CHAT_FONT_FILE = os.path.join(BASE_DIR, "assets", "fonts",
+                              "undertale_battle_font.ttf")
+
 # ---------- значения по умолчанию для интерфейса ----------
 DEFAULT_MODE = "lesson"      # "lesson" (урок) | "free" (свободное общение)
 DEFAULT_THEME = "dark"       # "dark" | "light"

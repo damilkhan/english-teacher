@@ -53,6 +53,7 @@ from controllers.server_monitor import ServerMonitor
 from llm_client import LLMClient
 from roles.analyst import Analyst
 from roles.planner import Planner
+from ui import fonts as ui_fonts
 from ui import gradient
 from ui.first_run import FirstRunForm
 from ui.panels.block_panel import BlockPanel
@@ -196,6 +197,14 @@ class EnglishTeacherApp:
     def __init__(self):
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
+
+        # Шрифт чата подключаем ДО создания окна: Tk читает список семейств
+        # один раз, и шрифт, добавленный позже, может остаться невидимым.
+        # Режим FR_PRIVATE — только для нашего процесса, в систему не ставим.
+        try:
+            ui_fonts.register_font(getattr(config, "CHAT_FONT_FILE", ""))
+        except Exception as exc:
+            print("ℹ️ Шрифт чата не подключён: %s" % exc)
 
         self.current_theme = config.DEFAULT_THEME
         self.palette = theme.palette(self.current_theme)
@@ -1953,4 +1962,8 @@ class EnglishTeacherApp:
             self.recorder.stop()
         if self.character is not None:
             self.character.stop_idle()
+        try:
+            ui_fonts.release_all()          # отпускаем шрифты, взятые у GDI
+        except Exception:
+            pass
         self.window.destroy()

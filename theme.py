@@ -141,7 +141,12 @@ _UI_FAMILY = "Segoe UI"
 FONT_PANEL_TITLE = (_TITLE_FAMILY, 15, "bold") # «Настройки»
 FONT_SECTION = (_UI_FAMILY, 11, "bold")        # подписи секций (РЕЖИМ, ТЕМА)
 FONT_UI = (_UI_FAMILY, 13)                     # кнопки, обычные подписи
-FONT_BODY = ("Segoe UI Emoji", 14)             # текст в чате (умеет эмодзи)
+FONT_BODY_DEFAULT = ("Segoe UI Emoji", 14)     # обычное тело чата
+FONT_BODY = FONT_BODY_DEFAULT                  # текст в чате (текущий)
+# Шрифт чата после resolve_fonts(): либо пиксельный (Undertale), либо Segoe.
+# Нужен отдельно, потому что пиксельный может не подключиться — тогда
+# остаётся обычный, и приложение работает как раньше.
+CHAT_FONT_OK = False                           # пиксельный шрифт включён?
 FONT_HEAD = (_UI_FAMILY, 11, "bold")           # ники и время в чате
 FONT_SMALL = (_UI_FAMILY, 11)                  # подписи-секции
 
@@ -176,6 +181,51 @@ def resolve_fonts(root):
     FONT_UI = (_UI_FAMILY, 13)
     FONT_HEAD = (_UI_FAMILY, 11, "bold")
     FONT_SMALL = (_UI_FAMILY, 11)
+
+    # --- пиксельный шрифт ЧАТА (если подключён и виден Tk) ---
+    resolve_chat_font(root)
+
+
+def resolve_chat_font(root):
+    """Включить пиксельный шрифт для ЧАТА, если он доступен.
+
+    Шрифт подключается из файла (ui.fonts, режим FR_PRIVATE) — в систему
+    ничего не ставится. Если файла нет, Tk его не видит или настройка
+    выключена — чат остаётся на Segoe UI, и ничего не ломается.
+
+    Меняем ТОЛЬКО FONT_BODY (тело реплик): ники, кнопки, панели и мелкие
+    подписи остаются на Segoe — там нужны 11 px и жирность, а пиксельный
+    на таких размерах размывается.
+    """
+    global FONT_BODY, CHAT_FONT_OK
+    CHAT_FONT_OK = False
+    try:
+        import config
+    except Exception:                          # noqa: BLE001
+        return False
+    if not getattr(config, "CHAT_PIXEL_FONT", False):
+        FONT_BODY = FONT_BODY_DEFAULT          # выключено → обычный шрифт
+        return False
+    family = str(getattr(config, "CHAT_FONT_FAMILY", "") or "")
+    size = int(getattr(config, "CHAT_FONT_SIZE", 16) or 16)
+    if not family:
+        return False
+    try:
+        from ui import fonts
+        if not fonts.family_available(root, family):
+            # пробуем подключить файл сами (на случай, если ещё не подключён)
+            fonts.register_font(getattr(config, "CHAT_FONT_FILE", ""))
+            if not fonts.family_available(root, family):
+                print("ℹ️ Шрифт чата «%s» недоступен — остаётся Segoe UI" % family)
+                FONT_BODY = FONT_BODY_DEFAULT
+                return False
+    except Exception as exc:                   # noqa: BLE001
+        print("⚠️ Шрифт чата не подключился (%s) — остаётся Segoe UI" % exc)
+        FONT_BODY = FONT_BODY_DEFAULT
+        return False
+    FONT_BODY = (family, size)
+    CHAT_FONT_OK = True
+    return True
 
 
 # ---------------------------------------------------------
