@@ -304,6 +304,44 @@ def stats(cards, today=None) -> dict:
 
 
 # ---------------------------------------------------------
+# Слова для промпта (этап C): вплести в разговор 1-2 слова ученика
+# ---------------------------------------------------------
+# Джейн получает НЕБОЛЬШОЙ список слов ученика и может естественно
+# использовать их в ответе или попросить ученика их употребить. Это не
+# экзамен: модель сама решает, уместно ли слово в текущей теме.
+def prompt_words(cards, limit=None) -> List[str]:
+    """Слова для необязательного блока промпта: ["ключ — key", …].
+
+    Берём «трудные» слова: сначала нижние уровни, потом те, где больше
+    промахов, потом давно не спрашивали. Выученные (5) не берём — их
+    повторять не нужно, а в разговоре они уже не тянут вниз.
+    """
+    if limit is None:
+        try:
+            import config
+            limit = int(getattr(config, "VOCAB_PROMPT_LIMIT", 4))
+        except Exception:
+            limit = 4
+    try:
+        limit = max(1, int(limit))
+    except (TypeError, ValueError):
+        limit = 4
+
+    prepared = []
+    for card in (cards or []):
+        if not isinstance(card, dict) or is_learned(card):
+            continue
+        word = str(card.get("word") or "").strip()
+        en = str(card.get("en") or "").strip()
+        if not word or not en:
+            continue
+        prepared.append((level_of(card), -_int(card.get("misses")), _due_date(card),
+                         "%s — %s" % (word, en)))
+    prepared.sort(key=lambda item: item[:3])
+    return [item[3] for item in prepared[:limit]]
+
+
+# ---------------------------------------------------------
 # Окно повторения (этап B): задание, эталон, «сегодня уже было»
 # ---------------------------------------------------------
 # Задание для ученика: русское слово + английский пример с ПРОПУСКОМ

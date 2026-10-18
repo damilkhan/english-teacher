@@ -26,6 +26,7 @@ from datetime import datetime
 import config
 import profile_store
 import prompt_builder
+import vocabulary
 import rag
 import user_manager
 
@@ -192,13 +193,16 @@ class ChatController:
         # план читаем БЕЗ ожидания: если он ещё строится — отвечаем без него
         plan_text = self._plan_text if self.mode == "lesson" else ""
         lesson_block = self._lesson if self.mode == "lesson" else None
+        # слова ученика (этап C): 1-2 из них Джейн может вплести в разговор
+        words = self._prompt_words()
         # «сейчас» и «не повторяйся» — так Джейн знает дату/время и не задаёт
         # один и тот же вопрос про завтрак при каждом знакомстве
         system_prompt = prompt_builder.build_system_prompt(
             self.mode, profile_store.load(self.user_id), lang,
             level=level, student=student, context=context, plan=plan_text,
             lesson=lesson_block, now=datetime.now(), variety=True,
-            english_only=bool(getattr(config, "ENGLISH_ONLY", False)))
+            english_only=bool(getattr(config, "ENGLISH_ONLY", False)),
+            words=words)
         messages = prompt_builder.build_messages(system_prompt, self.history, user_text)
 
         print(f"📤 Язык ответа: {'РУССКИЙ' if lang == 'ru' else 'ENGLISH'}")
@@ -216,6 +220,25 @@ class ChatController:
         if not cleaned:
             cleaned = prompt_builder.fallback_response(lang)
         return True, cleaned
+
+    def _prompt_words(self):
+        """Слова ученика для необязательного блока промпта (этап C).
+
+        Пусто, если система слов выключена, этап C выключен или слов нет —
+        тогда промпт остаётся прежним. Ошибка чтения профиля не должна
+        ломать ответ: молча отвечаем без блока.
+        """
+        if not getattr(config, "VOCAB_ENABLED", True):
+            return []
+        if not getattr(config, "VOCAB_IN_PROMPT", True):
+            return []
+        try:
+            cards = profile_store.vocabulary_cards(self.user_id)
+            return vocabulary.prompt_words(
+                cards, limit=getattr(config, "VOCAB_PROMPT_LIMIT", 4))
+        except Exception as exc:
+            print("⚠️ Слова для промпта не прочитаны: %s" % exc)
+            return []
 
     def _ensure_plan_async(self):
         """Построить план урока В ФОНЕ (не блокируя ответ Учителя).

@@ -161,6 +161,33 @@ def _knowledge_block(context):
     return KNOWLEDGE_BLOCK_TEMPLATE.format(context=context)
 
 
+# ---------- слова ученика в разговоре (этап C) ----------
+# Готовые строки вида «ключ — key» собирает vocabulary.prompt_words (по
+# профилю ученика). Здесь только текст блока: вплести слово ПО ТЕМЕ, не
+# устраивать опрос и не вываливать весь список. ВАЖНО: при words=None/пусто
+# блок не добавляется, и промпт остаётся прежним байт-в-байт
+# (см. tests/smoke_test.test_prompt_unchanged).
+WORDS_BLOCK_TEMPLATE = """
+\n\U0001F9E0 WORDS FROM THE STUDENT'S OWN VOCABULARY (use if it fits):
+{words}
+Pick at most ONE or TWO of these words and use them naturally in your reply —
+or ask the student a short question that invites one of them. Never list them,
+never quiz the student, and never force all of them into one answer.
+"""
+
+
+def _words_block(words):
+    """Блок «слова ученика». Пусто, если слов нет (обратная совместимость)."""
+    items = []
+    for item in (words or []):
+        text = str(item or "").strip()
+        if text:
+            items.append("- %s" % text)
+    if not items:
+        return ""
+    return WORDS_BLOCK_TEMPLATE.format(words="\n".join(items))
+
+
 # ---------- идущее занятие (карта прогресса, lesson.py) ----------
 # Готовую подпись урока собирает приложение (ui/app.py) и передаёт словарём
 # {"title", "type", "topic"}. ВАЖНО: при lesson=None блок НЕ добавляется —
@@ -310,7 +337,7 @@ def _mistake_line(err):
         text = str(err.get("jane_response") or "")
     return text[:50]
 
-def build_system_prompt(mode, profile, lang="en", level=None, student=None, context=None, plan=None, lesson=None, now=None, variety=False, english_only=False):
+def build_system_prompt(mode, profile, lang="en", level=None, student=None, context=None, plan=None, lesson=None, now=None, variety=False, english_only=False, words=None):
     """Собирает system-промпт (персона + профиль ученика).
 
     mode:    'lesson' | 'free'
@@ -327,6 +354,8 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
     now:     datetime «сейчас» — необязательно; None → блок не добавляется
     variety: True → добавить блок против повторов в беседе
     english_only: True → отвечать ТОЛЬКО по-английски (полное погружение)
+    words:   слова ученика для вплетения в разговор ["ключ — key", …] —
+             необязательно; None/пусто → блок не добавляется
     """
     language_rule = language_instruction(lang)
 
@@ -373,7 +402,8 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
             + _weak_topics_block(profile) + _student_block(student)
             + _lesson_block(lesson) + _now_block(now)
             + _variety_block(variety) + _english_only_block(english_only)
-            + _plan_block(plan) + _knowledge_block(context))
+            + _plan_block(plan) + _knowledge_block(context)
+            + _words_block(words))
 
 
 def build_messages(system_prompt, history, user_text):
