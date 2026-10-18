@@ -49,9 +49,9 @@
 - По завершении работы — `git push origin master`.
 - CRLF: большинство файлов в рабочем дереве с CRLF (`i/lf w/crlf`). Новые — тоже CRLF.
 - В `.gitignore`: `profiles/`, `logs/`, `models/`, `settings.json`, `__pycache__/`.
-- **`assets/fonts/undertale_battle_font.ttf` — В git** (шрифт чата выбран, §14.1).
-  ВНЕ git и не используются: `dotgothic16-regular.ttf`, `OFL.txt`, `metadata.json`
-  (комплект DotGothic16 — отклонён, лицензия OFL 1.1 рядом на всякий случай).
+- **`assets/fonts/` — только `undertale_battle_font.ttf`** (шрифт чата, в git).
+  Комплект DotGothic16 (`dotgothic16-regular.ttf` + `OFL.txt` + `metadata.json`)
+  **удалён** как неиспользуемый.
 
 ---
 
@@ -378,8 +378,7 @@ test_reactions.py              test_face.py          test_translate.py
    `AddFontResourceExW` + FR_PRIVATE). Настройки — в `config.py`:
    `CHAT_PIXEL_FONT` (выключатель), `CHAT_FONT_FAMILY`, `CHAT_FONT_SIZE`,
    `CHAT_FONT_FILE`. Если файла нет — чат спокойно на Segoe, ничего не падает.
-   `dotgothic16-regular.ttf` лежит рядом, но **не используется** (кириллица
-   вдвое шире латиницы — не понравилось).
+   Шрифт DotGothic16 пробовали — **удалён**: кириллица вдвое шире латиницы.
 2. ~~Точная синхронизация эмоций с озвучкой~~ — **СДЕЛАНО**: реплика режется
    на куски настроения и озвучивается по кускам; `tts.speak(parts=…, on_part=…)`
    сообщает о начале звука каждого куска, лицо меняется точно (замер: границы
