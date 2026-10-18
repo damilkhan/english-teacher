@@ -148,7 +148,10 @@ class UsersPanel(ctk.CTkFrame):
 
         # аватар — слева. Эмодзи рисуем Pillow-ом (embedded_color): Tk показал
         # бы его однотонным контуром, а нужен цветной.
-        avatar_token = str(user.get("avatar") or "🙂")
+        # ТОЛЬКО первый эмодзи: если в профиле эмодзи вместе с текстом
+        # («🐼 му-му»), картинка рисуется на всю строку (108 px) и обрезается
+        # в узком месте панели (26 px) — вместо аватара был квадратик.
+        avatar_token = user_manager.display_avatar(user.get("avatar"))
         avatar = ctk.CTkLabel(row, text="", width=self.AVATAR_W)
         avatar_image = self._avatar_image(avatar_token)
         if avatar_image is not None:

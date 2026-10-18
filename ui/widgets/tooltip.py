@@ -54,6 +54,8 @@ class ToolTip:
         return out
 
     def _on_enter(self, _event=None):
+        if self._tip is not None:
+            return                       # уже показана — не перезапускаем
         self._cancel()
         try:
             self._after_id = self.widget.after(self.delay, self._show)
@@ -97,12 +99,28 @@ class ToolTip:
                  font=theme.FONT_SMALL, padx=9, pady=5,
                  justify="left", borderwidth=0).pack(padx=1, pady=1)
         tip.update_idletasks()
+
+        # ВАЖНО: подсказка должна стоять ПОД виджетом, не поверх него.
+        # Раньше точка появления была +18 px от угла кнопки (высота кнопки
+        # 42 px) — подсказка ложилась НА кнопку. Курсор оказывался над
+        # подсказкой, кнопка получала <Leave>, подсказка исчезала, курсор
+        # снова был над кнопкой → <Enter>: бесконечный цикл, всё мерцало.
+        try:
+            w = max(1, self.widget.winfo_width())
+            h = max(1, self.widget.winfo_height())
+        except Exception:
+            w = h = 0
         x = self.widget.winfo_rootx() + self.offset[0]
-        y = self.widget.winfo_rooty() + self.offset[1]
+        y = self.widget.winfo_rooty() + h + 6
+
         # не даём подсказке уехать за правый край экрана
         screen_w = tip.winfo_screenwidth()
+        screen_h = tip.winfo_screenheight()
         if x + tip.winfo_reqwidth() > screen_w - 8:
             x = max(8, screen_w - tip.winfo_reqwidth() - 8)
+        # если снизу места нет — показываем НАД виджетом
+        if y + tip.winfo_reqheight() > screen_h - 8:
+            y = max(8, self.widget.winfo_rooty() - tip.winfo_reqheight() - 6)
         tip.wm_geometry("+%d+%d" % (x, y))
         self._tip = tip
 
