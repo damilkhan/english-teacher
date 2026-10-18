@@ -100,11 +100,12 @@ def model_is_available(model_id):
 #   CHAT_PIXEL_FONT — False, чтобы выключить и вернуть обычный шрифт;
 #   CHAT_FONT_FAMILY / CHAT_FONT_SIZE — что включать;
 #   CHAT_FONT_FILE — файл в assets/fonts.
-# Размер 16 — «родной» и самый чёткий для этого шрифта (проверено
-# пиксельно: чёткие 8, 15, 16, 24, 32).
+# Размер 13 выбран для аккуратности: 16 выглядел слишком крупно и жирно.
+# Чёткие размеры этого шрифта: 12, 13, 14, 15, 16 (проверено пиксельно).
+# Меньше 12 — штрих становится 1 px и «плывёт».
 CHAT_PIXEL_FONT = True
 CHAT_FONT_FAMILY = "Undertale Battle Font"
-CHAT_FONT_SIZE = 16
+CHAT_FONT_SIZE = 13
 CHAT_FONT_FILE = os.path.join(BASE_DIR, "assets", "fonts",
                               "undertale_battle_font.ttf")
 
