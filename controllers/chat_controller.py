@@ -100,23 +100,33 @@ class ChatController:
         self._lesson = dict(lesson) if isinstance(lesson, dict) else (
             {"title": str(lesson)} if lesson else None)
 
-    def begin_lesson(self, lesson=None):
+    def begin_lesson(self, lesson=None, student_text=""):
         """Джейн начинает занятие ПЕРВОЙ (служебная реплика, не ответ ученика).
 
         Ученик только что открыл урок и ещё не сказал ни слова — без этого
         он не знал бы, что делать. Затравка НЕ попадает ни в разбор Аналитика,
         ни в прогресс, ни в историю диалога (см. _opening).
+
+        student_text — первая реплика ученика (когда Джейн начинает урок САМА,
+        ученик уже поздоровался). Тогда просим модель сначала ответить на неё,
+        а потом перейти к уроку, — иначе приветствие ученика потеряется.
+        Пустая строка (по умолчанию) оставляет прежнюю затравку байт-в-байт.
         """
         if self.busy:
             return False
         if lesson is not None:
             self.set_lesson(lesson)
         title = (self._lesson or {}).get("title") or "the lesson"
+        said = str(student_text or "").strip()
+        intro = ""
+        if said:
+            intro = (" The student has just said: \"%s\" — answer that briefly "
+                     "first, then move on to the lesson." % said.replace('"', "'")[:200])
         self._opening = True
         return self.send(
             "[START OF LESSON] Topic: %s. Greet the student warmly in English "
-            "and give the FIRST small task of this lesson (one thing at a time)."
-            % title)
+            "and give the FIRST small task of this lesson (one thing at a time).%s"
+            % (title, intro))
 
     def clear_history(self):
         self.history = []

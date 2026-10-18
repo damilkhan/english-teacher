@@ -268,6 +268,20 @@ class ProgressMap:
         previous = order[idx - 1]
         return UNLOCKED if self.get_point_state(previous, profile) == COMPLETED else LOCKED
 
+    def next_lesson(self, profile: Optional[Dict[str, Any]]) -> Optional[str]:
+        """id ПЕРВОГО непройденного урока по порядку карты.
+
+        По этому уроку Джейн сама начинает занятие, когда ученик поздоровался
+        (решение §14.5). Порядок линейный, как в `_lesson_order`: уроки внутри
+        точки, точки по полю `number`. Все уроки пройдены → None; пустая карта →
+        None. Битый профиль не мешает: берём то, что удалось прочитать.
+        """
+        done = self.completed_lessons(profile)
+        for lesson_id in self._lesson_order:
+            if lesson_id not in done:
+                return lesson_id
+        return None
+
     def get_point_progress(self, point_id: str,
                            profile: Optional[Dict[str, Any]]) -> Tuple[int, int]:
         """(пройдено уроков, всего уроков) внутри точки."""
