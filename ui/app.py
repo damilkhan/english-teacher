@@ -230,8 +230,8 @@ class EnglishTeacherApp:
         self._story_context = False
         self.reactions = reactions.ReactionTracker()   # 3 промаха → похвала
         self._mood_plan = None          # план эмоций текущей реплики
-        self._mood_at = 0.0             # сколько реплики уже прозвучало
-        self._mood_last = 0.0           # метка времени прошлого такта
+        # лицо во время речи меняется по КОЛБЭКАМ из tts.py (начало звука
+        # очередного куска), поэтому «сколько уже прозвучало» не считаем
         self._hero_fonts = {}      # заполним ниже, после создания окна
 
         # ---------- окно ----------
@@ -1305,7 +1305,11 @@ class EnglishTeacherApp:
         return getattr(char, "state", None)
 
     def _start_mood_play(self, response):
-        """Начать «игру лицом» по тексту ответа: настроение по предложениям."""
+        """Начать «игру лицом» по тексту ответа: настроение по предложениям.
+
+        Ставит лицо для ПЕРВОГО куска; дальше эмоции меняет колбэк из
+        tts.py ровно в момент начала звука каждого следующего куска.
+        """
         try:
             import mood as mood_mod
             plan = mood_mod.plan_reply(response)
@@ -1313,8 +1317,6 @@ class EnglishTeacherApp:
             print("⚠️ Настроение не разобрано: %s" % exc)
             plan = None
         self._mood_plan = plan
-        self._mood_at = 0.0
-        self._mood_last = time.monotonic()
         if plan is None or not plan.segments:
             self._character_state("speak_story")
             return
@@ -1330,44 +1332,34 @@ class EnglishTeacherApp:
         except Exception:
             return "speaking"
 
-    def _mood_tick(self):
-        """Во время озвучки менять лицо по ходу рассказа (по времени)."""
+    def _mood_speech(self):
+        """Параметры speak() для точной синхронизации лица с озвучкой.
+
+        Отдаём озвучке готовые ЧАСТИ реплики: tts сам скажет, когда начинается
+        звук каждой (колбэк _on_mood_part). Раньше момент смены эмоции считался
+        «символы ÷ скорость речи» и опаздывал до 1-2 секунд.
+        """
+        plan = self._mood_plan
+        if plan is None or not plan.segments:
+            return {}
+        return {"parts": [seg.text for seg in plan.segments],
+                "on_part": self._on_mood_part}
+
+    def _on_mood_part(self, index):
+        """Поток озвучки: началась очередная часть реплики → сменить лицо."""
+        try:
+            self._dispatch(lambda i=index: self._apply_mood_part(i))
+        except Exception as exc:
+            print("⚠️ Настроение: часть не передана в окно (%s)" % exc)
+
+    def _apply_mood_part(self, index):
+        """Главный поток: поставить лицо по куску плана настроения."""
         plan = self._mood_plan
         if plan is None or not plan.segments:
             return
-        try:
-            import tts
-            level = float(tts.get_level())
-        except Exception:
-            level = 0.0
-        now = time.monotonic()
-        if self._mood_last <= 0.0:
-            self._mood_last = now
-        # время «звучания» считаем по РЕАЛЬНЫМ часам, а не «по тику»:
-        # такт может приходить с разной частотой, и фиксированный шаг
-        # ускорял бы смену настроения (куски кончались раньше речи).
-        elapsed = now - self._mood_last
-        self._mood_last = now
-        if level <= 2.0:
-            return              # тишина: лицо не трогаем (пусть доигрывает своё)
-        self._mood_at += max(0.0, min(0.5, elapsed))
-        index = 0
-        left = self._mood_at
-        for i, seg in enumerate(plan.segments):
-            if left < seg.seconds:
-                index = i
-                break
-            left -= seg.seconds
-            index = i
-        state = self._mood_state(plan, index)
-        char = getattr(self, "character", None)
-        if char is not None and getattr(char, "available", False):
-            try:
-                char.set_level(level, speaking=(level > 2.0))
-                if getattr(char, "state", None) != state:
-                    char.set_state(state)
-            except Exception:
-                pass
+        if index < 0 or index >= len(plan.segments):
+            return
+        self._character_state(self._mood_state(plan, index))
 
     def _react_to_analysis(self, result):
         """Реакция на разбор Аналитика: 3 промаха → верный ответ → похвала.
@@ -1425,8 +1417,6 @@ class EnglishTeacherApp:
                     self._last_char_level = level
                     self._last_char_speaker = speaker
                     char.set_level(level, speaking=(speaker == "jane" and level > 2.0))
-            if speaker == "jane" and self._mood_plan is not None:
-                self._mood_tick()
         except Exception as exc:
             print("⚠️ Эквалайзер: %s" % exc)
         try:
@@ -1455,7 +1445,7 @@ class EnglishTeacherApp:
             # «доиграла»: для рассказа — закрыть глаза на 3 с (конец истории)
             self._dispatch(lambda: self._finish_speech(m, story))
 
-        self._say(response, on_done=_after_speech)
+        self._say(response, on_done=_after_speech, **self._mood_speech())
         self.visualizer.reset()
 
     def _finish_speech(self, mark, story):
@@ -1488,8 +1478,12 @@ class EnglishTeacherApp:
         self._character_state("story_end")
 
     def _replay_reply(self, text):
-        """Кнопка «прослушать повторно»: озвучить ту же реплику заново."""
-        self._say(text)
+        """Кнопка «прослушать повторно»: озвучить ту же реплику заново.
+
+        План настроения строим заново — повтор звучит с той же «игрой лицом».
+        """
+        self._start_mood_play(text)
+        self._say(text, **self._mood_speech())
 
     # -----------------------------------------------------
     # Озвучка недоступна (edge-tts иногда отвечает 403)
@@ -1558,11 +1552,14 @@ class EnglishTeacherApp:
         return first
 
 
-    def _say(self, text, on_done=None):
+    def _say(self, text, on_done=None, parts=None, on_part=None):
         """Озвучка в фоне — окно ждать не должно.
 
         on_done вызывается (тоже в фоне) сразу после того, как звук доиграл;
         UI-обновления внутри него обязаны уйти через dispatch в главный поток.
+
+        parts / on_part — части реплики и колбэк «началась часть № N»: по нему
+        лицо робота меняет эмоцию ровно вместе со звуком (см. _mood_speech).
         """
         if not text:
             if on_done:
@@ -1578,7 +1575,8 @@ class EnglishTeacherApp:
 
         def _worker():
             try:
-                ok = tts.speak(text, name=name, name_latin=name_latin)
+                ok = tts.speak(text, name=name, name_latin=name_latin,
+                               parts=parts, on_part=on_part)
                 if ok is False:
                     # Джейн не смогла озвучить (например, edge-tts ответил 403)
                     self._dispatch(self._notify_no_voice)

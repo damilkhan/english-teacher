@@ -241,6 +241,52 @@ def split_by_language(text):
 
 
 # ---------------------------------------------------------
+# Части реплики (точная синхронизация лица с озвучкой)
+# ---------------------------------------------------------
+def _build_segments(parts, name=None, name_latin=None):
+    """Куски для озвучки: [(номер части, язык, текст), ...].
+
+    parts — части реплики (например, куски настроения из mood.plan_reply).
+    Каждая часть режется ПО ЯЗЫКУ, чтобы русское читал русский голос, а
+    английское — английский. Номер части нужен лицу робота: оно меняет
+    эмоцию ровно на начале звука этой части, а не по оценке «символы ÷ скорость».
+    Пустые части (только эмодзи/разметка) пропускаются.
+    """
+    out = []
+    for index, part in enumerate(parts or []):
+        clean_text = clean_for_speech(str(part or ""))
+        if not clean_text:
+            continue
+        chunks = split_by_language(clean_text) or [
+            (detect_language(clean_text), clean_text)]
+        for lang, chunk in chunks:
+            out.append((index, lang, _apply_name(chunk, lang, name, name_latin)))
+    return out
+
+
+class _PartTracker:
+    """Сообщать о начале звучания новой ЧАСТИ реплики (один раз на часть).
+
+    Колбэк зовётся из потока озвучки — внутри него нельзя трогать Tk
+    (приложение отправляет вызов в главный поток через dispatcher).
+    Ошибка колбэка не должна ломать звук, поэтому всё в try/except.
+    """
+
+    def __init__(self, callback=None) -> None:
+        self.callback = callback
+        self.last = None
+
+    def start(self, index) -> None:
+        if self.callback is None or index == self.last:
+            return
+        self.last = index
+        try:
+            self.callback(index)
+        except Exception as exc:               # noqa: BLE001 — звук важнее
+            _log.warning("TTS: колбэк части (%s)", exc)
+
+
+# ---------------------------------------------------------
 # Состояние (модуль-уровень: сериализация, прерывание, кэш)
 # ---------------------------------------------------------
 # --- уровень громкости для «эквалайзера» и рта робота ---
@@ -321,7 +367,7 @@ def clear_cache() -> None:
 # ---------------------------------------------------------
 # Публичный вход
 # ---------------------------------------------------------
-def speak(text: str, name=None, name_latin=None) -> bool:
+def speak(text: str, name=None, name_latin=None, parts=None, on_part=None) -> bool:
     """Озвучить текст. Блокирующая: вызывать из фонового потока.
 
     Возвращает True, если что-то прозвучало (False — не удалось озвучить,
@@ -330,6 +376,11 @@ def speak(text: str, name=None, name_latin=None) -> bool:
     name / name_latin: имя ученика в двух формах. Для КАЖДОГО куска имя
     подставляется НА ЯЗЫКЕ куска (ru → кириллица, en → латиница): в русском
     тексте имя звучит по-русски, в английском — по-английски.
+
+    parts / on_part: НЕОБЯЗАТЕЛЬНО. parts — части реплики (например, куски
+    настроения). Тогда текст режется по ним, а on_part(номер) вызывается в
+    момент, когда начинается звук этой части. Так лицо робота меняет эмоцию
+    РОВНО вместе со звуком. Без parts всё работает как раньше (одна часть).
 
     Смешанный текст разбивается ПО ЯЗЫКУ: русские куски читает русский
     голос, английские — английский. Новая реплика важнее текущей.
@@ -340,34 +391,35 @@ def speak(text: str, name=None, name_latin=None) -> bool:
     if not clean_text:
         return False
 
-    segments = split_by_language(clean_text)
-    if not segments:                       # только цифры/знаки
-        segments = [(detect_language(clean_text), clean_text)]
-    # имя — на языке КАЖДОГО куска (русский кусок → кириллица, англ. → латиница)
-    segments = [(lang, _apply_name(chunk, lang, name, name_latin))
-                for lang, chunk in segments]
+    # части реплики (по умолчанию одна) → куски по языку, с номером части
+    segments = _build_segments([clean_text] if parts is None else parts,
+                               name, name_latin)
+    if not segments:                       # только цифры/знаки/эмодзи
+        return False
 
     global last_failure
     my_gen = _bump_generation()
     stop()                                     # новая реплика прерывает старую
     with _lock:
         _stop.clear()
+        tracker = _PartTracker(on_part)
         # Основной путь: СЕГМЕНТНЫЙ поток — один звуковой выход на всю реплику
         # и предзагрузка кусков. Между языками нет пауз (раньше каждый кусок
         # открывал свой поток и качался по очереди — отсюда «задумчивость»).
         played = False
         if _streaming_enabled():
             try:
-                if _stream_play_segments(segments, my_gen):
+                if _stream_play_segments(segments, my_gen, tracker):
                     _reset_level()
                     last_failure = ""
                     return True
             except Exception as exc:           # noqa: BLE001 — вернёмся к запасному
                 _log.warning("TTS: сегментный путь не сработал (%s)", exc)
         # Запасной путь: по кускам (поток/скачивание, с повторами).
-        for lang, chunk in segments:
+        for index, lang, chunk in segments:
             if _stop.is_set() or my_gen != _current_generation():
                 return played                  # прервали / пришла более новая
+            tracker.start(index)
             if _speak_chunk(chunk, voice_for(lang), my_gen):
                 played = True
         last_failure = "" if played else "edge-tts не ответил (проверь интернет)"
@@ -740,22 +792,27 @@ def _decode_stream_into(out, text, voice, samplerate, channels, my_gen) -> bool:
     return played
 
 
-def _stream_play_segments(segments, my_gen) -> bool:
+def _stream_play_segments(segments, my_gen, tracker=None) -> bool:
     """Проиграть все куски ЧЕРЕЗ ОДИН звуковой выход.
 
     Первый кусок читаем ПОТОКОМ (звук — как только пришли первые байты, не
     дожидаясь полной загрузки), остальные качаются заранее (пока играет
     текущий — грузится следующий). Выход открывается ОДИН раз → нет пауз
     между языками и быстрый старт даже для длинного первого куска.
+
+    tracker (необязательно) — _PartTracker: сообщает лицу робота, какая
+    часть реплики звучит сейчас. Куски — (номер части, язык, текст); если
+    пришли пары (язык, текст), номер части считаем нулевым.
     """
     if not _STREAM_OK or not segments:
         return False
+    segments = [seg if len(seg) >= 3 else (0, seg[0], seg[1]) for seg in segments]
     samplerate, channels = _output_params()
     prefs = [None] * len(segments)
 
     def _start(i):
         if 0 <= i < len(segments) and prefs[i] is None:
-            lang, chunk = segments[i]
+            _index, lang, chunk = segments[i]
             prefs[i] = _Prefetch(chunk, voice_for(lang))
 
     _start(1)                                  # пока играет кусок 0 — качаем 1 и 2
@@ -765,7 +822,9 @@ def _stream_play_segments(segments, my_gen) -> bool:
         with _sd.OutputStream(samplerate=samplerate, channels=channels,
                               dtype="int16", blocksize=STREAM_BLOCKSIZE) as out:
             # кусок 0 — ПОТОКОМ (быстрый старт, не ждём полной загрузки)
-            lang0, chunk0 = segments[0]
+            index0, lang0, chunk0 = segments[0]
+            if tracker is not None:
+                tracker.start(index0)
             if _decode_stream_into(out, chunk0, voice_for(lang0),
                                    samplerate, channels, my_gen):
                 played = True
@@ -777,6 +836,8 @@ def _stream_play_segments(segments, my_gen) -> bool:
             for i in range(1, len(segments)):
                 if _stop.is_set() or my_gen != _current_generation():
                     break
+                if tracker is not None:
+                    tracker.start(segments[i][0])
                 data = prefs[i].wait() if prefs[i] is not None else None
                 if data and _decode_into(out, data, samplerate, channels, my_gen):
                     played = True

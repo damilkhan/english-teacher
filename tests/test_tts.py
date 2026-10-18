@@ -475,6 +475,91 @@ def test_download_failure():
         check("ничего не проиграно", fp.mixer.music.played == 0)
 
 
+# =========================================================
+# 9. Части реплики: точная синхронизация лица с озвучкой
+# =========================================================
+def test_build_segments():
+    print("\n[9] _build_segments: части реплики → куски по языку")
+    segs = tts._build_segments(["Hi! I'm glad.", "Ты молодец!"],
+                               name="Дамиль", name_latin="Damil")
+    check("две части → два куска, номера частей 0 и 1",
+          [x[0] for x in segs] == [0, 1], segs)
+    check("язык определён у каждого куска",
+          [x[1] for x in segs] == ["en", "ru"], segs)
+    ru = tts._build_segments(["Ты молодец, Дамиль!"])
+    check("русский кусок сохранён целиком", ru == [(0, "ru", "Ты молодец, Дамиль!")], ru)
+    mixed = tts._build_segments(["Great job, Damil! Ты сегодня молодец."],
+                                name="Дамиль", name_latin="Damil")
+    check("смешанная часть → два куска с ОДНИМ номером части",
+          [x[0] for x in mixed] == [0, 0], mixed)
+    empty = tts._build_segments(["😊", "", "Hello!"])
+    check("пустые части (только эмодзи) пропущены, номер исходной части сохранён",
+          len(empty) == 1 and empty[0][0] == 2, empty)
+    check("без частей → пустой список", tts._build_segments([]) == [])
+
+
+def test_parts_callback():
+    print("\n[9b] speak(parts=..., on_part=...): лицо меняется по частям")
+    with restore_tts():
+        fp = FakePygame()
+        tts.pygame = fp
+        tts._download = lambda text, voice: b"MP3DATA"
+        calls = []
+        parts = ["Hi there!", "Great job, Damil! Ты молодец.", "See you!"]
+        ok = tts.speak(" ".join(parts), name="Дамиль", name_latin="Damil",
+                       parts=parts, on_part=calls.append)
+        check("озвучка прошла", ok is True, ok)
+        check("колбэк вызван по разу на часть, по порядку", calls == [0, 1, 2], calls)
+        check("проиграно 4 куска (часть 1 распалась на en+ru)",
+              fp.mixer.music.played == 4, fp.mixer.music.played)
+
+        only = []
+        tts.speak("Hello there", on_part=only.append)
+        check("без parts — одна часть (номер 0)", only == [0], only)
+
+
+def test_parts_callback_streaming():
+    print("\n[9c] Сегментный поток тоже сообщает номер части")
+    orig = (tts._Prefetch, tts._decode_into, tts._decode_stream_into, tts._sd, tts._STREAM_OK)
+    seen = []
+
+    class FakePref:
+        def __init__(self, text, voice):
+            self.text = text
+        def wait(self, timeout=None):
+            return b"P"
+
+    class FakeOut:
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+        def write(self, arr):
+            pass
+
+    class FakeSD:
+        def OutputStream(self, **kw):
+            return FakeOut()
+
+    try:
+        tts._Prefetch = FakePref
+        tts._sd = FakeSD()
+        tts._decode_stream_into = lambda out, text, voice, sr, ch, gen: True
+        tts._decode_into = lambda out, data, sr, ch, gen: True
+        tts._STREAM_OK = True
+        tracker = tts._PartTracker(seen.append)
+        ok = tts._stream_play_segments([(0, "en", "A"), (1, "en", "B"),
+                                        (1, "ru", "В"), (2, "en", "C")],
+                                       tts._bump_generation(), tracker)
+        check("куски сыграны", ok is True, ok)
+        check("номера частей без повторов, по порядку", seen == [0, 1, 2], seen)
+        check("_PartTracker терпит падение колбэка",
+              tts._PartTracker(lambda i: 1 / 0).start(0) is None)
+    finally:
+        (tts._Prefetch, tts._decode_into, tts._decode_stream_into,
+         tts._sd, tts._STREAM_OK) = orig
+
+
 def main():
     print("=" * 60)
     print("Проверка tts.py (edge-tts/pygame — заглушки)")
@@ -496,6 +581,9 @@ def main():
     test_serialized()
     test_last_wins()
     test_download_failure()
+    test_build_segments()
+    test_parts_callback()
+    test_parts_callback_streaming()
 
     print("\n" + "=" * 60)
     if FAILED:
