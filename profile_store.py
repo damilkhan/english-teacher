@@ -21,6 +21,7 @@ from datetime import datetime
 
 import config
 import user_manager
+import vocabulary
 
 PROFILE_FILENAME = "student_profile.json"
 
@@ -106,6 +107,7 @@ def default_profile():
         "weak_topics": [],       # темы, где ученик чаще ошибался (для промпта)
         "analysis_log": [],      # разборы реплик Аналитиком (roles/analyst)
         "completed_lessons": [],  # id пройденных уроков карты (progress_map)
+        "vocabulary": [],        # карточки слов для повторения (vocabulary.py)
     }
 
 
@@ -132,6 +134,9 @@ def load(user_id=None):
             raise ValueError("профиль не является объектом JSON")
         # мягкая миграция: у профилей, созданных до карты прогресса, ключа нет
         data.setdefault("completed_lessons", [])
+        # ...и до системы повторения слов — тоже
+        if not isinstance(data.get("vocabulary"), list):
+            data["vocabulary"] = []
         return data
     except FileNotFoundError:
         return _empty_profile()
@@ -300,6 +305,60 @@ def record_lesson_completed(lesson_id, user_id=None):
     done.append(lesson_id)
     _write(profile, progress_path(user_id))
     return True
+
+
+def vocabulary_cards(user_id=None):
+    """Карточки слов для повторения активного ученика (список словарей)."""
+    profile = load(user_id)
+    cards = profile.get("vocabulary")
+    if not isinstance(cards, list):
+        return []
+    return [card for card in cards if isinstance(card, dict)]
+
+
+def add_vocabulary(word, meanings, user_id=None):
+    """Запомнить значения РУССКОГО слова (перевод из экспресс-переводчика).
+
+    Повторный перевод того же слова дубликатов не даёт, а уже выученное
+    слово не трогается: карточка просто не создаётся заново.
+    ВАЖНО: пишем через _write, а не через save() — перевод слова НЕ занятие,
+    счётчик total_lessons расти не должен.
+
+    Возвращает список НОВЫХ карточек (их может быть 0).
+    """
+    profile = load(user_id)
+    cards = profile.get("vocabulary")
+    if not isinstance(cards, list):
+        cards = []
+    added = vocabulary.add_meanings(cards, word, meanings,
+                                    limit=getattr(config, "VOCAB_MAX_CARDS", 500))
+    if not added:
+        return []
+    profile["vocabulary"] = cards
+    _write(profile, progress_path(user_id))
+    return added
+
+
+def update_vocabulary_card(word, en, success, user_id=None):
+    """Отметить ответ по карточке: успех (GOOD) или промах.
+
+    Возвращает карточку после правки (или None, если такой нет).
+    Пишем через _write — это не новое занятие.
+    """
+    profile = load(user_id)
+    cards = profile.get("vocabulary")
+    if not isinstance(cards, list):
+        return None
+    card = vocabulary.find_card(cards, word, en)
+    if card is None:
+        return None
+    if success:
+        vocabulary.register_success(card)
+    else:
+        vocabulary.register_miss(card)
+    profile["vocabulary"] = cards
+    _write(profile, progress_path(user_id))
+    return card
 
 
 def record_level_test(result, answers, user_id=None):
