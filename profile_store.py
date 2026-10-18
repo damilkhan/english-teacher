@@ -108,6 +108,7 @@ def default_profile():
         "analysis_log": [],      # разборы реплик Аналитиком (roles/analyst)
         "completed_lessons": [],  # id пройденных уроков карты (progress_map)
         "vocabulary": [],        # карточки слов для повторения (vocabulary.py)
+        "vocab_last_session": None,   # дата последнего захода повторения слов
     }
 
 
@@ -359,6 +360,27 @@ def update_vocabulary_card(word, en, success, user_id=None):
     profile["vocabulary"] = cards
     _write(profile, progress_path(user_id))
     return card
+
+
+def vocab_last_session(user_id=None):
+    """Когда последний раз был заход повторения слов («ГГГГ-ММ-ДД» или "")."""
+    profile = load(user_id)
+    return str(profile.get("vocab_last_session") or "").strip()
+
+
+def mark_vocab_session(day=None, user_id=None):
+    """Отметить, что заход повторения сегодня был.
+
+    Нужно, чтобы Джейн вытаскивала окно не чаще раза в день (проверка —
+    vocabulary.session_today). Пишем через _write: повторение слов — это
+    НЕ занятие, счётчик total_lessons расти не должен.
+    Возвращает записанную дату.
+    """
+    text = str(day or "").strip() or datetime.now().strftime("%Y-%m-%d")
+    profile = load(user_id)
+    profile["vocab_last_session"] = text
+    _write(profile, progress_path(user_id))
+    return text
 
 
 def record_level_test(result, answers, user_id=None):

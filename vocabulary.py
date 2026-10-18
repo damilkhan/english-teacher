@@ -304,6 +304,94 @@ def stats(cards, today=None) -> dict:
 
 
 # ---------------------------------------------------------
+# Окно повторения (этап B): задание, эталон, «сегодня уже было»
+# ---------------------------------------------------------
+# Задание для ученика: русское слово + английский пример с ПРОПУСКОМ
+# («Open the door with this ___.»). Пропуск не выдумываем: если в примере
+# нет самого слова (переводчик дал другую форму) — примера не показываем,
+# честнее спросить одно слово.
+_WORD_IN_TEXT_RE = re.compile(r"[A-Za-z']+")
+
+
+def word_forms(en) -> List[str]:
+    """Формы английского слова для поиска в примере (key → keys, keyed…)."""
+    text = str(en or "").strip().lower()
+    if not text:
+        return []
+    if " " in text:            # «look for» — ищем фразу целиком, форм не делаем
+        return [text]
+    forms = {text, text + "s", text + "es", text + "ed", text + "d", text + "ing"}
+    if text.endswith("e"):
+        forms.add(text[:-1] + "ing")
+    if text.endswith("y") and len(text) > 1:
+        forms.add(text[:-1] + "ies")
+        forms.add(text[:-1] + "ied")
+    # длинные формы первыми: «keys» должно проверяться раньше «key»
+    return sorted(forms, key=len, reverse=True)
+
+
+def example_with_gap(card) -> str:
+    """Пример с пропуском вместо слова: «Open the door with this ___.»
+
+    Пустая строка — если примера нет или в нём не нашлось само слово
+    (тогда окно покажет только русское слово, без выдуманного пропуска).
+    """
+    card = card or {}
+    example = str(card.get("example") or "").strip()
+    if not example:
+        return ""
+    forms = word_forms(card.get("en"))
+    if not forms:
+        return ""
+    low = example.lower()
+    for form in forms:
+        if " " in form:                       # значение из нескольких слов
+            index = low.find(form)
+            if index >= 0:
+                return example[:index] + "___" + example[index + len(form):]
+            continue
+        for match in _WORD_IN_TEXT_RE.finditer(low):
+            if match.group(0) == form:
+                start, end = match.span()
+                return example[:start] + "___" + example[end:]
+    return ""
+
+
+def reference_texts(card) -> List[str]:
+    """Что ученик может произнести: пример и само слово.
+
+    Сверяем с ОБОИМИ: «key» и «Open the door with this key.» — оба правильные
+    ответы. Если примером сверять только фразу, короткий ответ «key» выглядел
+    бы как «сказал своё» и вердикт не показался бы.
+    """
+    card = card or {}
+    out: List[str] = []
+    example = str(card.get("example") or "").strip()
+    en = str(card.get("en") or "").strip()
+    if example:
+        out.append(example)
+    if en and en.lower() not in [text.lower() for text in out]:
+        out.append(en)
+    return out
+
+
+def session_today(value, today=None) -> bool:
+    """Был ли заход повторения уже сегодня (дата из поля профиля).
+
+    Мусор и пустое значение → False: лучше спросить лишний раз, чем молча
+    потерять повторение из-за испорченного поля.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return False
+    try:
+        day = datetime.fromisoformat(text).date()
+    except ValueError:
+        return False
+    return day == _as_date(today)
+
+
+# ---------------------------------------------------------
 # Служебное
 # ---------------------------------------------------------
 def trim(cards, limit=None) -> list:
