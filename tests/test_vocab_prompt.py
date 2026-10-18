@@ -83,7 +83,7 @@ def test_words_block():
     check("слова в блоке", "ключ — key" in with_words and "дверь — door" in with_words)
     check("слова списком", "\n- ключ — key" in with_words, with_words[-260:])
     check("просьба «не устраивать опрос» есть",
-          "never quiz" in with_words.lower(), with_words[-400:])
+          "not turn it into a test" in with_words.lower(), with_words[-400:])
     check("просит 1-2 слова, а не все",
           "ONE or TWO" in with_words, with_words[-400:])
     # остальные необязательные блоки не сдвинулись
@@ -211,7 +211,8 @@ def test_controller():
         check("в промпте запроса есть слово ученика", "дверь — door" in system,
               system[-200:] if system else "пусто")
         check("и блок стоит в самом конце",
-              system.rstrip().endswith("into one answer."), system[-80:])
+              system.rstrip().endswith("what to practise."),
+              system[-80:])
 
 
 def main():

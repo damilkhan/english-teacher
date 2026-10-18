@@ -170,9 +170,12 @@ def _knowledge_block(context):
 WORDS_BLOCK_TEMPLATE = """
 \n\U0001F9E0 WORDS FROM THE STUDENT'S OWN VOCABULARY (use if it fits):
 {words}
-Pick at most ONE or TWO of these words and use them naturally in your reply —
-or ask the student a short question that invites one of them. Never list them,
-never quiz the student, and never force all of them into one answer.
+Pick at most ONE or TWO of these words and use them naturally in your reply,
+or ask a short question that invites one of them. Do not dump the whole list
+into one answer, do not turn it into a test, and never force all of them in.
+Naming one or two words while giving a small task is fine.
+If the student asks to practise or remember words, give a tiny task with one or
+two of them right away — do not answer with a question about what to practise.
 """
 
 
