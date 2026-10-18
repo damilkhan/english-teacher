@@ -279,7 +279,10 @@ class MapView(ctk.CTkFrame):
         self._offset = (0, 0)
         self._map_photo = None        # держим ссылку на картинку карты
         self._token_photos: Dict[str, Any] = {}
-        self._token_cache: Dict[Tuple[str, int], Any] = {}
+        # ключ кэша: состояние + радиус + НОМЕР точки. Без номера все жетоны
+        # одного состояния получали картинку ПЕРВОГО нарисованного (на карте
+        # все точки были под «2» — грабли №36).
+        self._token_cache: Dict[Tuple[str, int, Any], Any] = {}
         self._tokens: List[Dict[str, Any]] = []
         self._states: Dict[str, str] = {}
         self._item_map = None
@@ -485,7 +488,7 @@ class MapView(ctk.CTkFrame):
         token = next((t for t in self._tokens if t["id"] == pid), None)
         if token is None:
             return
-        key = (state, int(radius))
+        key = (state, int(radius), token.get("number"))
         photo = self._token_cache.get(key)
         if photo is None:
             try:
