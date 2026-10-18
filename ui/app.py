@@ -232,6 +232,10 @@ class EnglishTeacherApp:
         self._mood_plan = None          # план эмоций текущей реплики
         # лицо во время речи меняется по КОЛБЭКАМ из tts.py (начало звука
         # очередного куска), поэтому «сколько уже прозвучало» не считаем
+        # эталон для сверки произношения: последняя английская подсказка
+        # переводчика (ученик должен произнести её вслух) и время её появления
+        self._pron_ref = ""
+        self._pron_at = 0.0
         self._hero_fonts = {}      # заполним ниже, после создания окна
 
         # ---------- окно ----------
@@ -665,7 +669,8 @@ class EnglishTeacherApp:
         self.hint_bar = HintBar(self.chat_tab, p,
                                 on_insert=self._hint_insert,
                                 on_listen=self._hint_listen,
-                                before=self.chat_view)
+                                before=self.chat_view,
+                                on_close=self._pron_forget)
 
         self._build_hero()
 
@@ -1275,6 +1280,7 @@ class EnglishTeacherApp:
             self.hint_bar.show_meanings(result, source)
         else:
             self.hint_bar.show_translation(result, source)
+        self._remember_pron_reference(result, single)
         self._character_state("thinking")
 
     def _hint_insert(self, english):
@@ -1288,6 +1294,73 @@ class EnglishTeacherApp:
     def _hint_listen(self, english):
         """Кнопка 🔊: послушать, как фраза звучит по-английски."""
         self._say(english)
+
+    # -----------------------------------------------------
+    # Сверка произношения (см. pronunciation.py)
+    # -----------------------------------------------------
+    def _remember_pron_reference(self, result, single=False):
+        """Запомнить английскую подсказку как эталон для сверки произношения.
+
+        Дальше ученик должен произнести эту фразу в микрофон — тогда программа
+        скажет, похоже ли получилось. Работает без модели и без сети.
+        """
+        if not getattr(config, "PRON_CHECK_ENABLED", True):
+            return
+        try:
+            import pronunciation
+            english = result[0] if isinstance(result, list) and result else result
+            ref = pronunciation.reference_from_hint(english, single=bool(single))
+        except Exception as exc:
+            print("⚠️ Эталон произношения не сохранён: %s" % exc)
+            return
+        self._pron_ref = ref or ""
+        self._pron_at = time.monotonic() if self._pron_ref else 0.0
+
+    def _pron_forget(self):
+        """Подсказку закрыли — забываем эталон (дальше идёт обычный диалог)."""
+        self._pron_ref = ""
+        self._pron_at = 0.0
+
+    def _pronunciation_report(self, text):
+        """Сверить услышанное с подсказкой, если она ещё «в силе»."""
+        if not getattr(config, "PRON_CHECK_ENABLED", True) or not self._pron_ref:
+            return None
+        try:
+            memory = float(getattr(config, "PRON_MEMORY_SECONDS", 150.0) or 0)
+        except (TypeError, ValueError):
+            memory = 150.0
+        if memory > 0 and (time.monotonic() - self._pron_at) > memory:
+            self._pron_forget()               # подсказка устарела
+            return None
+        try:
+            import pronunciation
+            return pronunciation.compare(self._pron_ref, text)
+        except Exception as exc:
+            print("⚠️ Сверка произношения не удалась: %s" % exc)
+            return None
+
+    def _show_pronunciation(self, text):
+        """Показать вердикт сверки. True — реплику в диалог НЕ отправляем.
+
+        «Похоже» — показываем и продолжаем обычный разговор с Джейн (она
+        похвалит и поведёт урок дальше). «Почти»/«Попробуй ещё» — ученик
+        остаётся на этой фразе: 🔊 послушать, как надо, и повторить.
+        """
+        report = self._pronunciation_report(text)
+        if report is None or not report.show:
+            return False
+        if report.verdict == "good":
+            self._pron_forget()
+            self.hint_bar.show_note("✅ Похоже! «%s»" % report.reference,
+                                    report.reference)
+            self._character_state("happy")
+            return False
+        self.hint_bar.show_note(
+            str(report.message) + "\n   🔊 послушай, как надо, и повтори",
+            report.reference)
+        self._character_state("thinking")
+        return True
+
     # -----------------------------------------------------
     # Лицо робота: эмоции и реакции
     # -----------------------------------------------------
@@ -1604,6 +1677,9 @@ class EnglishTeacherApp:
         # сказал по-русски — тоже показываем подсказку, а не пишем в чат
         if self._wants_translation(text):
             self._show_translation_hint(text)
+            return
+        # сверка произношения: ученик произносит фразу из подсказки
+        if self._show_pronunciation(text):
             return
         self.add_message("Вы (голос)", text)
         self._handle_text(text)

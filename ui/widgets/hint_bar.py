@@ -41,20 +41,21 @@ class HintBar(ctk.CTkFrame):
     def __init__(self, parent, palette,
                  on_insert: Optional[Callable[[str], None]] = None,
                  on_listen: Optional[Callable[[str], None]] = None,
-                 before=None):
+                 before=None, on_close: Optional[Callable[[], None]] = None):
         super().__init__(parent, fg_color=palette["surface_alt"],
                          corner_radius=theme.R["block"])
         self.palette = palette
         self._on_insert = on_insert
         self._on_listen = on_listen
         self._before = before
+        self._on_close = on_close
         self._visible = False
         self._english = ""
 
         # КНОПКИ создаём ПЕРВЫМИ и упаковываем справа: тогда текст занимает
         # остаток и не выдавливает их, даже если строка длинная.
         self.close_btn = ctk.CTkButton(
-            self, text="✕", command=self.clear, width=28, height=28,
+            self, text="✕", command=self._close, width=28, height=28,
             fg_color="transparent", hover_color=palette["btn_hover"],
             text_color=palette["muted"], cursor="hand2",
             corner_radius=theme.R["button"], font=theme.FONT_SMALL)
@@ -116,6 +117,16 @@ class HintBar(ctk.CTkFrame):
         self.label.configure(text=str(text or ""))
         self._show()
 
+    def show_note(self, text: str, english: str = "") -> None:
+        """Показать пояснение (например, вердикт сверки произношения).
+
+        english — фраза, которую по-прежнему можно послушать кнопкой 🔊:
+        ученику важно услышать правильный вариант, а не только прочитать его.
+        """
+        self._english = str(english or "")
+        self.label.configure(text=str(text or ""))
+        self._show()
+
     def clear(self) -> None:
         self._english = ""
         self.label.configure(text="")
@@ -156,6 +167,15 @@ class HintBar(ctk.CTkFrame):
         self._visible = False
 
     # ---------- кнопки ----------
+    def _close(self) -> None:
+        """Кнопка ✕: убрать подсказку и сообщить об этом приложению."""
+        self.clear()
+        if self._on_close is not None:
+            try:
+                self._on_close()
+            except Exception:                          # noqa: BLE001
+                pass
+
     def _insert(self) -> None:
         """Вставить перевод в поле ввода (в место курсора)."""
         if not self._english or self._on_insert is None:
