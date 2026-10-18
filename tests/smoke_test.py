@@ -295,24 +295,27 @@ def test_profile_store():
 
 
 # =========================================================
-# 4. Команды смены режима (перенесены из консольной версии)
+# 4. Подписи режимов (commands.py)
 # =========================================================
-def test_commands():
-    print("\n[4] Команды смены режима")
+# Голосовые команды смены режима удалены как рудимент консольной версии
+# (§14.7): осталась только константа MODE_LABELS. Проверяем, что она есть
+# для обоих режимов и что разбор команд действительно вычищен — иначе
+# мёртвый код вернётся незаметно.
+def test_mode_labels():
+    print("\n[4] Подписи режимов (commands.py)")
     import commands
 
-    cases = [
-        ("урок", "lesson"), ("Урок!", "lesson"), ("заниматься", "lesson"), ("учитель", "lesson"),
-        ("перерыв", "free"), ("Перерыв.", "free"), ("отдохнем", "free"), ("друг", "free"),
-        ("привет, друг!", "None"), ("давай перерыв на десять минут", "None"),
-        ("", "None"), (None, "None"),
-    ]
-    for text, expected in cases:
-        got = commands.parse_mode_command(text)
-        check(f"команда {text!r} → {expected}", str(got) == expected, got)
+    for mode in ("lesson", "free"):
+        check(f"подпись для режима {mode} есть",
+              bool(commands.MODE_LABELS.get(mode)), commands.MODE_LABELS)
+    check("разбор команд вычищен",
+          not hasattr(commands, "parse_mode_command")
+          and not hasattr(commands, "MODE_COMMANDS"),
+          [n for n in ("parse_mode_command", "MODE_COMMANDS") if hasattr(commands, n)])
 
-    check("приветствие для урока есть", bool(commands.GREETINGS.get("lesson")))
-    check("приветствие для свободного режима есть", bool(commands.GREETINGS.get("free")))
+    import ui.app
+    check("панель настроек берёт подпись из commands.MODE_LABELS",
+          "commands.MODE_LABELS" in open(ui.app.__file__, encoding="utf-8").read())
 
 
 # =========================================================
@@ -629,7 +632,7 @@ def main():
     test_prompt_unchanged()
     test_clean_response()
     test_profile_store()
-    test_commands()
+    test_mode_labels()
     test_users()
     test_level_test()
 
