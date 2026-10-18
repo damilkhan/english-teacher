@@ -91,6 +91,8 @@ SETUP_HINT = ("✋ Чтобы начать, заполни профиль: им�
 LEVEL_TEST_NOTE = "🎯 Уровень определён: %s. Подстрою уроки под него."
 NOT_READY_LOADING = "⏳ Модель ещё загружается — подожди несколько секунд и попробуй снова."
 NOT_READY_OFFLINE = "❌ LLM-сервер не отвечает. Подробности в logs\\llama-server.log"
+ALL_LESSONS_NOTE = ("🎉 Вся карта «Пустыня» пройдена! Дальше — свободное общение: "
+                   "говорим на любые темы.")
 
 HERO_HEIGHT = 92
 PANEL_WIDTH = 400     # ширина правой панели: даже длинное «Имя Фамилия» видно целиком
@@ -343,6 +345,10 @@ class EnglishTeacherApp:
             on_aborted=self._on_lesson_aborted,
         )
         self._pending_lesson = None      # урок, ждущий готовности распознавания
+        # Автозапуск урока (Джейн сама ведёт занятие): взведён — следующая
+        # реплика ученика начнёт следующий урок по карте (решение §14.5).
+        self._auto_lesson_armed = False
+        self._auto_lesson_used = False   # одна попытка за запуск
         # Отложенное действие, ждущее LLM-сервер (см. _run_when_server_ready)
         self._server_task = None
 
@@ -417,7 +423,7 @@ class EnglishTeacherApp:
         if self.server_ready and not (self.current_user or {}).get("level"):
             self.window.after(300, lambda: self._level_test_then_vocab())
         else:
-            self.window.after(300, lambda: self.maybe_review_vocabulary())
+            self.window.after(300, self._review_then_arm)
 
     def _level_test_then_vocab(self):
         """Порядок запуска: вводный тест уровня → повторение слов.
@@ -428,7 +434,7 @@ class EnglishTeacherApp:
         try:
             self.run_level_test((self.current_user or {}).get("id"))
         finally:
-            self.maybe_review_vocabulary()
+            self._review_then_arm()
 
     def _prompt_profile_setup(self):
         """Обязательная форма: без имени и пола общение с Джейн запрещено."""
@@ -539,6 +545,8 @@ class EnglishTeacherApp:
             pass
         self._story_context = False
         self._vocab_wanted = False
+        self._auto_lesson_armed = False   # у нового ученика свой автозапуск
+        self._auto_lesson_used = False
         self.vocab.user_id = user_id      # слова следующего ученика — его
         self.chat_view.clear()
         self.info_bar.clear()
@@ -881,8 +889,14 @@ class EnglishTeacherApp:
     # =====================================================
     # ЗАНЯТИЕ по карте (lesson.py + LessonController)
     # =====================================================
-    def start_lesson(self, lesson_id, point_id=None):
-        """Начать занятие по уроку с карты (после выбора в окне блока)."""
+    def start_lesson(self, lesson_id, point_id=None, student_text="",
+                     auto=False):
+        """Начать занятие по уроку с карты (после выбора в окне блока).
+
+        student_text — первая реплика ученика, когда урок начинает САМА Джейн;
+        auto — урок выбран автоматически по учебному плану (влияет только на
+        строку в чате). Оба параметра необязательны: с карты всё как раньше.
+        """
         if not self.profile_ready:
             self.add_message("Джейн", SETUP_HINT)
             return None
@@ -908,7 +922,7 @@ class EnglishTeacherApp:
                 return None
 
         self._pending_lesson = None
-        return self._begin_lesson(data)
+        return self._begin_lesson(data, student_text=student_text, auto=auto)
 
     def _lesson_data(self, lesson_id, point_id=None):
         """Данные урока и его блока из учебного плана (или None)."""
@@ -968,8 +982,12 @@ class EnglishTeacherApp:
             return (False, "⏳ Готовлю распознавание — начну урок через несколько секунд.")
         return (False, "❌ Распознавание речи недоступно — перезапусти приложение.")
 
-    def _begin_lesson(self, data):
-        """Создать сессию занятия, настроить интерфейс и начать диалог."""
+    def _begin_lesson(self, data, student_text="", auto=False):
+        """Создать сессию занятия, настроить интерфейс и начать диалог.
+
+        student_text — реплика ученика, с которой начался урок (её Джейн
+        сначала услышит в затравке), auto — урок выбран самой Джейн по плану.
+        """
         session = self.lesson.start(
             lesson_id=data["id"], point_id=data.get("point_id"),
             lesson_type=data.get("type"), title=data.get("title"),
@@ -995,6 +1013,8 @@ class EnglishTeacherApp:
         self.info_bar.clear()
         opening = "🎓 Начинаем %s (%s)." % (
             session.label(), lesson_mod.type_label(data.get("type")))
+        if auto:
+            opening += "\n📚 По плану дальше — этот урок. Поехали!"
         if data.get("story"):
             opening += "\n🎧 Слушай историю, а потом перескажи её — по-русски или по-английски."
         try:
@@ -1013,18 +1033,22 @@ class EnglishTeacherApp:
         self._apply_lesson_input_state(session)
         self._lesson_state("thinking")
         if self.server_ready:
-            self._open_lesson_dialog(lesson_payload)
+            self._open_lesson_dialog(lesson_payload, student_text)
         else:
             # сервер молчит — ждём его («ожидание»), занятие пока «на паузе»
             self._run_when_server_ready(
-                lambda: self._open_lesson_dialog(lesson_payload),
+                lambda: self._open_lesson_dialog(lesson_payload, student_text),
                 on_timeout=self._lesson_server_timeout)
         return session
 
-    def _open_lesson_dialog(self, lesson_payload):
-        """Дать Джейн начать занятие (первая реплика урока)."""
+    def _open_lesson_dialog(self, lesson_payload, student_text=""):
+        """Дать Джейн начать занятие (первая реплика урока).
+
+        student_text — что ученик сказал перед стартом: Джейн сначала коротко
+        ответит на это, а потом поведёт урок (пусто — обычная затравка).
+        """
         try:
-            self.chat.begin_lesson(lesson_payload)
+            self.chat.begin_lesson(lesson_payload, student_text=student_text)
         except Exception as exc:
             print("⚠️ Не удалось начать занятие в чате: %s" % exc)
 
@@ -1454,6 +1478,87 @@ class EnglishTeacherApp:
         self.vocab_panel = None
         print("📚 Повторение закончено: %s" % (summary or {}))
         self._refresh_side_views()
+        self._arm_auto_lesson()        # повторение было — теперь урок
+
+    # -----------------------------------------------------
+    # Автозапуск урока: Джейн сама ведёт занятие (этап B+)
+    # -----------------------------------------------------
+    def _review_then_arm(self):
+        """Повторение слов → взвод автозапуска урока (порядок §14.5).
+
+        Порядок запуска: профиль → модель → тест уровня → повторение слов →
+        урок. Повторение всегда идёт раньше: слова ученик вспоминает на
+        разогреве, а не посреди занятия.
+        """
+        try:
+            self.maybe_review_vocabulary()
+        except Exception as exc:
+            print("⚠️ Повторение не открылось: %s" % exc)
+        finally:
+            self._after_vocab_review()
+
+    def _after_vocab_review(self):
+        """Повторение закончилось (или не понадобилось) → взводим урок."""
+        if self.vocab_panel is not None:
+            return                  # окно открыто: взведём после закрытия
+        self._arm_auto_lesson()
+
+    def _arm_auto_lesson(self):
+        """Взвести автозапуск: урок начнётся с ПЕРВОЙ реплики ученика.
+
+        Так Джейн ведёт занятие сама (решение §14.5): не спрашиваем «Начнём
+        урок 1.2? Да / Позже», а просто начинаем следующий урок по карте.
+        Условия: профиль полон, модель готова, урок не идёт, окно повторения
+        закрыто, есть непройденный урок. Одна попытка за запуск.
+        """
+        if not getattr(config, "LESSON_AUTO_START", True):
+            return False
+        if self._auto_lesson_used or self._auto_lesson_armed:
+            return False
+        if not self.profile_ready or self.lesson.is_active:
+            return False
+        if self.vocab_panel is not None:
+            return False            # сначала повторение слов, потом урок
+        if not self.server_ready:
+            return False            # модель грузится — взведём, когда будет готова
+        try:
+            lesson_id = self.progress_map.next_lesson(self._active_profile())
+        except Exception as exc:
+            print("⚠️ Следующий урок не определён: %s" % exc)
+            return False
+        if not lesson_id:
+            self._auto_lesson_used = True          # начинать нечего
+            self.add_message("Джейн", ALL_LESSONS_NOTE)
+            return False
+        self._auto_lesson_armed = True
+        print("🎓 Автозапуск урока взведён: следующий — %s" % lesson_id)
+        return True
+
+    def _maybe_start_auto_lesson(self, text, sender="Вы"):
+        """Первая реплика ученика → сразу начинаем следующий урок по карте.
+
+        Возвращает True, если урок начат (или причина уже сказана): тогда
+        реплику дальше не обрабатываем — она уходит в затравку урока, а не в
+        обычный диалог. False — всё как раньше (свободное общение).
+        """
+        if not self._auto_lesson_armed:
+            return False
+        self._auto_lesson_armed = False
+        self._auto_lesson_used = True
+        if self.lesson.is_active or not self.profile_ready:
+            return False
+        try:
+            lesson_id = self.progress_map.next_lesson(self._active_profile())
+        except Exception as exc:
+            print("⚠️ Автозапуск: урок не определён (%s)" % exc)
+            return False
+        if not lesson_id:
+            return False
+        # реплика ученика видна в чате, а дальше Джейн начинает урок
+        self.add_message(sender, text)
+        print("🎓 Автозапуск: начинаю урок %s" % lesson_id)
+        self.start_lesson(lesson_id, student_text=text, auto=True)
+        return True
 
     # -----------------------------------------------------
     # Сверка произношения (см. pronunciation.py)
@@ -1848,6 +1953,9 @@ class EnglishTeacherApp:
         if panel is not None and panel.is_open:
             panel.accept_text(text)
             return
+        # первая реплика голосом тоже запускает урок (до проверки языка)
+        if self._maybe_start_auto_lesson(text, "Вы (голос)"):
+            return
         # сказал по-русски — тоже показываем подсказку, а не пишем в чат
         if self._wants_translation(text):
             self._show_translation_hint(text)
@@ -1863,6 +1971,10 @@ class EnglishTeacherApp:
         self.server_ready = (state == "ready")
         self._refresh_status()
         self._refresh_input_state()
+        if self.server_ready and not (self._auto_lesson_armed
+                                       or self._auto_lesson_used):
+            # модель готова — урок можно начинать (если ещё не взведён)
+            self.window.after(300, lambda: self._arm_auto_lesson())
         return state
 
     def _stt_hotwords(self):
@@ -1892,7 +2004,7 @@ class EnglishTeacherApp:
         # повторение слов ждало микрофон — теперь можно открыть окно
         if self.stt_ready and self._vocab_wanted:
             self._vocab_wanted = False
-            self.window.after(200, lambda: self.maybe_review_vocabulary())
+            self.window.after(200, self._review_then_arm)
 
     def _refresh_status(self):
         """Единая точка выбора текста бейджа: сервер + распознавание.
@@ -1919,6 +2031,10 @@ class EnglishTeacherApp:
             self.add_message("Джейн", "🎤 На этом уроке говори в микрофон — текст отключён.")
             return
         self.input_bar.clear_text()
+        # Первая реплика запускает урок (ДО переводчика: русское «привет»
+        # тоже должно начинать занятие — см. грабли №28)
+        if self._maybe_start_auto_lesson(text, "Вы"):
+            return
         # Русская фраза НЕ пишется в чат: она уходит в подсказку перевода
         # (решение ученика — переписать, произнести или отправить как есть).
         if self._wants_translation(text):
