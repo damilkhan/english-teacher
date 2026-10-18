@@ -43,6 +43,7 @@ import stt_engine
 import theme
 import tts
 import user_manager
+import vocabulary
 from controllers.chat_controller import ChatController
 from controllers.dispatcher import Dispatcher
 from controllers.lesson_controller import LessonController
@@ -144,6 +145,13 @@ def profile_summary(user, profile, map_progress=(0, 0)):
     if topics:
         out.append(("Слабые темы", ", ".join(topics[:5])))
 
+    vocab = [card for card in (profile.get("vocabulary") or [])
+             if isinstance(card, dict)]
+    if vocab:
+        known = vocabulary.stats(vocab)
+        out.append(("Слова", "всего %d · к повторению %d · выучено %d"
+                    % (known["total"], known["due"], known["learned"])))
+
     strengths = profile.get("strengths") or []
     if strengths:
         out.append(("Сильные стороны", "удачных реплик: %d" % len(strengths)))
@@ -236,6 +244,9 @@ class EnglishTeacherApp:
         # переводчика (ученик должен произнести её вслух) и время её появления
         self._pron_ref = ""
         self._pron_at = 0.0
+        # (слово, значение) карточки словаря, чей пример стал эталоном:
+        # при вердикте GOOD именно ей начисляем «+1» (см. _vocabulary_success)
+        self._pron_card = None
         self._hero_fonts = {}      # заполним ниже, после создания окна
 
         # ---------- окно ----------
@@ -1280,6 +1291,10 @@ class EnglishTeacherApp:
             self.hint_bar.show_meanings(result, source)
         else:
             self.hint_bar.show_translation(result, source)
+        # ОДИНОЧНОЕ слово копится в словарь повторения САМО, без кнопок.
+        # Заодно запоминаем карточку: её пример станет эталоном произношения,
+        # значит при вердикте GOOD «+1» получит именно она.
+        self._pron_card = self._remember_vocabulary(source, result) if single else None
         self._remember_pron_reference(result, single)
         self._character_state("thinking")
 
@@ -1294,6 +1309,51 @@ class EnglishTeacherApp:
     def _hint_listen(self, english):
         """Кнопка 🔊: послушать, как фраза звучит по-английски."""
         self._say(english)
+
+    # -----------------------------------------------------
+    # Словарь для повторения (см. vocabulary.py)
+    # -----------------------------------------------------
+    def _remember_vocabulary(self, source, meanings):
+        """Запомнить значения переведённого слова → (слово, значение) первой карточки.
+
+        Копится САМО, без кнопок «сохранить»: ученик перевёл слово — оно уже
+        в словаре. Дубликаты не появляются, выученное слово не сбрасывается
+        (это делает vocabulary.add_meanings).
+
+        Возвращает пару (русское слово, английское значение) ПЕРВОЙ карточки:
+        её пример становится эталоном произношения, поэтому при вердикте GOOD
+        «+1» должен достаться именно ей.
+        """
+        if not getattr(config, "VOCAB_ENABLED", True):
+            return None
+        try:
+            parsed = vocabulary.parse_meanings(meanings)
+            if not parsed:
+                return None
+            word = str(source or "").strip()
+            added = profile_store.add_vocabulary(
+                word, meanings, (self.current_user or {}).get("id"))
+            if added:
+                print("📚 В словарь: «%s» (+%d карточ.)" % (word, len(added)))
+            return (word, parsed[0]["en"])
+        except Exception as exc:
+            print("⚠️ Слово не записано в словарь: %s" % exc)
+            return None
+
+    def _vocabulary_success(self):
+        """Вердикт GOOD: +1 к уровню карточки, чей пример был эталоном."""
+        key = getattr(self, "_pron_card", None)
+        if not key or not getattr(config, "VOCAB_ENABLED", True):
+            return
+        word, en = key
+        try:
+            card = profile_store.update_vocabulary_card(
+                word, en, True, (self.current_user or {}).get("id"))
+        except Exception as exc:
+            print("⚠️ Успех слова не записан: %s" % exc)
+            return
+        if card:
+            print("📚 «%s» → уровень %s" % (en, card.get("level")))
 
     # -----------------------------------------------------
     # Сверка произношения (см. pronunciation.py)
@@ -1320,6 +1380,7 @@ class EnglishTeacherApp:
         """Подсказку закрыли — забываем эталон (дальше идёт обычный диалог)."""
         self._pron_ref = ""
         self._pron_at = 0.0
+        self._pron_card = None
 
     def _pronunciation_report(self, text):
         """Сверить услышанное с подсказкой, если она ещё «в силе»."""
@@ -1350,6 +1411,7 @@ class EnglishTeacherApp:
         if report is None or not report.show:
             return False
         if report.verdict == "good":
+            self._vocabulary_success()      # +1 к уровню слова (до _pron_forget!)
             self._pron_forget()
             self.hint_bar.show_note("✅ Похоже! «%s»" % report.reference,
                                     report.reference)
