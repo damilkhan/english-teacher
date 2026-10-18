@@ -32,6 +32,11 @@ TYPE_LABELS = {
 # Значок кнопки запуска (текстовый: ▶ рисуется шрифтом, эмодзи тут не нужны).
 START_ICON = "▶"
 
+# Кнопка «повторение слов»: окно закрывается и возвращает метку VOCAB_RESULT.
+# id уроков выглядят как «1.1», «2.3», поэтому метку с ними не спутать.
+VOCAB_TEXT = "📚  Повторить слова"
+VOCAB_RESULT = "__vocab__"
+
 WIDTH = 480
 HEIGHT = 440
 
@@ -125,12 +130,28 @@ class BlockPanel(ctk.CTkToplevel):
                      anchor="w", font=theme.FONT_SMALL,
                      text_color=p["muted"]).pack(anchor="w", padx=16, pady=(0, 8))
 
-        ctk.CTkButton(card, text="Закрыть", command=self._close,
+        # --- нижний ряд: повторение слов + закрыть ---
+        # Повторение не привязано к конкретному уроку, поэтому кнопка ОДНА
+        # на весь блок. Её смысл — открыть окно «Повторение» в любой момент
+        # (проверить, как оно выглядит), даже если сегодня уже повторяли:
+        # тогда окно само скажет «повторять нечего».
+        bottom = ctk.CTkFrame(card, fg_color="transparent")
+        bottom.pack(fill="x", padx=16, pady=(0, 16))
+
+        ctk.CTkButton(bottom, text="Закрыть", command=self._close,
+                      width=110, height=38,
                       fg_color=p["btn"], hover_color=p["btn_hover"],
-                      text_color=p["text"], height=38, cursor="hand2",
+                      text_color=p["text"], cursor="hand2",
                       font=theme.FONT_UI, corner_radius=theme.R["button"],
                       border_width=1, border_color=p["border"]
-                      ).pack(fill="x", padx=16, pady=(0, 16))
+                      ).pack(side="right")
+
+        ctk.CTkButton(bottom, text=VOCAB_TEXT, command=self._pick_vocab,
+                      height=38, fg_color=p["btn"], hover_color=p["btn_hover"],
+                      text_color=p["text"], cursor="hand2",
+                      font=theme.FONT_UI, corner_radius=theme.R["button"],
+                      border_width=1, border_color=p["border"]
+                      ).pack(side="left", fill="x", expand=True, padx=(0, 8))
 
         self.after(80, self._grab)
         self.bind("<Escape>", lambda _e: self._close())
@@ -168,6 +189,11 @@ class BlockPanel(ctk.CTkToplevel):
         self.result = str(lesson_id or "") or None
         self._close()
 
+    def _pick_vocab(self) -> None:
+        """«Повторить слова»: окно закроется и вернёт метку VOCAB_RESULT."""
+        self.result = VOCAB_RESULT
+        self._close()
+
     def _center(self, parent, w, h):
         try:
             parent.update_idletasks()
@@ -197,7 +223,11 @@ class BlockPanel(ctk.CTkToplevel):
     # -----------------------------------------------------
     @classmethod
     def ask(cls, parent, palette, point=None, location_title=""):
-        """Показать окно и дождаться закрытия. Возвращает id урока или None."""
+        """Показать окно и дождаться закрытия.
+
+        Возвращает id выбранного урока, VOCAB_RESULT (нажали «Повторить
+        слова») или None (окно закрыли).
+        """
         panel = cls(parent, palette, point=point, location_title=location_title)
         try:
             parent.wait_window(panel)

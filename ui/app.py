@@ -58,7 +58,7 @@ from roles.planner import Planner
 from ui import fonts as ui_fonts
 from ui import gradient
 from ui.first_run import FirstRunForm
-from ui.panels.block_panel import BlockPanel
+from ui.panels.block_panel import BlockPanel, VOCAB_RESULT
 from ui.panels.boot_panel import BootPanel
 from ui.panels.level_test_panel import LevelTestPanel
 from ui.panels.settings_panel import SettingsPanel
@@ -326,6 +326,9 @@ class EnglishTeacherApp:
         self.vocab = VocabularyController(user_id=self.current_user["id"])
         self.vocab_panel = None        # открытое окно повторения (или None)
         self._vocab_wanted = False     # повторение ждёт готовности распознавания
+        # окно открыто ПОСЛЕ автозапуска (при старте) — урок взведём, когда
+        # его закроют. Для захода с карты этот флаг остаётся False.
+        self._arm_after_vocab = False
 
         self.recorder = RecordingController(
             vad=self.vad, stt=self.stt, dispatch=self._dispatch,
@@ -545,6 +548,7 @@ class EnglishTeacherApp:
             pass
         self._story_context = False
         self._vocab_wanted = False
+        self._arm_after_vocab = False
         self._auto_lesson_armed = False   # у нового ученика свой автозапуск
         self._auto_lesson_used = False
         self.vocab.user_id = user_id      # слова следующего ученика — его
@@ -883,7 +887,10 @@ class EnglishTeacherApp:
             chosen = BlockPanel.ask(self.window, self.palette, point, location_title)
         except Exception as exc:
             print("⚠️ Окно блока не открылось: %s" % exc)
-        if chosen:
+        if chosen == VOCAB_RESULT:
+            # нажали «📚 Повторить слова» — окно повторения вместо урока
+            self.review_vocabulary()
+        elif chosen:
             self.start_lesson(chosen, point_id)
 
     # =====================================================
@@ -1444,27 +1451,74 @@ class EnglishTeacherApp:
         self.add_message("Джейн", "📚 Давай повторим %d слов." % len(due))
         self._open_vocab_panel()
 
-    def _open_vocab_panel(self):
-        """Показать окно повторения (модальное, поверх главного окна)."""
+    def review_vocabulary(self):
+        """«📚 Повторить слова» в окне блока: повторение по требованию.
+
+        Отличие от автозапуска (maybe_review_vocabulary): НЕ смотрим «сегодня
+        уже повторяли» и «есть ли слова на сегодня» — окно открывается всегда,
+        чтобы его можно было проверить в любой момент. Если повторять нечего,
+        окно само это скажет. Автозапуск урока после такого захода НЕ взводим:
+        ученик пришёл с карты, а не поздоровался в чате.
+        """
+        if not getattr(config, "VOCAB_ENABLED", True):
+            self.add_message("Джейн", "📚 Повторение слов выключено в настройках.")
+            return None
+        if not self.profile_ready:
+            self.add_message("Джейн", SETUP_HINT)
+            return None
+        if self.vocab_panel is not None:
+            return self.vocab_panel        # окно уже открыто — второе не нужно
+        if self.lesson.is_active:
+            self.add_message("Джейн", "⚠️ Сначала заверши урок — повторение открою после.")
+            return None
+        return self._open_vocab_panel(allow_empty=True)
+
+    def _open_vocab_panel(self, allow_empty=False):
+        """Показать окно повторения (модальное, поверх главного окна).
+
+        allow_empty — открыть окно даже без слов (кнопка с карты): тогда оно
+        покажет «повторять нечего» и объяснит почему.
+        """
         try:
             self.vocab.start()
         except Exception as exc:
             print("⚠️ Заход повторения не собрался: %s" % exc)
             return None
-        if not self.vocab.is_active:
+        if not self.vocab.is_active and not allow_empty:
             return None
+        empty_text = "" if self.vocab.is_active else self._vocab_empty_note()
         try:
             self.vocab_panel = VocabPanel(
                 self.window, self.palette, self.vocab,
                 on_record_start=self._vocab_record_start,
                 on_record_stop=self._vocab_record_stop,
                 on_say=self._say,
-                on_finish=self._vocab_finished)
+                on_finish=self._vocab_finished,
+                empty_text=empty_text)
         except Exception as exc:
             print("⚠️ Окно повторения не открылось: %s" % exc)
             self.vocab_panel = None
             return None
         return self.vocab_panel
+
+    @staticmethod
+    def _vocab_empty_note():
+        """Объяснение для окна «повторять нечего» — простыми словами."""
+        try:
+            cards = profile_store.vocabulary_cards()
+        except Exception:
+            cards = []
+        if not cards:
+            return ("В словаре пока пусто. Переведи слово в чате — "
+                    "оно само сюда попадёт.")
+        try:
+            due = vocabulary.due_cards(cards)
+        except Exception:
+            due = []
+        if not due:
+            return ("Сегодня повторять нечего: все слова ждут своего дня "
+                    "(лестница 1 → 3 → 7 → 21 день).")
+        return ""
 
     def _vocab_record_start(self):
         """«Запись» в окне повторения: тот же push-to-talk, что и в чате."""
@@ -1478,7 +1532,10 @@ class EnglishTeacherApp:
         self.vocab_panel = None
         print("📚 Повторение закончено: %s" % (summary or {}))
         self._refresh_side_views()
-        self._arm_auto_lesson()        # повторение было — теперь урок
+        if self._arm_after_vocab:
+            # заход был частью запуска (после теста уровня) — теперь урок
+            self._arm_after_vocab = False
+            self._arm_auto_lesson()
 
     # -----------------------------------------------------
     # Автозапуск урока: Джейн сама ведёт занятие (этап B+)
@@ -1500,7 +1557,9 @@ class EnglishTeacherApp:
     def _after_vocab_review(self):
         """Повторение закончилось (или не понадобилось) → взводим урок."""
         if self.vocab_panel is not None:
-            return                  # окно открыто: взведём после закрытия
+            # окно открыто: взведём урок, когда его закроют (_vocab_finished)
+            self._arm_after_vocab = True
+            return
         self._arm_auto_lesson()
 
     def _arm_auto_lesson(self):

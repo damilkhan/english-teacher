@@ -48,7 +48,8 @@ class VocabPanel(ctk.CTkToplevel):
                  on_record_start: Optional[Callable[[], None]] = None,
                  on_record_stop: Optional[Callable[[], None]] = None,
                  on_say: Optional[Callable[[str], None]] = None,
-                 on_finish: Optional[Callable[[dict], None]] = None):
+                 on_finish: Optional[Callable[[dict], None]] = None,
+                 empty_text: str = ""):
         super().__init__(parent)
         self.palette = palette
         self.controller = controller
@@ -56,6 +57,8 @@ class VocabPanel(ctk.CTkToplevel):
         self._on_record_stop = on_record_stop
         self._on_say = on_say
         self._on_finish = on_finish
+        # что написать, если повторять нечего (окно открыли кнопкой с карты)
+        self._empty_text = str(empty_text or "")
         self._open = True
         self._answered = False       # по текущему слову уже показан итог
         self._finished = False
@@ -165,7 +168,10 @@ class VocabPanel(ctk.CTkToplevel):
         """Показать текущую карточку (или итог, если заход закончен)."""
         card = self.controller.current()
         if card is None:
-            self._show_result()
+            if self.controller.total <= 0:
+                self._show_empty()       # слов на сегодня нет — объясняем
+            else:
+                self._show_result()
             return
         self._answered = False
         total = max(1, self.controller.total)
@@ -335,6 +341,40 @@ class VocabPanel(ctk.CTkToplevel):
     # -----------------------------------------------------
     # Итог
     # -----------------------------------------------------
+    def _show_empty(self) -> None:
+        """Повторять нечего: окно объясняет почему и спокойно закрывается.
+
+        Так кнопка «📚 Повторить слова» работает ВСЕГДА (её смысл — увидеть
+        окно в любой момент), а не молчит, ничего не открывая.
+        """
+        if self._finished:
+            return
+        self._finished = True
+        p = self.palette
+        self._set_answer_buttons(False)
+        try:
+            self.bar.set(0)
+        except Exception:
+            pass
+        self.counter_lbl.configure(text="Повторять нечего")
+        self.word_lbl.configure(text="Пока нечего 📚", text_color=p["text_strong"])
+        self.example_lbl.configure(text="", text_color=p["muted"])
+        self._show_lines(self._empty_text or "Слов для повторения сейчас нет.",
+                         "Слова копятся сами: переведи слово в чате — "
+                         "и оно придёт сюда.", color_key="muted")
+        for btn in (self.record_btn, self.hint_btn, self.later_btn, self.listen_btn):
+            try:
+                btn.configure(state="disabled")
+            except Exception:
+                pass
+        try:
+            self.next_btn.configure(text="Понятно", state="normal",
+                                    command=self._done)
+        except Exception:
+            pass
+        self.hint_lbl.configure(text="Слова повторяются по лестнице: 1 → 3 → 7 → 21 день.",
+                                text_color=p["muted"])
+
     def _show_result(self) -> None:
         if self._finished:
             return
