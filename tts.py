@@ -680,6 +680,12 @@ def _stream_once(text: str, voice: str, my_gen: int) -> bool:
 # ---------------------------------------------------------
 # Сегментная озвучка: один выход + предзагрузка кусков
 # ---------------------------------------------------------
+# Сколько кусков качаем ОДНОВРЕМЕННО. Куски короткие, поэтому 6 запросов к
+# edge-tts проходят спокойно (замер: 7 кусков готовы за ~1.1 с); ограничитель
+# нужен только чтобы длинная реплика не открывала десяток соединений сразу.
+_PREFETCH_SLOTS = threading.BoundedSemaphore(6)
+
+
 class _Prefetch:
     """Фоновая загрузка mp3 одного куска (играем текущий — качаем следующий)."""
 
@@ -692,7 +698,8 @@ class _Prefetch:
 
     def _run(self) -> None:
         try:
-            self._data = _download(self.text, self.voice)
+            with _PREFETCH_SLOTS:            # не больше 6 скачиваний разом
+                self._data = _download(self.text, self.voice)
         except Exception:                      # noqa: BLE001 — сбой загрузки не критичен
             self._data = None
         finally:
@@ -792,13 +799,42 @@ def _decode_stream_into(out, text, voice, samplerate, channels, my_gen) -> bool:
     return played
 
 
+def _play_segment(out, text, voice, samplerate, channels, my_gen,
+                  data=None) -> bool:
+    """Проиграть ОДИН кусок так, чтобы НИ ОДНО слово не пропало.
+
+    Порядок попыток: готовые mp3-байты (предзагрузка) → поток → повторная
+    загрузка целиком. Раньше при неудачной предзагрузке кусок МОЛЧА
+    выбрасывался — и из смешанной фразы исчезало слово (например, русское).
+    Теперь слово звучит всегда, если сеть хоть как-то отвечает.
+
+    True — что-то прозвучало; False — не вышло (или реплику прервали).
+    """
+    if data and _decode_into(out, data, samplerate, channels, my_gen):
+        return True
+    if _stop.is_set() or my_gen != _current_generation():
+        return False
+    if _decode_stream_into(out, text, voice, samplerate, channels, my_gen):
+        return True
+    if _stop.is_set() or my_gen != _current_generation():
+        return False
+    data = _download(text, voice)                # последняя попытка целиком
+    return bool(data) and _decode_into(out, data, samplerate, channels, my_gen)
+
+
 def _stream_play_segments(segments, my_gen, tracker=None) -> bool:
     """Проиграть все куски ЧЕРЕЗ ОДИН звуковой выход.
 
     Первый кусок читаем ПОТОКОМ (звук — как только пришли первые байты, не
-    дожидаясь полной загрузки), остальные качаются заранее (пока играет
-    текущий — грузится следующий). Выход открывается ОДИН раз → нет пауз
-    между языками и быстрый старт даже для длинного первого куска.
+    дожидаясь полной загрузки), остальные качаются ЗАРАНЕЕ — пока звучит
+    текущий. Выход открывается ОДИН раз → нет пауз между языками.
+
+    Сколько кусков качать заранее — решает config.TTS_PREFETCH_ALL:
+      True  — ВСЕ сразу. Замер: 7 кусков (4 русских вставки) готовы за ~1.1 с,
+              а первый кусок звучит ~2 с, поэтому к моменту смены голоса
+              русский кусок уже наготове — пауз нет, фраза звучит целиком;
+      False — прежнее поведение (два куска вперёд): на длинной реплике был
+              слышен провал до 2.3 с перед 4-м куском.
 
     tracker (необязательно) — _PartTracker: сообщает лицу робота, какая
     часть реплики звучит сейчас. Куски — (номер части, язык, текст); если
@@ -815,8 +851,13 @@ def _stream_play_segments(segments, my_gen, tracker=None) -> bool:
             _index, lang, chunk = segments[i]
             prefs[i] = _Prefetch(chunk, voice_for(lang))
 
-    _start(1)                                  # пока играет кусок 0 — качаем 1 и 2
-    _start(2)
+    prefetch_all = bool(getattr(config, "TTS_PREFETCH_ALL", True))
+    if prefetch_all:
+        for i in range(1, len(segments)):      # ВСЕ куски — сразу
+            _start(i)
+    else:
+        _start(1)                              # прежний режим: 1 и 2
+        _start(2)
     played = False
     try:
         with _sd.OutputStream(samplerate=samplerate, channels=channels,
@@ -825,23 +866,22 @@ def _stream_play_segments(segments, my_gen, tracker=None) -> bool:
             index0, lang0, chunk0 = segments[0]
             if tracker is not None:
                 tracker.start(index0)
-            if _decode_stream_into(out, chunk0, voice_for(lang0),
-                                   samplerate, channels, my_gen):
+            if _play_segment(out, chunk0, voice_for(lang0),
+                             samplerate, channels, my_gen):
                 played = True
-            else:
-                data = _download(chunk0, voice_for(lang0))
-                if data and _decode_into(out, data, samplerate, channels, my_gen):
-                    played = True
             # остальные куски — из предзагрузки (без пауз между языками)
             for i in range(1, len(segments)):
                 if _stop.is_set() or my_gen != _current_generation():
                     break
                 if tracker is not None:
                     tracker.start(segments[i][0])
+                _index, lang, chunk = segments[i]
                 data = prefs[i].wait() if prefs[i] is not None else None
-                if data and _decode_into(out, data, samplerate, channels, my_gen):
+                if _play_segment(out, chunk, voice_for(lang),
+                                 samplerate, channels, my_gen, data):
                     played = True
-                _start(i + 2)
+                if not prefetch_all:
+                    _start(i + 2)
     except Exception as exc:                   # noqa: BLE001 — звук некритичен
         _log.warning("TTS: сегментный поток (%s)", exc)
     return played
