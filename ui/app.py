@@ -377,6 +377,10 @@ class EnglishTeacherApp:
         self.check_server()
         self.monitor.start()
         self.stt.preload()                      # Whisper — в фоне, окно не ждёт
+        # Соединение с edge-tts тоже «холодное» в первые секунды после запуска
+        # (замер: 1-й запрос до 7 с, потом 1.0–1.3 с) — греем его ЗАРАНЕЕ,
+        # иначе первая реплика Джейн обрывается долгой паузой посреди фразы.
+        tts.warmup_async()
         self.window.after(60, self._redraw)     # первая отрисовка после раскладки
         self.window.after(120, self._visual_tick)   # эквалайзер: кто говорит
         self._refresh_input_state()             # чат закрыт, пока нет профиля/модели

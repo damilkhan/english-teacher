@@ -115,9 +115,13 @@ def rate_for(voice):
     return VOICE_RATE.get(voice, RATE)
 
 RATE = "+10%"                 # скорость речи по умолчанию (если нет в VOICE_RATE)
-DOWNLOAD_TIMEOUT = 7.0        # ТОЛЬКО скачивание (проигрывание — отдельно)
+DOWNLOAD_TIMEOUT = 5.0        # ТОЛЬКО скачивание (проигрывание — отдельно)
+DOWNLOAD_BUDGET = 7.0         # общий предел на ВСЕ повторы одного куска
 PLAYBACK_TICK = 0.05          # шаг опроса get_busy (для прерывания речи)
 CACHE_LIMIT = 16              # сколько mp3 держим в памяти
+SEGMENT_WAIT_MAX = 1.5        # сколько ждём предзагрузку ПЕРЕД началом куска
+STREAM_DEADLINE = 15.0        # страховка: поток одного куска не дольше, сек
+WARMUP_TEXT = "Hello there! Let's start."
 
 # --- потоковая озвучка ---
 STREAM_FORMAT = "mp3"         # edge-tts отдаёт audio-24khz-...-mp3
@@ -127,7 +131,7 @@ STREAM_BLOCKSIZE = 2400       # размер блока вывода (0.1 с п�
 # edge-tts (онлайн) иногда отвечает 403 — делаем несколько попыток,
 # иначе реплика прозвучит «в тишину».
 RETRY_ATTEMPTS = 3
-RETRY_DELAY = 0.6             # пауза между попытками, сек
+RETRY_DELAY = 0.3             # пауза между попытками, сек
 
 EMOJI_PATTERN = re.compile("["
     u"\U0001F600-\U0001F64F"
@@ -365,6 +369,80 @@ def clear_cache() -> None:
 
 
 # ---------------------------------------------------------
+# Прогрев соединения с edge-tts
+# ---------------------------------------------------------
+# Замер на живой сети (каждый замер — НОВЫЙ процесс, как запуск приложения):
+#   1-й запрос  — 7.01 с (таймаут) или «No audio was received»;
+#   2-й         — 3.11 с;
+#   3-й         — 5.08 с;
+#   4-й и далее — 1.0–1.3 с.
+# То есть первые секунды после запуска соединение «холодное». Первая реплика
+# урока приходится ровно на это время, и ученик слышал: «Hello, Damil!» →
+# долгая пауза → остаток фразы. Прогрев делает эти запросы ЗАРАНЕЕ, пока
+# ученик ещё читает приветствие.
+_warm_lock = threading.Lock()
+_warm_done = False
+_warm_running = False
+_warm_last = 0.0             # когда последний раз пытались греть (monotonic)
+WARMUP_RETRY_SECONDS = 20.0  # не чаще раза в 20 с (иначе при обрыве сети
+                             # каждая неудачная загрузка плодила бы поток)
+
+
+def warmup(attempts: int = 4) -> bool:
+    """Один (или несколько) БЕЗЗВУЧНЫХ запросов к edge-tts — «разогреть» связь.
+
+    True — соединение готово. Ошибки глушим: без сети озвучка всё равно не
+    заработает, падать из-за прогрева нельзя.
+    """
+    global _warm_done, _warm_running, _warm_last
+    with _warm_lock:
+        if _warm_done:
+            return True
+        if _warm_running:
+            return False
+        _warm_running = True
+        _warm_last = time.monotonic()
+    ok = False
+    try:
+        for _attempt in range(max(1, int(attempts))):
+            for voice in (VOICE_EN, VOICE_RU):
+                try:
+                    if _download_once(WARMUP_TEXT, voice):
+                        ok = True
+                except Exception:              # noqa: BLE001 — прогрев не критичен
+                    pass
+            if ok:
+                break
+    finally:
+        with _warm_lock:
+            _warm_done = ok
+            _warm_running = False
+    _log.info("TTS: прогрев %s", "готов" if ok else "не удался")
+    return ok
+
+
+def warmup_async() -> None:
+    """Запустить прогрев в ФОНЕ (вызывается при старте приложения)."""
+    if _warm_done or _warm_running:
+        return
+    # Вторая попытка не сразу: при обрыве сети каждая неудачная загрузка
+    # звала бы прогрев, и потоки копились бы.
+    if time.monotonic() - _warm_last < WARMUP_RETRY_SECONDS:
+        return
+    threading.Thread(target=warmup, daemon=True).start()
+
+
+def _schedule_rewarm() -> None:
+    """Сбросить отметку прогрева и разогреть связь заново (в фоне)."""
+    global _warm_done
+    with _warm_lock:
+        if _warm_running:
+            return
+        _warm_done = False
+    warmup_async()               # сам не чаще WARMUP_RETRY_SECONDS
+
+
+# ---------------------------------------------------------
 # Публичный вход
 # ---------------------------------------------------------
 def speak(text: str, name=None, name_latin=None, parts=None, on_part=None) -> bool:
@@ -471,12 +549,23 @@ def _synthesize(text: str, voice: str) -> Optional[bytes]:
 
 
 def _download(text: str, voice: str) -> Optional[bytes]:
-    """Скачивает mp3 С ПОВТОРАМИ (403/сеть) во временный файл. Файл убираем."""
+    """Скачивает mp3 С ПОВТОРАМИ (403/сеть) во временный файл. Файл убираем.
+
+    Повторы ограничены ОБЩИМ временем DOWNLOAD_BUDGET: раньше три попытки по
+    таймауту 7 с давали до 26 с тишины посреди фразы (замер). Теперь дольше
+    ~7 с на один кусок не ждём.
+    """
+    deadline = time.monotonic() + DOWNLOAD_BUDGET
     for _attempt in range(RETRY_ATTEMPTS):
         data = _download_once(text, voice)
         if data:
             return data
+        # повторяем, только если СЛЕДУЮЩАЯ попытка успеет в бюджет:
+        # так «зависшая» попытка не тянет за собой ещё одну на 5 с
+        if time.monotonic() + DOWNLOAD_TIMEOUT >= deadline:
+            break
         time.sleep(RETRY_DELAY)
+    _schedule_rewarm()               # соединение «протухло» — прогреем заново
     return None
 
 
@@ -595,7 +684,10 @@ def _edge_stream(text: str, voice: str, chunks) -> None:
             if chunk.get("type") == "audio":
                 chunks.put(chunk["data"])
     try:
-        asyncio.run(_go())
+        # страховка: зависшее соединение не должно держать поток вечно
+        asyncio.run(asyncio.wait_for(_go(), timeout=STREAM_DEADLINE))
+    except asyncio.TimeoutError:
+        _log.warning("TTS поток: не уложился в %.0f с", STREAM_DEADLINE)
     except Exception as exc:                   # noqa: BLE001 — сбой сети/сервиса
         _log.warning("TTS поток: %s", exc)
     finally:
@@ -859,6 +951,7 @@ def _stream_play_segments(segments, my_gen, tracker=None) -> bool:
         _start(1)                              # прежний режим: 1 и 2
         _start(2)
     played = False
+    waits = []                                 # сколько ждали каждый кусок
     try:
         with _sd.OutputStream(samplerate=samplerate, channels=channels,
                               dtype="int16", blocksize=STREAM_BLOCKSIZE) as out:
@@ -876,7 +969,13 @@ def _stream_play_segments(segments, my_gen, tracker=None) -> bool:
                 if tracker is not None:
                     tracker.start(segments[i][0])
                 _index, lang, chunk = segments[i]
-                data = prefs[i].wait() if prefs[i] is not None else None
+                # Ждём готовый кусок НЕ ДОЛЬШЕ SEGMENT_WAIT_MAX: если
+                # предзагрузка застряла, быстрее начать поток заново, чем
+                # держать ученика в тишине (раньше wait() ждал до 26 с).
+                t_wait = time.monotonic()
+                data = (prefs[i].wait(SEGMENT_WAIT_MAX)
+                        if prefs[i] is not None else None)
+                waits.append(round(time.monotonic() - t_wait, 2))
                 if _play_segment(out, chunk, voice_for(lang),
                                  samplerate, channels, my_gen, data):
                     played = True
@@ -884,6 +983,9 @@ def _stream_play_segments(segments, my_gen, tracker=None) -> bool:
                     _start(i + 2)
     except Exception as exc:                   # noqa: BLE001 — звук некритичен
         _log.warning("TTS: сегментный поток (%s)", exc)
+    finally:
+        if waits and max(waits) > 0.3:         # видно в logs\app.log
+            print("⏱ TTS: ожидание кусков, с: %s" % waits)
     return played
 
 
