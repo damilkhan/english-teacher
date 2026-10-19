@@ -261,12 +261,15 @@ class MapView(ctk.CTkFrame):
     def __init__(self, parent, palette, base_path: str = "knowledge_base",
                  location_id: str = "desert",
                  on_point_click: Optional[Callable[[str], None]] = None,
-                 map_obj: Optional[ProgressMap] = None):
+                 map_obj: Optional[ProgressMap] = None,
+                 on_location_change: Optional[Callable[[str], None]] = None):
         super().__init__(parent, fg_color=palette.get("chat_bg", palette["surface"]),
                          corner_radius=theme.R["card"],
                          border_width=1, border_color=palette["border"])
         self.palette = palette
         self._on_point_click = on_point_click
+        self._on_location_change = on_location_change
+        self._profile: Optional[Dict[str, Any]] = None
         self.location_id = location_id
 
         # карту (ProgressMap) можно передать готовой — чтобы не читать
@@ -319,18 +322,22 @@ class MapView(ctk.CTkFrame):
         self.nav = ctk.CTkFrame(self, fg_color="transparent")
         self.nav.pack(side="bottom", fill="x", padx=10, pady=(0, 8))
         self.prev_btn = ctk.CTkButton(self.nav, text="◀", width=44, height=30,
+                                      command=lambda: self.switch_location(-1),
                                       state="disabled", font=theme.FONT_UI,
-                                      fg_color=p["btn"], text_color=p["muted"],
+                                      fg_color=p["btn"], text_color=p["text"],
+                                      hover_color=p["btn_hover"],
                                       corner_radius=theme.R["button"],
                                       border_width=1, border_color=p["border"])
         self.prev_btn.pack(side="left")
         self.next_btn = ctk.CTkButton(self.nav, text="▶", width=44, height=30,
+                                      command=lambda: self.switch_location(1),
                                       state="disabled", font=theme.FONT_UI,
-                                      fg_color=p["btn"], text_color=p["muted"],
+                                      fg_color=p["btn"], text_color=p["text"],
+                                      hover_color=p["btn_hover"],
                                       corner_radius=theme.R["button"],
                                       border_width=1, border_color=p["border"])
         self.next_btn.pack(side="left", padx=(8, 0))
-        self.nav_hint = ctk.CTkLabel(self.nav, text="Другие локации — " + ARROW_STUB,
+        self.nav_hint = ctk.CTkLabel(self.nav, text="",
                                      font=theme.FONT_SMALL, text_color=p["muted"])
         self.nav_hint.pack(side="left", padx=(12, 0))
 
@@ -339,6 +346,7 @@ class MapView(ctk.CTkFrame):
     # =====================================================
     def refresh(self, profile: Optional[Dict[str, Any]]) -> None:
         """Пересчитать состояния точек по профилю и перерисовать карту."""
+        self._profile = profile
         loc = self._location or {}
         points = self.map.points_of(self.location_id)
         self._states = {str(p.get("id")): self.map.get_point_state(p.get("id"), profile)
@@ -353,9 +361,88 @@ class MapView(ctk.CTkFrame):
         except Exception:
             pass
         self._build_legend()
+        self._update_nav()
         if self._active:
             self._redraw_map()
             self._restart_pulse()
+
+    # =====================================================
+    # Другие локации (переключатель ◀ ▶)
+    # =====================================================
+    def location_ids(self) -> List[str]:
+        """Все локации плана по порядку."""
+        try:
+            return list(self.map.location_ids())
+        except Exception:                              # noqa: BLE001
+            return [self.location_id]
+
+    def switch_location(self, step: int) -> bool:
+        """Перейти к соседней локации (step=+1 следующая, -1 предыдущая).
+
+        Закрытые миры тоже можно ПОСМОТРЕТЬ: ученику полезно видеть, куда
+        он идёт. Точки там остаются закрытыми, а подпись объясняет почему.
+        """
+        ids = self.location_ids()
+        if self.location_id not in ids:
+            return False
+        idx = ids.index(self.location_id) + int(step)
+        if idx < 0 or idx >= len(ids):
+            return False
+        return self.set_location(ids[idx])
+
+    def set_location(self, location_id: str,
+                     profile: Optional[Dict[str, Any]] = None) -> bool:
+        """Показать другую локацию (картинка, жетоны, подписи)."""
+        ids = self.location_ids()
+        location_id = str(location_id or "")
+        if location_id not in ids:
+            return False
+        self.location_id = location_id
+        self._location = self.map.get_location(location_id) or {}
+        self._token_cache.clear()
+        self._token_photos.clear()
+        self._map_photo = None
+        self._hide_tooltip()
+        self.refresh(self._profile if profile is None else profile)
+        if self._on_location_change is not None:
+            try:
+                self._on_location_change(location_id)
+            except Exception:                          # noqa: BLE001
+                pass
+        return True
+
+    def _update_nav(self) -> None:
+        """Подписи и доступность стрелок ◀ ▶."""
+        ids = self.location_ids()
+        try:
+            idx = ids.index(self.location_id)
+        except ValueError:
+            idx = 0
+        try:
+            self.prev_btn.configure(state="normal" if idx > 0 else "disabled")
+            self.next_btn.configure(
+                state="normal" if idx + 1 < len(ids) else "disabled")
+        except Exception:                              # noqa: BLE001
+            pass
+
+        state = self.map.get_location_state(self.location_id, self._profile)
+        level = (self._location or {}).get("level") or ""
+        if state == "locked":
+            prev_title = ""
+            if idx > 0:
+                prev_title = (self.map.get_location(ids[idx - 1]) or {}).get("title", "")
+            text = ("🔒 Закрыто · сначала пройди «%s»" % prev_title) if prev_title \
+                else "🔒 Закрыто"
+        elif state == "completed":
+            text = "✅ Пройдена"
+        else:
+            text = "Локация %d из %d" % (idx + 1, len(ids))
+        if level and state != "locked":
+            text = "%s · %s" % (level, text)
+        try:
+            self.nav_hint.configure(text=text)
+        except Exception:                              # noqa: BLE001
+            pass
 
     def apply_theme(self, palette: Dict[str, Any]) -> None:
         """Смена темы: перекрасить фон/тексты и перерисовать жетоны."""
@@ -429,6 +516,11 @@ class MapView(ctk.CTkFrame):
         if photo is not None:
             self._map_photo = photo          # ссылку держим, иначе Tk заберёт
             self._item_map = self.canvas.create_image(ox, oy, anchor="nw", image=photo)
+        else:
+            # Картинки локации ещё нет (новые миры рисуем по мере готовности,
+            # §15). Без подписи карта выглядела бы «сломанной»: пустой фон и
+            # жетоны в воздухе. Пишем, куда ученик попал.
+            self._draw_placeholder(w, h)
 
         # ---------- жетоны ----------
         self._tokens = []
@@ -482,6 +574,24 @@ class MapView(ctk.CTkFrame):
             return ""
         base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         return os.path.join(base, rel.replace("/", os.sep))
+
+    def _draw_placeholder(self, w: int, h: int) -> None:
+        """Подпись вместо картинки локации (пока её нет)."""
+        p = self.palette
+        loc = self._location or {}
+        title = str(loc.get("title") or "Локация")
+        level = str(loc.get("level") or "")
+        cx, cy = w // 2, max(60, h // 2 - 40)
+        try:
+            self.canvas.create_text(
+                cx, cy, text="\U0001F5FA  " + title, fill=p["text"],
+                font=(theme.FONT_SECTION[0], 20, "bold"))
+            self.canvas.create_text(
+                cx, cy + 30,
+                text=(level + " · карта скоро") if level else "карта скоро",
+                fill=p["muted"], font=theme.FONT_SMALL)
+        except Exception:                              # noqa: BLE001
+            pass
 
     def _paint_token(self, pid: str, radius: int, state: str) -> None:
         """Обновить картинку жетона (с кэшем по состоянию и радиусу)."""

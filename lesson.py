@@ -30,15 +30,19 @@ _log = logging.getLogger(__name__)
 SPEAKING = "speaking"
 CHAT = "chat"
 LISTENING = "listening"
+# ПРОВЕРОЧНОЕ занятие в конце каждого блока: Джейн НЕ учит новому,
+# а проверяет, закрепился ли материал блока (см. §8 снимка проекта).
+CHECK = "check"
 MIXED = "mixed"                 # не используем в UI (совместимость данных)
 
-KNOWN_TYPES = (SPEAKING, CHAT, LISTENING, MIXED)
+KNOWN_TYPES = (SPEAKING, CHAT, LISTENING, CHECK, MIXED)
 DEFAULT_TYPE = SPEAKING
 
 TYPE_LABELS = {
     SPEAKING: "говорение",
     CHAT: "текст",
     LISTENING: "аудирование",
+    CHECK: "проверка",
     MIXED: "смешанный",
 }
 
@@ -51,8 +55,11 @@ _TEXT = {"text"}
 try:
     import config as _config
     DEFAULT_REPLY_TARGET = max(1, int(getattr(_config, "LESSON_REPLY_TARGET", 12) or 12))
+    # Проверка идёт дольше обычного урока: спрашиваем по всему блоку.
+    CHECK_REPLY_TARGET = max(1, int(getattr(_config, "LESSON_CHECK_REPLY_TARGET", 16) or 16))
 except Exception:                                     # pragma: no cover
     DEFAULT_REPLY_TARGET = 12
+    CHECK_REPLY_TARGET = 16
 
 
 # =========================================================
@@ -75,6 +82,7 @@ def allowed_inputs(lesson_type: Any) -> Set[str]:
         return set(_TEXT)
     if name == MIXED:
         return set(_VOICE) | set(_TEXT)
+    # speaking / listening / check — только голос
     return set(_VOICE)
 
 
@@ -105,6 +113,13 @@ OPENING_TASKS = {
                 "the topic and the student's level. Tell it warmly, with a "
                 "beginning and an ending. Then ask the student to RETELL what "
                 "they heard — in Russian or in English, as they prefer."),
+    CHECK: ("This is a CHECK lesson: the student has already finished all the "
+            "lessons of this block. Do NOT teach anything new and do not "
+            "explain rules. Ask ONE question at a time from this block's "
+            "topics and let the student answer; keep each question short. "
+            "If the answer is wrong, do not correct at once — first give one "
+            "more chance with a simpler question. Near the end say in two "
+            "sentences what went well and what needs practice."),
 }
 
 
@@ -118,11 +133,18 @@ def is_story_lesson(lesson_type: Any) -> bool:
     return normalize_type(lesson_type) == LISTENING
 
 
+def is_check_lesson(lesson_type: Any) -> bool:
+    """ПРОВЕРОЧНОЕ занятие в конце блока: не учим, а проверяем."""
+    return normalize_type(lesson_type) == CHECK
+
+
 def locked_hint(lesson_type: Any) -> str:
     """Подсказка в поле ввода, когда текст заблокирован (single source)."""
     name = normalize_type(lesson_type)
     if name == LISTENING:
         return "🔒 Слушай и отвечай голосом"
+    if name == CHECK:
+        return "🔒 Проверка: отвечай голосом"
     return "🔒 Говорите в микрофон"
 
 
@@ -131,6 +153,8 @@ def voice_hint(lesson_type: Any) -> str:
     name = normalize_type(lesson_type)
     if name == LISTENING:
         return "🎧 Ответь голосом"
+    if name == CHECK:
+        return "📝 Ответь голосом"
     return "🎤 Ответь голосом"
 
 
@@ -148,8 +172,11 @@ class LessonSession:
     def __init__(self, lesson_id: str, point_id: Optional[str] = None,
                  lesson_type: Any = SPEAKING, title: str = "", topic: str = "",
                  block_number: Optional[int] = None, block_title: str = "",
-                 reply_target: Optional[int] = None) -> None:
+                 reply_target: Optional[int] = None, code: str = "") -> None:
         self.lesson_id = str(lesson_id or "").strip()
+        # code — короткий номер для экрана («1.1»). id уникален во всём
+        # плане («forest/1.1»), но ученику такое показывать незачем.
+        self.code = str(code or "").strip() or self.lesson_id
         self.point_id = str(point_id or "").strip() or None
         self.lesson_type = normalize_type(lesson_type)
         self.title = str(title or "").strip() or self.lesson_id
@@ -158,7 +185,12 @@ class LessonSession:
         self.block_title = str(block_title or "").strip()
         # 0 — это НЕ «нет значения»: явный лимит доводим до минимума 1,
         # а дефолт берём только когда лимит не задан вовсе (None).
-        target = DEFAULT_REPLY_TARGET if reply_target is None else reply_target
+        if reply_target is None:
+            # проверочное занятие по умолчанию длиннее обычного урока
+            target = (CHECK_REPLY_TARGET if self.lesson_type == CHECK
+                      else DEFAULT_REPLY_TARGET)
+        else:
+            target = reply_target
         try:
             target = int(target)
         except (TypeError, ValueError):
@@ -223,8 +255,8 @@ class LessonSession:
 
     # ---------- подписи ----------
     def label(self) -> str:
-        """«Урок 1.1 · Hello / Hi»."""
-        return "Урок %s · %s" % (self.lesson_id, self.title)
+        """«Урок 1.1 · Hello / Hi» (короткий номер, без префикса локации)."""
+        return "Урок %s · %s" % (self.code, self.title)
 
     def progress_text(self) -> str:
         """«4/12»."""
@@ -234,6 +266,7 @@ class LessonSession:
         """Снимок состояния (для колбэков и тестов)."""
         return {
             "lesson_id": self.lesson_id,
+            "code": self.code,
             "point_id": self.point_id,
             "type": self.lesson_type,
             "title": self.title,

@@ -790,13 +790,28 @@ class EnglishTeacherApp:
     # Вкладки: карта и профиль
     # =====================================================
     def _build_map_tab(self):
-        """Вкладка «Карта»: интерактивная карта локации «Пустыня»."""
+        """Вкладка «Карта»: карта локации, где ученик сейчас.
+
+        Стартуем не всегда с «Пустыни», а с первой НЕпройденной локации
+        (см. ProgressMap.first_open_location): ученику показывают его место
+        в программе. Переключение ◀ ▶ — на самой карте.
+        """
+        try:
+            start_location = self.progress_map.first_open_location(
+                self._active_profile()) or "desert"
+        except Exception:
+            start_location = "desert"
         self.map_view = MapView(self.map_tab, self.palette,
-                                location_id="desert",
+                                location_id=start_location,
                                 on_point_click=self.on_point_click,
-                                map_obj=self.progress_map)
+                                map_obj=self.progress_map,
+                                on_location_change=self._on_location_change)
         self.map_view.pack(fill="both", expand=True, padx=4, pady=4)
         self.map_view.set_active(False)      # стартовая вкладка — «Чат»
+
+    def _on_location_change(self, location_id):
+        """Ученик посмотрел другую локацию: запоминаем выбор до сессии."""
+        self._map_location = location_id
 
     def _build_profile_tab(self):
         """Вкладка «Профиль»: краткая сводка прогресса ученика."""
@@ -963,6 +978,11 @@ class EnglishTeacherApp:
             # что Джейн делает в начале: для listening — рассказывает историю
             "task": lesson_mod.opening_task(lesson_type),
             "story": lesson_mod.is_story_lesson(lesson_type),
+            # проверочное занятие: Джейн не учит новому, а спрашивает по блоку
+            "check": lesson_mod.is_check_lesson(lesson_type),
+            # сколько реплик ученика до автозавершения (у проверки больше)
+            "reply_target": lesson.get("replies"),
+            "code": lesson.get("code"),
         }
 
     def _point_of_lesson(self, lesson_id):
@@ -1000,7 +1020,8 @@ class EnglishTeacherApp:
             lesson_id=data["id"], point_id=data.get("point_id"),
             lesson_type=data.get("type"), title=data.get("title"),
             topic=data.get("topic"), block_number=data.get("block_number"),
-            block_title=data.get("block_title"))
+            block_title=data.get("block_title"),
+            reply_target=data.get("reply_target"), code=data.get("code"))
         if session is None:
             return None
 
@@ -1025,6 +1046,9 @@ class EnglishTeacherApp:
             opening += "\n📚 По плану дальше — этот урок. Поехали!"
         if data.get("story"):
             opening += "\n🎧 Слушай историю, а потом перескажи её — по-русски или по-английски."
+        if data.get("check"):
+            opening += ("\n📝 Это ПРОВЕРКА по блоку: Джейн не учит новому, а "
+                        "спрашивает по пройденному. В конце скажет, что закрепилось.")
         try:
             self.reactions.reset()          # новый урок — новый счёт стараний
         except Exception:

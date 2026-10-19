@@ -56,6 +56,9 @@ class ProgressMap:
         self._points: Dict[str, Dict[str, Any]] = {}
         self._point_location: Dict[str, str] = {}
         self._location_points: Dict[str, List[str]] = {}
+        # уроки локации по порядку — нужны для «локация пройдена» без
+        # обращения к состояниям блоков (иначе зацикливание)
+        self._location_lessons: Dict[str, List[str]] = {}
         self._point_lessons: Dict[str, List[str]] = {}
         self._lesson_point: Dict[str, str] = {}
         self._lesson_order: List[str] = []
@@ -143,6 +146,9 @@ class ProgressMap:
             ids.append(point_id)
 
         self._location_points[loc_id] = ids
+        # уроки ЭТОЙ локации — просто все уроки её блоков по порядку
+        self._location_lessons[loc_id] = [lid for pid in ids
+                                          for lid in self._point_lessons[pid]]
 
     def _register_lesson(self, lesson: Dict[str, Any], point_id: str) -> str:
         """Запомнить урок (id → его точка). Повтор id игнорируем."""
@@ -235,6 +241,10 @@ class ProgressMap:
             return COMPLETED
         if lesson_id not in self._lesson_point:
             return LOCKED
+        # локация закрыта — в ней закрыто всё, даже первый урок
+        loc_id = self._point_location.get(self._lesson_point.get(lesson_id))
+        if loc_id and not self.is_location_unlocked(loc_id, profile):
+            return LOCKED
         idx = self._lesson_order.index(lesson_id)
         if idx == 0:
             return UNLOCKED
@@ -259,6 +269,10 @@ class ProgressMap:
             return COMPLETED
 
         loc_id = self._point_location.get(point_id)
+        # локация закрыта — все её блоки закрыты (иначе на карте чужого
+        # мира горел зелёный «открытый» жетон, см. get_location_state)
+        if loc_id and not self.is_location_unlocked(loc_id, profile):
+            return LOCKED
         order = self._location_points.get(loc_id, [])
         if point_id not in order:
             return LOCKED
@@ -267,6 +281,64 @@ class ProgressMap:
             return UNLOCKED
         previous = order[idx - 1]
         return UNLOCKED if self.get_point_state(previous, profile) == COMPLETED else LOCKED
+
+    def is_location_completed(self, location_id: str,
+                               profile: Optional[Dict[str, Any]]) -> bool:
+        """Все уроки локации пройдены (и уроки вообще есть).
+
+        Считаем по УРОКАМ, а не по блокам: состояние блока само зависит от
+        состояния локации (get_point_state), и через блоки получилось бы
+        зацикливание «локация → блок → локация».
+        """
+        lessons = self._location_lessons.get(str(location_id or ""), [])
+        if not lessons:
+            return False
+        done = self.completed_lessons(profile)
+        return all(lid in done for lid in lessons)
+
+    def get_location_state(self, location_id: str,
+                           profile: Optional[Dict[str, Any]]) -> str:
+        """Состояние ЛОКАЦИИ: "completed" | "unlocked" | "locked".
+
+        Локации идут по порядку (как в файле плана), прохождение линейное:
+          * completed — все блоки локации пройдены;
+          * unlocked — первая локация или предыдущая уже completed;
+          * locked — иначе.
+
+        Раньше проверялось только внутри локации, и первая точка ВТОРОЙ
+        локации показывалась открытой, хотя до неё ещё не дошли (видно на
+        карте: зелёный пульсирующий жетон в закрытом мире).
+        """
+        location_id = str(location_id or "")
+        if location_id not in self._locations:
+            return LOCKED
+        if self.is_location_completed(location_id, profile):
+            return COMPLETED
+        order = self._location_order
+        if location_id not in order:
+            return LOCKED
+        idx = order.index(location_id)
+        if idx == 0:
+            return UNLOCKED
+        previous = order[idx - 1]
+        return (UNLOCKED if self.is_location_completed(previous, profile)
+                else LOCKED)
+
+    def is_location_unlocked(self, location_id: str,
+                             profile: Optional[Dict[str, Any]]) -> bool:
+        """В эту локацию уже можно заходить?"""
+        return self.get_location_state(location_id, profile) != LOCKED
+
+    def first_open_location(self, profile: Optional[Dict[str, Any]]) -> str:
+        """Первая НЕ пройденная до конца открытая локация (для карты).
+
+        Так карта сама показывает то место, где ученик сейчас, а не всегда
+        первую локацию. Всё пройдено → последняя. Пустой план → "".
+        """
+        for location_id in self._location_order:
+            if not self.is_location_completed(location_id, profile):
+                return location_id
+        return self._location_order[-1] if self._location_order else ""
 
     def next_lesson(self, profile: Optional[Dict[str, Any]]) -> Optional[str]:
         """id ПЕРВОГО непройденного урока по порядку карты.

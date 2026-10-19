@@ -78,7 +78,9 @@ def main():
     print("\n[1] Реальный knowledge_base/curriculum.json")
     pm = ProgressMap(os.path.join(ROOT, "knowledge_base"))
     ids = pm.location_ids()
-    check("локация desert найдена", ids == ["desert"], ids)
+    check("первая локация — desert", bool(ids) and ids[0] == "desert", ids)
+    # программа полная: A0 → C1 (13 локаций, см. tools/build_curriculum.py)
+    check("13 локаций по программе", len(ids) == 13, ids)
     loc = pm.get_location("desert")
     check("у локации есть image и size",
           loc.get("image") == "assets/map/desert.jpg" and loc.get("size") == [1248, 832],
@@ -104,6 +106,11 @@ def main():
           pm.get_lesson_state("1.2", empty))
     check("прогресс локации 0/9", pm.get_location_progress("desert", empty) == (0, 9),
           pm.get_location_progress("desert", empty))
+    check("вторая локация закрыта",
+          pm.get_location_state(ids[1], empty) == LOCKED,
+          pm.get_location_state(ids[1], empty))
+    check("её первая точка тоже закрыта",
+          pm.get_point_state(pm.points_of(ids[1])[0]["id"], empty) == LOCKED)
 
     # ---------- 3. Линейное продвижение ----------
     print("\n[3] Частичное прохождение")
@@ -111,14 +118,19 @@ def main():
     check("урок 1.1 completed", pm.get_lesson_state("1.1", profile) == COMPLETED)
     check("урок 1.2 unlocked после 1.1", pm.get_lesson_state("1.2", profile) == UNLOCKED)
     check("урок 2.1 всё ещё locked", pm.get_lesson_state("2.1", profile) == LOCKED)
-    check("точка 1 ещё не completed (1 из 3 уроков)",
+    check("точка 1 ещё не completed (1 из 4 уроков)",
           pm.get_point_state("point_1", profile) == UNLOCKED)
-    check("прогресс точки 1 — (1, 3)",
-          pm.get_point_progress("point_1", profile) == (1, 3),
+    check("прогресс точки 1 — (1, 4)",
+          pm.get_point_progress("point_1", profile) == (1, 4),
           pm.get_point_progress("point_1", profile))
+    check("в блоке есть проверочное занятие",
+          any(l.get("type") == "check"
+              for l in pm.lessons_of("point_1")),
+          [l.get("type") for l in pm.lessons_of("point_1")])
 
-    profile = {"completed_lessons": ["1.1", "1.2", "1.3"]}
-    check("точка 1 completed", pm.get_point_state("point_1", profile) == COMPLETED,
+    profile = {"completed_lessons": ["1.1", "1.2", "1.3", "1.4"]}
+    check("точка 1 completed (3 урока + проверка)",
+          pm.get_point_state("point_1", profile) == COMPLETED,
           pm.get_point_state("point_1", profile))
     check("точка 2 unlocked", pm.get_point_state("point_2", profile) == UNLOCKED,
           pm.get_point_state("point_2", profile))
@@ -129,7 +141,8 @@ def main():
     # ---------- 4. Всё пройдено ----------
     print("\n[4] Полное прохождение")
     all_lessons = [l["id"] for p in pts for l in pm.lessons_of(p["id"])]
-    check("всего 27 уроков в локации", len(all_lessons) == 27, len(all_lessons))
+    check("всего 36 уроков в локации (9 блоков × 4)",
+          len(all_lessons) == 36, len(all_lessons))
     done = {"completed_lessons": all_lessons}
     check("все точки completed",
           all(pm.get_point_state(p["id"], done) == COMPLETED for p in pts))

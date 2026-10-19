@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "locations": [
     {
       "id": "desert",
@@ -22,18 +22,27 @@
           "lessons": [
             {
               "id": "1.1",
+              "code": "1.1",
               "title": "Hello / Hi",
               "type": "speaking"
             },
             {
               "id": "1.2",
+              "code": "1.2",
               "title": "Good morning / Good evening",
               "type": "speaking"
             },
             {
               "id": "1.3",
+              "code": "1.3",
               "title": "How are you?",
               "type": "chat"
+            },
+            {
+              "id": "1.4",
+              "code": "1.4",
+              "title": "Проверка: Greetings & Hello",
+              "type": "check"
             }
           ]
         },
@@ -48,18 +57,27 @@
           "lessons": [
             {
               "id": "2.1",
+              "code": "2.1",
               "title": "My name is…",
               "type": "speaking"
             },
             {
               "id": "2.2",
+              "code": "2.2",
               "title": "I'm from…",
               "type": "speaking"
             },
             {
               "id": "2.3",
+              "code": "2.3",
               "title": "Nice to meet you",
               "type": "chat"
+            },
+            {
+              "id": "2.4",
+              "code": "2.4",
+              "title": "Проверка: Introducing Yourself",
+              "type": "check"
             }
           ]
         },
@@ -74,18 +92,27 @@
           "lessons": [
             {
               "id": "3.1",
+              "code": "3.1",
               "title": "Counting 1–10",
               "type": "speaking"
             },
             {
               "id": "3.2",
+              "code": "3.2",
               "title": "How many?",
               "type": "speaking"
             },
             {
               "id": "3.3",
+              "code": "3.3",
               "title": "Phone numbers",
               "type": "chat"
+            },
+            {
+              "id": "3.4",
+              "code": "3.4",
+              "title": "Проверка: Numbers 0–10",
+              "type": "check"
             }
           ]
         },
@@ -100,18 +127,27 @@
           "lessons": [
             {
               "id": "4.1",
+              "code": "4.1",
               "title": "11–20",
               "type": "speaking"
             },
             {
               "id": "4.2",
+              "code": "4.2",
               "title": "Tens: 20–100",
               "type": "speaking"
             },
             {
               "id": "4.3",
+              "code": "4.3",
               "title": "How old are you?",
               "type": "chat"
+            },
+            {
+              "id": "4.4",
+              "code": "4.4",
+              "title": "Проверка: Numbers 11–100 & Age",
+              "type": "check"
             }
           ]
         },
@@ -126,18 +162,27 @@
           "lessons": [
             {
               "id": "5.1",
+              "code": "5.1",
               "title": "Basic colours",
               "type": "speaking"
             },
             {
               "id": "5.2",
+              "code": "5.2",
               "title": "What colour is it?",
               "type": "speaking"
             },
             {
               "id": "5.3",
+              "code": "5.3",
               "title": "Colours I like",
               "type": "chat"
+            },
+            {
+              "id": "5.4",
+              "code": "5.4",
+              "title": "Проверка: Colours",
+              "type": "check"
             }
           ]
         },
@@ -152,18 +197,27 @@
           "lessons": [
             {
               "id": "6.1",
+              "code": "6.1",
               "title": "This is a pen",
               "type": "speaking"
             },
             {
               "id": "6.2",
+              "code": "6.2",
               "title": "Classroom objects",
               "type": "speaking"
             },
             {
               "id": "6.3",
+              "code": "6.3",
               "title": "My things",
               "type": "chat"
+            },
+            {
+              "id": "6.4",
+              "code": "6.4",
+              "title": "Проверка: Objects & This is…",
+              "type": "check"
             }
           ]
         },
@@ -178,18 +232,27 @@
           "lessons": [
             {
               "id": "7.1",
+              "code": "7.1",
               "title": "This is my mother",
               "type": "speaking"
             },
             {
               "id": "7.2",
+              "code": "7.2",
               "title": "He / She is…",
               "type": "speaking"
             },
             {
               "id": "7.3",
+              "code": "7.3",
               "title": "Who is this?",
               "type": "chat"
+            },
+            {
+              "id": "7.4",
+              "code": "7.4",
+              "title": "Проверка: Family & People",
+              "type": "check"
             }
           ]
         },
@@ -204,18 +267,27 @@
           "lessons": [
             {
               "id": "8.1",
+              "code": "8.1",
               "title": "Days of the week",
               "type": "speaking"
             },
             {
               "id": "8.2",
+              "code": "8.2",
               "title": "What's the time?",
               "type": "speaking"
             },
             {
               "id": "8.3",
+              "code": "8.3",
               "title": "Today is…",
               "type": "chat"
+            },
+            {
+              "id": "8.4",
+              "code": "8.4",
+              "title": "Проверка: Days & Time",
+              "type": "check"
             }
           ]
         },
@@ -226,22 +298,3955 @@
             311,
             159
           ],
-          "block_title": "Likes & My Day (Present Simple)",
+          "block_title": "Likes & My Day",
           "lessons": [
             {
               "id": "9.1",
+              "code": "9.1",
               "title": "I like tea",
               "type": "speaking"
             },
             {
               "id": "9.2",
+              "code": "9.2",
               "title": "Do you like…?",
               "type": "speaking"
             },
             {
               "id": "9.3",
+              "code": "9.3",
               "title": "My day: I get up at 7",
               "type": "chat"
+            },
+            {
+              "id": "9.4",
+              "code": "9.4",
+              "title": "Проверка: Likes & My Day",
+              "type": "check"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "forest",
+      "title": "Лесная тропа",
+      "level": "A1",
+      "image": "assets/map/forest.jpg",
+      "size": [
+        1248,
+        832
+      ],
+      "points": [
+        {
+          "id": "forest/point_1",
+          "number": 1,
+          "point": [
+            252,
+            676
+          ],
+          "block_title": "Daily Routine",
+          "lessons": [
+            {
+              "id": "forest/1.1",
+              "code": "1.1",
+              "title": "My morning",
+              "type": "speaking"
+            },
+            {
+              "id": "forest/1.2",
+              "code": "1.2",
+              "title": "What time do you…?",
+              "type": "speaking"
+            },
+            {
+              "id": "forest/1.3",
+              "code": "1.3",
+              "title": "My usual day",
+              "type": "chat"
+            },
+            {
+              "id": "forest/1.4",
+              "code": "1.4",
+              "title": "Проверка: Daily Routine",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "forest/point_2",
+          "number": 2,
+          "point": [
+            235,
+            530
+          ],
+          "block_title": "Food & Drinks",
+          "lessons": [
+            {
+              "id": "forest/2.1",
+              "code": "2.1",
+              "title": "I eat…",
+              "type": "speaking"
+            },
+            {
+              "id": "forest/2.2",
+              "code": "2.2",
+              "title": "At breakfast",
+              "type": "speaking"
+            },
+            {
+              "id": "forest/2.3",
+              "code": "2.3",
+              "title": "What do you like to eat?",
+              "type": "chat"
+            },
+            {
+              "id": "forest/2.4",
+              "code": "2.4",
+              "title": "Проверка: Food & Drinks",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "forest/point_3",
+          "number": 3,
+          "point": [
+            637,
+            623
+          ],
+          "block_title": "In the Shop",
+          "lessons": [
+            {
+              "id": "forest/3.1",
+              "code": "3.1",
+              "title": "How much is it?",
+              "type": "speaking"
+            },
+            {
+              "id": "forest/3.2",
+              "code": "3.2",
+              "title": "I'd like…",
+              "type": "speaking"
+            },
+            {
+              "id": "forest/3.3",
+              "code": "3.3",
+              "title": "Shopping list",
+              "type": "chat"
+            },
+            {
+              "id": "forest/3.4",
+              "code": "3.4",
+              "title": "Проверка: In the Shop",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "forest/point_4",
+          "number": 4,
+          "point": [
+            910,
+            646
+          ],
+          "block_title": "Clothes",
+          "lessons": [
+            {
+              "id": "forest/4.1",
+              "code": "4.1",
+              "title": "What are you wearing?",
+              "type": "speaking"
+            },
+            {
+              "id": "forest/4.2",
+              "code": "4.2",
+              "title": "This shirt is blue",
+              "type": "speaking"
+            },
+            {
+              "id": "forest/4.3",
+              "code": "4.3",
+              "title": "My favourite clothes",
+              "type": "chat"
+            },
+            {
+              "id": "forest/4.4",
+              "code": "4.4",
+              "title": "Проверка: Clothes",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "forest/point_5",
+          "number": 5,
+          "point": [
+            1024,
+            542
+          ],
+          "block_title": "House & Rooms",
+          "lessons": [
+            {
+              "id": "forest/5.1",
+              "code": "5.1",
+              "title": "There is / There are",
+              "type": "speaking"
+            },
+            {
+              "id": "forest/5.2",
+              "code": "5.2",
+              "title": "Where is the kitchen?",
+              "type": "speaking"
+            },
+            {
+              "id": "forest/5.3",
+              "code": "5.3",
+              "title": "Describe your home",
+              "type": "chat"
+            },
+            {
+              "id": "forest/5.4",
+              "code": "5.4",
+              "title": "Проверка: House & Rooms",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "forest/point_6",
+          "number": 6,
+          "point": [
+            860,
+            414
+          ],
+          "block_title": "Weather & Seasons",
+          "lessons": [
+            {
+              "id": "forest/6.1",
+              "code": "6.1",
+              "title": "It's sunny today",
+              "type": "speaking"
+            },
+            {
+              "id": "forest/6.2",
+              "code": "6.2",
+              "title": "Seasons and months",
+              "type": "speaking"
+            },
+            {
+              "id": "forest/6.3",
+              "code": "6.3",
+              "title": "Weather in my city",
+              "type": "chat"
+            },
+            {
+              "id": "forest/6.4",
+              "code": "6.4",
+              "title": "Проверка: Weather & Seasons",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "forest/point_7",
+          "number": 7,
+          "point": [
+            482,
+            321
+          ],
+          "block_title": "Hobbies & Free Time",
+          "lessons": [
+            {
+              "id": "forest/7.1",
+              "code": "7.1",
+              "title": "I like playing…",
+              "type": "speaking"
+            },
+            {
+              "id": "forest/7.2",
+              "code": "7.2",
+              "title": "Free time questions",
+              "type": "speaking"
+            },
+            {
+              "id": "forest/7.3",
+              "code": "7.3",
+              "title": "My hobby",
+              "type": "chat"
+            },
+            {
+              "id": "forest/7.4",
+              "code": "7.4",
+              "title": "Проверка: Hobbies & Free Time",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "forest/point_8",
+          "number": 8,
+          "point": [
+            237,
+            288
+          ],
+          "block_title": "Transport",
+          "lessons": [
+            {
+              "id": "forest/8.1",
+              "code": "8.1",
+              "title": "By bus or by car?",
+              "type": "speaking"
+            },
+            {
+              "id": "forest/8.2",
+              "code": "8.2",
+              "title": "How do you get to school?",
+              "type": "speaking"
+            },
+            {
+              "id": "forest/8.3",
+              "code": "8.3",
+              "title": "Travelling in town",
+              "type": "chat"
+            },
+            {
+              "id": "forest/8.4",
+              "code": "8.4",
+              "title": "Проверка: Transport",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "forest/point_9",
+          "number": 9,
+          "point": [
+            311,
+            159
+          ],
+          "block_title": "My Weekend (Past Simple)",
+          "lessons": [
+            {
+              "id": "forest/9.1",
+              "code": "9.1",
+              "title": "What did you do?",
+              "type": "speaking"
+            },
+            {
+              "id": "forest/9.2",
+              "code": "9.2",
+              "title": "Yesterday I went…",
+              "type": "speaking"
+            },
+            {
+              "id": "forest/9.3",
+              "code": "9.3",
+              "title": "My last weekend",
+              "type": "chat"
+            },
+            {
+              "id": "forest/9.4",
+              "code": "9.4",
+              "title": "Проверка: My Weekend (Past Simple)",
+              "type": "check"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "river",
+      "title": "Речная долина",
+      "level": "A1",
+      "image": "assets/map/river.jpg",
+      "size": [
+        1248,
+        832
+      ],
+      "points": [
+        {
+          "id": "river/point_1",
+          "number": 1,
+          "point": [
+            252,
+            676
+          ],
+          "block_title": "Directions & Places",
+          "lessons": [
+            {
+              "id": "river/1.1",
+              "code": "1.1",
+              "title": "Where is the bank?",
+              "type": "speaking"
+            },
+            {
+              "id": "river/1.2",
+              "code": "1.2",
+              "title": "Turn left / go straight",
+              "type": "speaking"
+            },
+            {
+              "id": "river/1.3",
+              "code": "1.3",
+              "title": "My town",
+              "type": "chat"
+            },
+            {
+              "id": "river/1.4",
+              "code": "1.4",
+              "title": "Проверка: Directions & Places",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "river/point_2",
+          "number": 2,
+          "point": [
+            235,
+            530
+          ],
+          "block_title": "Health & Doctor",
+          "lessons": [
+            {
+              "id": "river/2.1",
+              "code": "2.1",
+              "title": "I have a headache",
+              "type": "speaking"
+            },
+            {
+              "id": "river/2.2",
+              "code": "2.2",
+              "title": "At the doctor's",
+              "type": "speaking"
+            },
+            {
+              "id": "river/2.3",
+              "code": "2.3",
+              "title": "Healthy habits",
+              "type": "chat"
+            },
+            {
+              "id": "river/2.4",
+              "code": "2.4",
+              "title": "Проверка: Health & Doctor",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "river/point_3",
+          "number": 3,
+          "point": [
+            637,
+            623
+          ],
+          "block_title": "Phone Calls",
+          "lessons": [
+            {
+              "id": "river/3.1",
+              "code": "3.1",
+              "title": "Hello, it's Damil",
+              "type": "speaking"
+            },
+            {
+              "id": "river/3.2",
+              "code": "3.2",
+              "title": "Can I speak to…?",
+              "type": "speaking"
+            },
+            {
+              "id": "river/3.3",
+              "code": "3.3",
+              "title": "Texting a friend",
+              "type": "chat"
+            },
+            {
+              "id": "river/3.4",
+              "code": "3.4",
+              "title": "Проверка: Phone Calls",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "river/point_4",
+          "number": 4,
+          "point": [
+            910,
+            646
+          ],
+          "block_title": "Invitations & Plans",
+          "lessons": [
+            {
+              "id": "river/4.1",
+              "code": "4.1",
+              "title": "Are you free on Friday?",
+              "type": "speaking"
+            },
+            {
+              "id": "river/4.2",
+              "code": "4.2",
+              "title": "Let's meet at…",
+              "type": "speaking"
+            },
+            {
+              "id": "river/4.3",
+              "code": "4.3",
+              "title": "Weekend plans",
+              "type": "chat"
+            },
+            {
+              "id": "river/4.4",
+              "code": "4.4",
+              "title": "Проверка: Invitations & Plans",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "river/point_5",
+          "number": 5,
+          "point": [
+            1024,
+            542
+          ],
+          "block_title": "Feelings & Opinions",
+          "lessons": [
+            {
+              "id": "river/5.1",
+              "code": "5.1",
+              "title": "I feel happy",
+              "type": "speaking"
+            },
+            {
+              "id": "river/5.2",
+              "code": "5.2",
+              "title": "I think that…",
+              "type": "speaking"
+            },
+            {
+              "id": "river/5.3",
+              "code": "5.3",
+              "title": "How do you feel today?",
+              "type": "chat"
+            },
+            {
+              "id": "river/5.4",
+              "code": "5.4",
+              "title": "Проверка: Feelings & Opinions",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "river/point_6",
+          "number": 6,
+          "point": [
+            860,
+            414
+          ],
+          "block_title": "Describing People",
+          "lessons": [
+            {
+              "id": "river/6.1",
+              "code": "6.1",
+              "title": "She is tall and kind",
+              "type": "speaking"
+            },
+            {
+              "id": "river/6.2",
+              "code": "6.2",
+              "title": "What does he look like?",
+              "type": "speaking"
+            },
+            {
+              "id": "river/6.3",
+              "code": "6.3",
+              "title": "My best friend",
+              "type": "chat"
+            },
+            {
+              "id": "river/6.4",
+              "code": "6.4",
+              "title": "Проверка: Describing People",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "river/point_7",
+          "number": 7,
+          "point": [
+            482,
+            321
+          ],
+          "block_title": "School & Studies",
+          "lessons": [
+            {
+              "id": "river/7.1",
+              "code": "7.1",
+              "title": "My favourite subject",
+              "type": "speaking"
+            },
+            {
+              "id": "river/7.2",
+              "code": "7.2",
+              "title": "In the classroom",
+              "type": "speaking"
+            },
+            {
+              "id": "river/7.3",
+              "code": "7.3",
+              "title": "My school day",
+              "type": "chat"
+            },
+            {
+              "id": "river/7.4",
+              "code": "7.4",
+              "title": "Проверка: School & Studies",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "river/point_8",
+          "number": 8,
+          "point": [
+            237,
+            288
+          ],
+          "block_title": "Holidays & Trips",
+          "lessons": [
+            {
+              "id": "river/8.1",
+              "code": "8.1",
+              "title": "Last summer I…",
+              "type": "speaking"
+            },
+            {
+              "id": "river/8.2",
+              "code": "8.2",
+              "title": "Where did you go?",
+              "type": "speaking"
+            },
+            {
+              "id": "river/8.3",
+              "code": "8.3",
+              "title": "My best trip",
+              "type": "chat"
+            },
+            {
+              "id": "river/8.4",
+              "code": "8.4",
+              "title": "Проверка: Holidays & Trips",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "river/point_9",
+          "number": 9,
+          "point": [
+            311,
+            159
+          ],
+          "block_title": "Future Plans",
+          "lessons": [
+            {
+              "id": "river/9.1",
+              "code": "9.1",
+              "title": "I'm going to…",
+              "type": "speaking"
+            },
+            {
+              "id": "river/9.2",
+              "code": "9.2",
+              "title": "What will you do?",
+              "type": "speaking"
+            },
+            {
+              "id": "river/9.3",
+              "code": "9.3",
+              "title": "Next year",
+              "type": "chat"
+            },
+            {
+              "id": "river/9.4",
+              "code": "9.4",
+              "title": "Проверка: Future Plans",
+              "type": "check"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "city",
+      "title": "Городские улицы",
+      "level": "A2",
+      "image": "assets/map/city.jpg",
+      "size": [
+        1248,
+        832
+      ],
+      "points": [
+        {
+          "id": "city/point_1",
+          "number": 1,
+          "point": [
+            252,
+            676
+          ],
+          "block_title": "Making Arrangements",
+          "lessons": [
+            {
+              "id": "city/1.1",
+              "code": "1.1",
+              "title": "Shall we meet at six?",
+              "type": "speaking"
+            },
+            {
+              "id": "city/1.2",
+              "code": "1.2",
+              "title": "Sorry, I can't — I'm busy",
+              "type": "speaking"
+            },
+            {
+              "id": "city/1.3",
+              "code": "1.3",
+              "title": "Agreeing on a time",
+              "type": "chat"
+            },
+            {
+              "id": "city/1.4",
+              "code": "1.4",
+              "title": "Проверка: Making Arrangements",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "city/point_2",
+          "number": 2,
+          "point": [
+            235,
+            530
+          ],
+          "block_title": "At the Restaurant",
+          "lessons": [
+            {
+              "id": "city/2.1",
+              "code": "2.1",
+              "title": "Can I have the menu?",
+              "type": "speaking"
+            },
+            {
+              "id": "city/2.2",
+              "code": "2.2",
+              "title": "I'd like a coffee, please",
+              "type": "speaking"
+            },
+            {
+              "id": "city/2.3",
+              "code": "2.3",
+              "title": "Ordering food",
+              "type": "chat"
+            },
+            {
+              "id": "city/2.4",
+              "code": "2.4",
+              "title": "Проверка: At the Restaurant",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "city/point_3",
+          "number": 3,
+          "point": [
+            637,
+            623
+          ],
+          "block_title": "Shopping & Money",
+          "lessons": [
+            {
+              "id": "city/3.1",
+              "code": "3.1",
+              "title": "It's too expensive",
+              "type": "speaking"
+            },
+            {
+              "id": "city/3.2",
+              "code": "3.2",
+              "title": "Can I pay by card?",
+              "type": "speaking"
+            },
+            {
+              "id": "city/3.3",
+              "code": "3.3",
+              "title": "A good buy",
+              "type": "chat"
+            },
+            {
+              "id": "city/3.4",
+              "code": "3.4",
+              "title": "Проверка: Shopping & Money",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "city/point_4",
+          "number": 4,
+          "point": [
+            910,
+            646
+          ],
+          "block_title": "Comparing Things",
+          "lessons": [
+            {
+              "id": "city/4.1",
+              "code": "4.1",
+              "title": "Bigger than / the biggest",
+              "type": "speaking"
+            },
+            {
+              "id": "city/4.2",
+              "code": "4.2",
+              "title": "Better or worse?",
+              "type": "speaking"
+            },
+            {
+              "id": "city/4.3",
+              "code": "4.3",
+              "title": "Two phones: which one?",
+              "type": "chat"
+            },
+            {
+              "id": "city/4.4",
+              "code": "4.4",
+              "title": "Проверка: Comparing Things",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "city/point_5",
+          "number": 5,
+          "point": [
+            1024,
+            542
+          ],
+          "block_title": "Experiences (Present Perfect)",
+          "lessons": [
+            {
+              "id": "city/5.1",
+              "code": "5.1",
+              "title": "Have you ever been…?",
+              "type": "speaking"
+            },
+            {
+              "id": "city/5.2",
+              "code": "5.2",
+              "title": "I have never tried…",
+              "type": "speaking"
+            },
+            {
+              "id": "city/5.3",
+              "code": "5.3",
+              "title": "My life experiences",
+              "type": "chat"
+            },
+            {
+              "id": "city/5.4",
+              "code": "5.4",
+              "title": "Проверка: Experiences (Present Perfect)",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "city/point_6",
+          "number": 6,
+          "point": [
+            860,
+            414
+          ],
+          "block_title": "Rules & Obligations",
+          "lessons": [
+            {
+              "id": "city/6.1",
+              "code": "6.1",
+              "title": "You must / You have to",
+              "type": "speaking"
+            },
+            {
+              "id": "city/6.2",
+              "code": "6.2",
+              "title": "At school we can't…",
+              "type": "speaking"
+            },
+            {
+              "id": "city/6.3",
+              "code": "6.3",
+              "title": "House rules",
+              "type": "chat"
+            },
+            {
+              "id": "city/6.4",
+              "code": "6.4",
+              "title": "Проверка: Rules & Obligations",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "city/point_7",
+          "number": 7,
+          "point": [
+            482,
+            321
+          ],
+          "block_title": "Technology",
+          "lessons": [
+            {
+              "id": "city/7.1",
+              "code": "7.1",
+              "title": "My phone is broken",
+              "type": "speaking"
+            },
+            {
+              "id": "city/7.2",
+              "code": "7.2",
+              "title": "How do I use this app?",
+              "type": "speaking"
+            },
+            {
+              "id": "city/7.3",
+              "code": "7.3",
+              "title": "Phones and me",
+              "type": "chat"
+            },
+            {
+              "id": "city/7.4",
+              "code": "7.4",
+              "title": "Проверка: Technology",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "city/point_8",
+          "number": 8,
+          "point": [
+            237,
+            288
+          ],
+          "block_title": "Work & Jobs",
+          "lessons": [
+            {
+              "id": "city/8.1",
+              "code": "8.1",
+              "title": "What do you do?",
+              "type": "speaking"
+            },
+            {
+              "id": "city/8.2",
+              "code": "8.2",
+              "title": "My dream job",
+              "type": "speaking"
+            },
+            {
+              "id": "city/8.3",
+              "code": "8.3",
+              "title": "Jobs in my family",
+              "type": "chat"
+            },
+            {
+              "id": "city/8.4",
+              "code": "8.4",
+              "title": "Проверка: Work & Jobs",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "city/point_9",
+          "number": 9,
+          "point": [
+            311,
+            159
+          ],
+          "block_title": "Telling a Story (Past Continuous)",
+          "lessons": [
+            {
+              "id": "city/9.1",
+              "code": "9.1",
+              "title": "I was walking when…",
+              "type": "speaking"
+            },
+            {
+              "id": "city/9.2",
+              "code": "9.2",
+              "title": "What happened next?",
+              "type": "speaking"
+            },
+            {
+              "id": "city/9.3",
+              "code": "9.3",
+              "title": "A funny story",
+              "type": "chat"
+            },
+            {
+              "id": "city/9.4",
+              "code": "9.4",
+              "title": "Проверка: Telling a Story (Past Continuous)",
+              "type": "check"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mountain",
+      "title": "Горный перевал",
+      "level": "A2",
+      "image": "assets/map/mountain.jpg",
+      "size": [
+        1248,
+        832
+      ],
+      "points": [
+        {
+          "id": "mountain/point_1",
+          "number": 1,
+          "point": [
+            252,
+            676
+          ],
+          "block_title": "Travel & Booking",
+          "lessons": [
+            {
+              "id": "mountain/1.1",
+              "code": "1.1",
+              "title": "I'd like to book a room",
+              "type": "speaking"
+            },
+            {
+              "id": "mountain/1.2",
+              "code": "1.2",
+              "title": "At the airport",
+              "type": "speaking"
+            },
+            {
+              "id": "mountain/1.3",
+              "code": "1.3",
+              "title": "Planning a trip",
+              "type": "chat"
+            },
+            {
+              "id": "mountain/1.4",
+              "code": "1.4",
+              "title": "Проверка: Travel & Booking",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "mountain/point_2",
+          "number": 2,
+          "point": [
+            235,
+            530
+          ],
+          "block_title": "Problems & Complaints",
+          "lessons": [
+            {
+              "id": "mountain/2.1",
+              "code": "2.1",
+              "title": "Excuse me, there is a problem",
+              "type": "speaking"
+            },
+            {
+              "id": "mountain/2.2",
+              "code": "2.2",
+              "title": "Could you help me?",
+              "type": "speaking"
+            },
+            {
+              "id": "mountain/2.3",
+              "code": "2.3",
+              "title": "A bad hotel",
+              "type": "chat"
+            },
+            {
+              "id": "mountain/2.4",
+              "code": "2.4",
+              "title": "Проверка: Problems & Complaints",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "mountain/point_3",
+          "number": 3,
+          "point": [
+            637,
+            623
+          ],
+          "block_title": "Advice & Suggestions",
+          "lessons": [
+            {
+              "id": "mountain/3.1",
+              "code": "3.1",
+              "title": "You should…",
+              "type": "speaking"
+            },
+            {
+              "id": "mountain/3.2",
+              "code": "3.2",
+              "title": "Why don't you…?",
+              "type": "speaking"
+            },
+            {
+              "id": "mountain/3.3",
+              "code": "3.3",
+              "title": "Asking for advice",
+              "type": "chat"
+            },
+            {
+              "id": "mountain/3.4",
+              "code": "3.4",
+              "title": "Проверка: Advice & Suggestions",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "mountain/point_4",
+          "number": 4,
+          "point": [
+            910,
+            646
+          ],
+          "block_title": "Possibility",
+          "lessons": [
+            {
+              "id": "mountain/4.1",
+              "code": "4.1",
+              "title": "It might rain",
+              "type": "speaking"
+            },
+            {
+              "id": "mountain/4.2",
+              "code": "4.2",
+              "title": "Maybe / perhaps",
+              "type": "speaking"
+            },
+            {
+              "id": "mountain/4.3",
+              "code": "4.3",
+              "title": "What could happen?",
+              "type": "chat"
+            },
+            {
+              "id": "mountain/4.4",
+              "code": "4.4",
+              "title": "Проверка: Possibility",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "mountain/point_5",
+          "number": 5,
+          "point": [
+            1024,
+            542
+          ],
+          "block_title": "Preferences",
+          "lessons": [
+            {
+              "id": "mountain/5.1",
+              "code": "5.1",
+              "title": "I'd rather…",
+              "type": "speaking"
+            },
+            {
+              "id": "mountain/5.2",
+              "code": "5.2",
+              "title": "I prefer tea to coffee",
+              "type": "speaking"
+            },
+            {
+              "id": "mountain/5.3",
+              "code": "5.3",
+              "title": "What do you prefer?",
+              "type": "chat"
+            },
+            {
+              "id": "mountain/5.4",
+              "code": "5.4",
+              "title": "Проверка: Preferences",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "mountain/point_6",
+          "number": 6,
+          "point": [
+            860,
+            414
+          ],
+          "block_title": "Describing Places",
+          "lessons": [
+            {
+              "id": "mountain/6.1",
+              "code": "6.1",
+              "title": "It's a quiet town",
+              "type": "speaking"
+            },
+            {
+              "id": "mountain/6.2",
+              "code": "6.2",
+              "title": "What is it like?",
+              "type": "speaking"
+            },
+            {
+              "id": "mountain/6.3",
+              "code": "6.3",
+              "title": "My favourite place",
+              "type": "chat"
+            },
+            {
+              "id": "mountain/6.4",
+              "code": "6.4",
+              "title": "Проверка: Describing Places",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "mountain/point_7",
+          "number": 7,
+          "point": [
+            482,
+            321
+          ],
+          "block_title": "Sport & Fitness",
+          "lessons": [
+            {
+              "id": "mountain/7.1",
+              "code": "7.1",
+              "title": "I play football",
+              "type": "speaking"
+            },
+            {
+              "id": "mountain/7.2",
+              "code": "7.2",
+              "title": "How often do you…?",
+              "type": "speaking"
+            },
+            {
+              "id": "mountain/7.3",
+              "code": "7.3",
+              "title": "Sport in my life",
+              "type": "chat"
+            },
+            {
+              "id": "mountain/7.4",
+              "code": "7.4",
+              "title": "Проверка: Sport & Fitness",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "mountain/point_8",
+          "number": 8,
+          "point": [
+            237,
+            288
+          ],
+          "block_title": "Media & Entertainment",
+          "lessons": [
+            {
+              "id": "mountain/8.1",
+              "code": "8.1",
+              "title": "What's on TV?",
+              "type": "speaking"
+            },
+            {
+              "id": "mountain/8.2",
+              "code": "8.2",
+              "title": "I watched a great film",
+              "type": "speaking"
+            },
+            {
+              "id": "mountain/8.3",
+              "code": "8.3",
+              "title": "Films and music",
+              "type": "chat"
+            },
+            {
+              "id": "mountain/8.4",
+              "code": "8.4",
+              "title": "Проверка: Media & Entertainment",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "mountain/point_9",
+          "number": 9,
+          "point": [
+            311,
+            159
+          ],
+          "block_title": "First Conditional",
+          "lessons": [
+            {
+              "id": "mountain/9.1",
+              "code": "9.1",
+              "title": "If it rains, I will…",
+              "type": "speaking"
+            },
+            {
+              "id": "mountain/9.2",
+              "code": "9.2",
+              "title": "What will happen if…?",
+              "type": "speaking"
+            },
+            {
+              "id": "mountain/9.3",
+              "code": "9.3",
+              "title": "If I have time…",
+              "type": "chat"
+            },
+            {
+              "id": "mountain/9.4",
+              "code": "9.4",
+              "title": "Проверка: First Conditional",
+              "type": "check"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "coast",
+      "title": "Морской берег",
+      "level": "B1",
+      "image": "assets/map/coast.jpg",
+      "size": [
+        1248,
+        832
+      ],
+      "points": [
+        {
+          "id": "coast/point_1",
+          "number": 1,
+          "point": [
+            252,
+            676
+          ],
+          "block_title": "Ambitions & Dreams",
+          "lessons": [
+            {
+              "id": "coast/1.1",
+              "code": "1.1",
+              "title": "I've always wanted to…",
+              "type": "speaking"
+            },
+            {
+              "id": "coast/1.2",
+              "code": "1.2",
+              "title": "My goals for this year",
+              "type": "speaking"
+            },
+            {
+              "id": "coast/1.3",
+              "code": "1.3",
+              "title": "Dreams and plans",
+              "type": "chat"
+            },
+            {
+              "id": "coast/1.4",
+              "code": "1.4",
+              "title": "Проверка: Ambitions & Dreams",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "coast/point_2",
+          "number": 2,
+          "point": [
+            235,
+            530
+          ],
+          "block_title": "Relationships",
+          "lessons": [
+            {
+              "id": "coast/2.1",
+              "code": "2.1",
+              "title": "We've known each other for…",
+              "type": "speaking"
+            },
+            {
+              "id": "coast/2.2",
+              "code": "2.2",
+              "title": "Friendship matters",
+              "type": "speaking"
+            },
+            {
+              "id": "coast/2.3",
+              "code": "2.3",
+              "title": "People in my life",
+              "type": "chat"
+            },
+            {
+              "id": "coast/2.4",
+              "code": "2.4",
+              "title": "Проверка: Relationships",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "coast/point_3",
+          "number": 3,
+          "point": [
+            637,
+            623
+          ],
+          "block_title": "Environment",
+          "lessons": [
+            {
+              "id": "coast/3.1",
+              "code": "3.1",
+              "title": "We should recycle",
+              "type": "speaking"
+            },
+            {
+              "id": "coast/3.2",
+              "code": "3.2",
+              "title": "Problems in my city",
+              "type": "speaking"
+            },
+            {
+              "id": "coast/3.3",
+              "code": "3.3",
+              "title": "Being eco-friendly",
+              "type": "chat"
+            },
+            {
+              "id": "coast/3.4",
+              "code": "3.4",
+              "title": "Проверка: Environment",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "coast/point_4",
+          "number": 4,
+          "point": [
+            910,
+            646
+          ],
+          "block_title": "News & Current Events",
+          "lessons": [
+            {
+              "id": "coast/4.1",
+              "code": "4.1",
+              "title": "Did you hear about…?",
+              "type": "speaking"
+            },
+            {
+              "id": "coast/4.2",
+              "code": "4.2",
+              "title": "In my opinion, the news…",
+              "type": "speaking"
+            },
+            {
+              "id": "coast/4.3",
+              "code": "4.3",
+              "title": "A story I read",
+              "type": "chat"
+            },
+            {
+              "id": "coast/4.4",
+              "code": "4.4",
+              "title": "Проверка: News & Current Events",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "coast/point_5",
+          "number": 5,
+          "point": [
+            1024,
+            542
+          ],
+          "block_title": "Past Habits (used to)",
+          "lessons": [
+            {
+              "id": "coast/5.1",
+              "code": "5.1",
+              "title": "I used to play…",
+              "type": "speaking"
+            },
+            {
+              "id": "coast/5.2",
+              "code": "5.2",
+              "title": "How things have changed",
+              "type": "speaking"
+            },
+            {
+              "id": "coast/5.3",
+              "code": "5.3",
+              "title": "When I was a child",
+              "type": "chat"
+            },
+            {
+              "id": "coast/5.4",
+              "code": "5.4",
+              "title": "Проверка: Past Habits (used to)",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "coast/point_6",
+          "number": 6,
+          "point": [
+            860,
+            414
+          ],
+          "block_title": "Present Perfect Continuous",
+          "lessons": [
+            {
+              "id": "coast/6.1",
+              "code": "6.1",
+              "title": "I've been learning English for…",
+              "type": "speaking"
+            },
+            {
+              "id": "coast/6.2",
+              "code": "6.2",
+              "title": "How long have you been…?",
+              "type": "speaking"
+            },
+            {
+              "id": "coast/6.3",
+              "code": "6.3",
+              "title": "What have you been doing?",
+              "type": "chat"
+            },
+            {
+              "id": "coast/6.4",
+              "code": "6.4",
+              "title": "Проверка: Present Perfect Continuous",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "coast/point_7",
+          "number": 7,
+          "point": [
+            482,
+            321
+          ],
+          "block_title": "Reported Speech",
+          "lessons": [
+            {
+              "id": "coast/7.1",
+              "code": "7.1",
+              "title": "She said that…",
+              "type": "speaking"
+            },
+            {
+              "id": "coast/7.2",
+              "code": "7.2",
+              "title": "He told me to…",
+              "type": "speaking"
+            },
+            {
+              "id": "coast/7.3",
+              "code": "7.3",
+              "title": "What did they say?",
+              "type": "chat"
+            },
+            {
+              "id": "coast/7.4",
+              "code": "7.4",
+              "title": "Проверка: Reported Speech",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "coast/point_8",
+          "number": 8,
+          "point": [
+            237,
+            288
+          ],
+          "block_title": "Agreeing & Disagreeing",
+          "lessons": [
+            {
+              "id": "coast/8.1",
+              "code": "8.1",
+              "title": "I completely agree",
+              "type": "speaking"
+            },
+            {
+              "id": "coast/8.2",
+              "code": "8.2",
+              "title": "I'm afraid I disagree",
+              "type": "speaking"
+            },
+            {
+              "id": "coast/8.3",
+              "code": "8.3",
+              "title": "A friendly argument",
+              "type": "chat"
+            },
+            {
+              "id": "coast/8.4",
+              "code": "8.4",
+              "title": "Проверка: Agreeing & Disagreeing",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "coast/point_9",
+          "number": 9,
+          "point": [
+            311,
+            159
+          ],
+          "block_title": "Giving Opinion",
+          "lessons": [
+            {
+              "id": "coast/9.1",
+              "code": "9.1",
+              "title": "From my point of view…",
+              "type": "speaking"
+            },
+            {
+              "id": "coast/9.2",
+              "code": "9.2",
+              "title": "The pros and cons",
+              "type": "speaking"
+            },
+            {
+              "id": "coast/9.3",
+              "code": "9.3",
+              "title": "Should students wear uniforms?",
+              "type": "chat"
+            },
+            {
+              "id": "coast/9.4",
+              "code": "9.4",
+              "title": "Проверка: Giving Opinion",
+              "type": "check"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bazaar",
+      "title": "Ночной рынок",
+      "level": "B1",
+      "image": "assets/map/bazaar.jpg",
+      "size": [
+        1248,
+        832
+      ],
+      "points": [
+        {
+          "id": "bazaar/point_1",
+          "number": 1,
+          "point": [
+            252,
+            676
+          ],
+          "block_title": "Negotiating",
+          "lessons": [
+            {
+              "id": "bazaar/1.1",
+              "code": "1.1",
+              "title": "Could you lower the price?",
+              "type": "speaking"
+            },
+            {
+              "id": "bazaar/1.2",
+              "code": "1.2",
+              "title": "That's my final offer",
+              "type": "speaking"
+            },
+            {
+              "id": "bazaar/1.3",
+              "code": "1.3",
+              "title": "Bargaining politely",
+              "type": "chat"
+            },
+            {
+              "id": "bazaar/1.4",
+              "code": "1.4",
+              "title": "Проверка: Negotiating",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "bazaar/point_2",
+          "number": 2,
+          "point": [
+            235,
+            530
+          ],
+          "block_title": "Food Culture",
+          "lessons": [
+            {
+              "id": "bazaar/2.1",
+              "code": "2.1",
+              "title": "Traditional dishes",
+              "type": "speaking"
+            },
+            {
+              "id": "bazaar/2.2",
+              "code": "2.2",
+              "title": "How is it cooked?",
+              "type": "speaking"
+            },
+            {
+              "id": "bazaar/2.3",
+              "code": "2.3",
+              "title": "Food from my country",
+              "type": "chat"
+            },
+            {
+              "id": "bazaar/2.4",
+              "code": "2.4",
+              "title": "Проверка: Food Culture",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "bazaar/point_3",
+          "number": 3,
+          "point": [
+            637,
+            623
+          ],
+          "block_title": "Festivals & Traditions",
+          "lessons": [
+            {
+              "id": "bazaar/3.1",
+              "code": "3.1",
+              "title": "We celebrate…",
+              "type": "speaking"
+            },
+            {
+              "id": "bazaar/3.2",
+              "code": "3.2",
+              "title": "A festival I love",
+              "type": "speaking"
+            },
+            {
+              "id": "bazaar/3.3",
+              "code": "3.3",
+              "title": "Traditions in my family",
+              "type": "chat"
+            },
+            {
+              "id": "bazaar/3.4",
+              "code": "3.4",
+              "title": "Проверка: Festivals & Traditions",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "bazaar/point_4",
+          "number": 4,
+          "point": [
+            910,
+            646
+          ],
+          "block_title": "Fashion & Style",
+          "lessons": [
+            {
+              "id": "bazaar/4.1",
+              "code": "4.1",
+              "title": "It suits you",
+              "type": "speaking"
+            },
+            {
+              "id": "bazaar/4.2",
+              "code": "4.2",
+              "title": "What's in fashion now?",
+              "type": "speaking"
+            },
+            {
+              "id": "bazaar/4.3",
+              "code": "4.3",
+              "title": "My style",
+              "type": "chat"
+            },
+            {
+              "id": "bazaar/4.4",
+              "code": "4.4",
+              "title": "Проверка: Fashion & Style",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "bazaar/point_5",
+          "number": 5,
+          "point": [
+            1024,
+            542
+          ],
+          "block_title": "Money & Budget",
+          "lessons": [
+            {
+              "id": "bazaar/5.1",
+              "code": "5.1",
+              "title": "I save money for…",
+              "type": "speaking"
+            },
+            {
+              "id": "bazaar/5.2",
+              "code": "5.2",
+              "title": "Spending or saving?",
+              "type": "speaking"
+            },
+            {
+              "id": "bazaar/5.3",
+              "code": "5.3",
+              "title": "My monthly budget",
+              "type": "chat"
+            },
+            {
+              "id": "bazaar/5.4",
+              "code": "5.4",
+              "title": "Проверка: Money & Budget",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "bazaar/point_6",
+          "number": 6,
+          "point": [
+            860,
+            414
+          ],
+          "block_title": "City vs Countryside",
+          "lessons": [
+            {
+              "id": "bazaar/6.1",
+              "code": "6.1",
+              "title": "Living in the city",
+              "type": "speaking"
+            },
+            {
+              "id": "bazaar/6.2",
+              "code": "6.2",
+              "title": "Advantages and drawbacks",
+              "type": "speaking"
+            },
+            {
+              "id": "bazaar/6.3",
+              "code": "6.3",
+              "title": "Where would you live?",
+              "type": "chat"
+            },
+            {
+              "id": "bazaar/6.4",
+              "code": "6.4",
+              "title": "Проверка: City vs Countryside",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "bazaar/point_7",
+          "number": 7,
+          "point": [
+            482,
+            321
+          ],
+          "block_title": "Anecdotes",
+          "lessons": [
+            {
+              "id": "bazaar/7.1",
+              "code": "7.1",
+              "title": "You won't believe this…",
+              "type": "speaking"
+            },
+            {
+              "id": "bazaar/7.2",
+              "code": "7.2",
+              "title": "A funny thing happened",
+              "type": "speaking"
+            },
+            {
+              "id": "bazaar/7.3",
+              "code": "7.3",
+              "title": "Tell me a story",
+              "type": "chat"
+            },
+            {
+              "id": "bazaar/7.4",
+              "code": "7.4",
+              "title": "Проверка: Anecdotes",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "bazaar/point_8",
+          "number": 8,
+          "point": [
+            237,
+            288
+          ],
+          "block_title": "Speculation (Modals)",
+          "lessons": [
+            {
+              "id": "bazaar/8.1",
+              "code": "8.1",
+              "title": "It must be…",
+              "type": "speaking"
+            },
+            {
+              "id": "bazaar/8.2",
+              "code": "8.2",
+              "title": "It can't be true",
+              "type": "speaking"
+            },
+            {
+              "id": "bazaar/8.3",
+              "code": "8.3",
+              "title": "What do you think happened?",
+              "type": "chat"
+            },
+            {
+              "id": "bazaar/8.4",
+              "code": "8.4",
+              "title": "Проверка: Speculation (Modals)",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "bazaar/point_9",
+          "number": 9,
+          "point": [
+            311,
+            159
+          ],
+          "block_title": "Making Decisions",
+          "lessons": [
+            {
+              "id": "bazaar/9.1",
+              "code": "9.1",
+              "title": "I've decided to…",
+              "type": "speaking"
+            },
+            {
+              "id": "bazaar/9.2",
+              "code": "9.2",
+              "title": "It's a difficult choice",
+              "type": "speaking"
+            },
+            {
+              "id": "bazaar/9.3",
+              "code": "9.3",
+              "title": "A decision I made",
+              "type": "chat"
+            },
+            {
+              "id": "bazaar/9.4",
+              "code": "9.4",
+              "title": "Проверка: Making Decisions",
+              "type": "check"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "aurora",
+      "title": "Северное сияние",
+      "level": "B1",
+      "image": "assets/map/aurora.jpg",
+      "size": [
+        1248,
+        832
+      ],
+      "points": [
+        {
+          "id": "aurora/point_1",
+          "number": 1,
+          "point": [
+            252,
+            676
+          ],
+          "block_title": "Nature & Wildlife",
+          "lessons": [
+            {
+              "id": "aurora/1.1",
+              "code": "1.1",
+              "title": "Animals in my region",
+              "type": "speaking"
+            },
+            {
+              "id": "aurora/1.2",
+              "code": "1.2",
+              "title": "Protecting nature",
+              "type": "speaking"
+            },
+            {
+              "id": "aurora/1.3",
+              "code": "1.3",
+              "title": "The wild world",
+              "type": "chat"
+            },
+            {
+              "id": "aurora/1.4",
+              "code": "1.4",
+              "title": "Проверка: Nature & Wildlife",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "aurora/point_2",
+          "number": 2,
+          "point": [
+            235,
+            530
+          ],
+          "block_title": "Science & Discovery",
+          "lessons": [
+            {
+              "id": "aurora/2.1",
+              "code": "2.1",
+              "title": "A discovery I find amazing",
+              "type": "speaking"
+            },
+            {
+              "id": "aurora/2.2",
+              "code": "2.2",
+              "title": "How does it work?",
+              "type": "speaking"
+            },
+            {
+              "id": "aurora/2.3",
+              "code": "2.3",
+              "title": "Science in everyday life",
+              "type": "chat"
+            },
+            {
+              "id": "aurora/2.4",
+              "code": "2.4",
+              "title": "Проверка: Science & Discovery",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "aurora/point_3",
+          "number": 3,
+          "point": [
+            637,
+            623
+          ],
+          "block_title": "Learning & Memory",
+          "lessons": [
+            {
+              "id": "aurora/3.1",
+              "code": "3.1",
+              "title": "How I learn best",
+              "type": "speaking"
+            },
+            {
+              "id": "aurora/3.2",
+              "code": "3.2",
+              "title": "Tricks to remember words",
+              "type": "speaking"
+            },
+            {
+              "id": "aurora/3.3",
+              "code": "3.3",
+              "title": "My learning habits",
+              "type": "chat"
+            },
+            {
+              "id": "aurora/3.4",
+              "code": "3.4",
+              "title": "Проверка: Learning & Memory",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "aurora/point_4",
+          "number": 4,
+          "point": [
+            910,
+            646
+          ],
+          "block_title": "Cultural Differences",
+          "lessons": [
+            {
+              "id": "aurora/4.1",
+              "code": "4.1",
+              "title": "In my culture…",
+              "type": "speaking"
+            },
+            {
+              "id": "aurora/4.2",
+              "code": "4.2",
+              "title": "What surprised me abroad",
+              "type": "speaking"
+            },
+            {
+              "id": "aurora/4.3",
+              "code": "4.3",
+              "title": "Culture and manners",
+              "type": "chat"
+            },
+            {
+              "id": "aurora/4.4",
+              "code": "4.4",
+              "title": "Проверка: Cultural Differences",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "aurora/point_5",
+          "number": 5,
+          "point": [
+            1024,
+            542
+          ],
+          "block_title": "Phrasal Verbs",
+          "lessons": [
+            {
+              "id": "aurora/5.1",
+              "code": "5.1",
+              "title": "Get up, give up, look after",
+              "type": "speaking"
+            },
+            {
+              "id": "aurora/5.2",
+              "code": "5.2",
+              "title": "Using phrasal verbs in speech",
+              "type": "speaking"
+            },
+            {
+              "id": "aurora/5.3",
+              "code": "5.3",
+              "title": "Phrasal verbs in a story",
+              "type": "chat"
+            },
+            {
+              "id": "aurora/5.4",
+              "code": "5.4",
+              "title": "Проверка: Phrasal Verbs",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "aurora/point_6",
+          "number": 6,
+          "point": [
+            860,
+            414
+          ],
+          "block_title": "Everyday Idioms",
+          "lessons": [
+            {
+              "id": "aurora/6.1",
+              "code": "6.1",
+              "title": "It's a piece of cake",
+              "type": "speaking"
+            },
+            {
+              "id": "aurora/6.2",
+              "code": "6.2",
+              "title": "Break the ice",
+              "type": "speaking"
+            },
+            {
+              "id": "aurora/6.3",
+              "code": "6.3",
+              "title": "Idioms I like",
+              "type": "chat"
+            },
+            {
+              "id": "aurora/6.4",
+              "code": "6.4",
+              "title": "Проверка: Everyday Idioms",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "aurora/point_7",
+          "number": 7,
+          "point": [
+            482,
+            321
+          ],
+          "block_title": "Detailed Storytelling",
+          "lessons": [
+            {
+              "id": "aurora/7.1",
+              "code": "7.1",
+              "title": "Setting the scene",
+              "type": "speaking"
+            },
+            {
+              "id": "aurora/7.2",
+              "code": "7.2",
+              "title": "Adding details and feelings",
+              "type": "speaking"
+            },
+            {
+              "id": "aurora/7.3",
+              "code": "7.3",
+              "title": "A story with a twist",
+              "type": "chat"
+            },
+            {
+              "id": "aurora/7.4",
+              "code": "7.4",
+              "title": "Проверка: Detailed Storytelling",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "aurora/point_8",
+          "number": 8,
+          "point": [
+            237,
+            288
+          ],
+          "block_title": "Debating",
+          "lessons": [
+            {
+              "id": "aurora/8.1",
+              "code": "8.1",
+              "title": "I'd like to argue that…",
+              "type": "speaking"
+            },
+            {
+              "id": "aurora/8.2",
+              "code": "8.2",
+              "title": "Counter-arguments",
+              "type": "speaking"
+            },
+            {
+              "id": "aurora/8.3",
+              "code": "8.3",
+              "title": "Two sides of one question",
+              "type": "chat"
+            },
+            {
+              "id": "aurora/8.4",
+              "code": "8.4",
+              "title": "Проверка: Debating",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "aurora/point_9",
+          "number": 9,
+          "point": [
+            311,
+            159
+          ],
+          "block_title": "Fluency Review",
+          "lessons": [
+            {
+              "id": "aurora/9.1",
+              "code": "9.1",
+              "title": "Speaking about anything",
+              "type": "speaking"
+            },
+            {
+              "id": "aurora/9.2",
+              "code": "9.2",
+              "title": "Keeping the talk going",
+              "type": "speaking"
+            },
+            {
+              "id": "aurora/9.3",
+              "code": "9.3",
+              "title": "Free conversation",
+              "type": "chat"
+            },
+            {
+              "id": "aurora/9.4",
+              "code": "9.4",
+              "title": "Проверка: Fluency Review",
+              "type": "check"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ruins",
+      "title": "Заброшенные руины",
+      "level": "B2",
+      "image": "assets/map/ruins.jpg",
+      "size": [
+        1248,
+        832
+      ],
+      "points": [
+        {
+          "id": "ruins/point_1",
+          "number": 1,
+          "point": [
+            252,
+            676
+          ],
+          "block_title": "Second Conditional",
+          "lessons": [
+            {
+              "id": "ruins/1.1",
+              "code": "1.1",
+              "title": "If I had more time…",
+              "type": "speaking"
+            },
+            {
+              "id": "ruins/1.2",
+              "code": "1.2",
+              "title": "What would you do?",
+              "type": "speaking"
+            },
+            {
+              "id": "ruins/1.3",
+              "code": "1.3",
+              "title": "Imaginary situations",
+              "type": "chat"
+            },
+            {
+              "id": "ruins/1.4",
+              "code": "1.4",
+              "title": "Проверка: Second Conditional",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "ruins/point_2",
+          "number": 2,
+          "point": [
+            235,
+            530
+          ],
+          "block_title": "Third Conditional",
+          "lessons": [
+            {
+              "id": "ruins/2.1",
+              "code": "2.1",
+              "title": "If I had known…",
+              "type": "speaking"
+            },
+            {
+              "id": "ruins/2.2",
+              "code": "2.2",
+              "title": "Looking back with regret",
+              "type": "speaking"
+            },
+            {
+              "id": "ruins/2.3",
+              "code": "2.3",
+              "title": "What might have been",
+              "type": "chat"
+            },
+            {
+              "id": "ruins/2.4",
+              "code": "2.4",
+              "title": "Проверка: Third Conditional",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "ruins/point_3",
+          "number": 3,
+          "point": [
+            637,
+            623
+          ],
+          "block_title": "Wishes & Regrets",
+          "lessons": [
+            {
+              "id": "ruins/3.1",
+              "code": "3.1",
+              "title": "I wish I could…",
+              "type": "speaking"
+            },
+            {
+              "id": "ruins/3.2",
+              "code": "3.2",
+              "title": "I should have…",
+              "type": "speaking"
+            },
+            {
+              "id": "ruins/3.3",
+              "code": "3.3",
+              "title": "Regrets and lessons",
+              "type": "chat"
+            },
+            {
+              "id": "ruins/3.4",
+              "code": "3.4",
+              "title": "Проверка: Wishes & Regrets",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "ruins/point_4",
+          "number": 4,
+          "point": [
+            910,
+            646
+          ],
+          "block_title": "Hypothetical Situations",
+          "lessons": [
+            {
+              "id": "ruins/4.1",
+              "code": "4.1",
+              "title": "Suppose you were…",
+              "type": "speaking"
+            },
+            {
+              "id": "ruins/4.2",
+              "code": "4.2",
+              "title": "What if…?",
+              "type": "speaking"
+            },
+            {
+              "id": "ruins/4.3",
+              "code": "4.3",
+              "title": "A difficult choice",
+              "type": "chat"
+            },
+            {
+              "id": "ruins/4.4",
+              "code": "4.4",
+              "title": "Проверка: Hypothetical Situations",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "ruins/point_5",
+          "number": 5,
+          "point": [
+            1024,
+            542
+          ],
+          "block_title": "Past Perfect",
+          "lessons": [
+            {
+              "id": "ruins/5.1",
+              "code": "5.1",
+              "title": "By the time I arrived…",
+              "type": "speaking"
+            },
+            {
+              "id": "ruins/5.2",
+              "code": "5.2",
+              "title": "Sequencing past events",
+              "type": "speaking"
+            },
+            {
+              "id": "ruins/5.3",
+              "code": "5.3",
+              "title": "A complicated day",
+              "type": "chat"
+            },
+            {
+              "id": "ruins/5.4",
+              "code": "5.4",
+              "title": "Проверка: Past Perfect",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "ruins/point_6",
+          "number": 6,
+          "point": [
+            860,
+            414
+          ],
+          "block_title": "Passive Voice",
+          "lessons": [
+            {
+              "id": "ruins/6.1",
+              "code": "6.1",
+              "title": "It was built in…",
+              "type": "speaking"
+            },
+            {
+              "id": "ruins/6.2",
+              "code": "6.2",
+              "title": "The story was told by…",
+              "type": "speaking"
+            },
+            {
+              "id": "ruins/6.3",
+              "code": "6.3",
+              "title": "News in the passive",
+              "type": "chat"
+            },
+            {
+              "id": "ruins/6.4",
+              "code": "6.4",
+              "title": "Проверка: Passive Voice",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "ruins/point_7",
+          "number": 7,
+          "point": [
+            482,
+            321
+          ],
+          "block_title": "Reported Speech (advanced)",
+          "lessons": [
+            {
+              "id": "ruins/7.1",
+              "code": "7.1",
+              "title": "She claimed that…",
+              "type": "speaking"
+            },
+            {
+              "id": "ruins/7.2",
+              "code": "7.2",
+              "title": "He denied doing it",
+              "type": "speaking"
+            },
+            {
+              "id": "ruins/7.3",
+              "code": "7.3",
+              "title": "Retelling a conversation",
+              "type": "chat"
+            },
+            {
+              "id": "ruins/7.4",
+              "code": "7.4",
+              "title": "Проверка: Reported Speech (advanced)",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "ruins/point_8",
+          "number": 8,
+          "point": [
+            237,
+            288
+          ],
+          "block_title": "Relative Clauses",
+          "lessons": [
+            {
+              "id": "ruins/8.1",
+              "code": "8.1",
+              "title": "The man who…",
+              "type": "speaking"
+            },
+            {
+              "id": "ruins/8.2",
+              "code": "8.2",
+              "title": "Defining and non-defining",
+              "type": "speaking"
+            },
+            {
+              "id": "ruins/8.3",
+              "code": "8.3",
+              "title": "Describing precisely",
+              "type": "chat"
+            },
+            {
+              "id": "ruins/8.4",
+              "code": "8.4",
+              "title": "Проверка: Relative Clauses",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "ruins/point_9",
+          "number": 9,
+          "point": [
+            311,
+            159
+          ],
+          "block_title": "Complex Narrative",
+          "lessons": [
+            {
+              "id": "ruins/9.1",
+              "code": "9.1",
+              "title": "Building tension",
+              "type": "speaking"
+            },
+            {
+              "id": "ruins/9.2",
+              "code": "9.2",
+              "title": "Ending with impact",
+              "type": "speaking"
+            },
+            {
+              "id": "ruins/9.3",
+              "code": "9.3",
+              "title": "Tell a complete story",
+              "type": "chat"
+            },
+            {
+              "id": "ruins/9.4",
+              "code": "9.4",
+              "title": "Проверка: Complex Narrative",
+              "type": "check"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "volcano",
+      "title": "Вулкан",
+      "level": "B2",
+      "image": "assets/map/volcano.jpg",
+      "size": [
+        1248,
+        832
+      ],
+      "points": [
+        {
+          "id": "volcano/point_1",
+          "number": 1,
+          "point": [
+            252,
+            676
+          ],
+          "block_title": "Arguments & Persuasion",
+          "lessons": [
+            {
+              "id": "volcano/1.1",
+              "code": "1.1",
+              "title": "Convincing someone",
+              "type": "speaking"
+            },
+            {
+              "id": "volcano/1.2",
+              "code": "1.2",
+              "title": "Handling objections",
+              "type": "speaking"
+            },
+            {
+              "id": "volcano/1.3",
+              "code": "1.3",
+              "title": "Persuasive speaking",
+              "type": "chat"
+            },
+            {
+              "id": "volcano/1.4",
+              "code": "1.4",
+              "title": "Проверка: Arguments & Persuasion",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "volcano/point_2",
+          "number": 2,
+          "point": [
+            235,
+            530
+          ],
+          "block_title": "Register",
+          "lessons": [
+            {
+              "id": "volcano/2.1",
+              "code": "2.1",
+              "title": "Formal or informal?",
+              "type": "speaking"
+            },
+            {
+              "id": "volcano/2.2",
+              "code": "2.2",
+              "title": "Choosing the right tone",
+              "type": "speaking"
+            },
+            {
+              "id": "volcano/2.3",
+              "code": "2.3",
+              "title": "An email and a message",
+              "type": "chat"
+            },
+            {
+              "id": "volcano/2.4",
+              "code": "2.4",
+              "title": "Проверка: Register",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "volcano/point_3",
+          "number": 3,
+          "point": [
+            637,
+            623
+          ],
+          "block_title": "Work & Career",
+          "lessons": [
+            {
+              "id": "volcano/3.1",
+              "code": "3.1",
+              "title": "Career paths",
+              "type": "speaking"
+            },
+            {
+              "id": "volcano/3.2",
+              "code": "3.2",
+              "title": "A job interview",
+              "type": "speaking"
+            },
+            {
+              "id": "volcano/3.3",
+              "code": "3.3",
+              "title": "My professional plans",
+              "type": "chat"
+            },
+            {
+              "id": "volcano/3.4",
+              "code": "3.4",
+              "title": "Проверка: Work & Career",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "volcano/point_4",
+          "number": 4,
+          "point": [
+            910,
+            646
+          ],
+          "block_title": "Business Communication",
+          "lessons": [
+            {
+              "id": "volcano/4.1",
+              "code": "4.1",
+              "title": "Meetings and deadlines",
+              "type": "speaking"
+            },
+            {
+              "id": "volcano/4.2",
+              "code": "4.2",
+              "title": "Negotiating a deal",
+              "type": "speaking"
+            },
+            {
+              "id": "volcano/4.3",
+              "code": "4.3",
+              "title": "A business call",
+              "type": "chat"
+            },
+            {
+              "id": "volcano/4.4",
+              "code": "4.4",
+              "title": "Проверка: Business Communication",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "volcano/point_5",
+          "number": 5,
+          "point": [
+            1024,
+            542
+          ],
+          "block_title": "Risk & Decisions",
+          "lessons": [
+            {
+              "id": "volcano/5.1",
+              "code": "5.1",
+              "title": "Weighing risks",
+              "type": "speaking"
+            },
+            {
+              "id": "volcano/5.2",
+              "code": "5.2",
+              "title": "Taking a chance",
+              "type": "speaking"
+            },
+            {
+              "id": "volcano/5.3",
+              "code": "5.3",
+              "title": "A risky decision",
+              "type": "chat"
+            },
+            {
+              "id": "volcano/5.4",
+              "code": "5.4",
+              "title": "Проверка: Risk & Decisions",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "volcano/point_6",
+          "number": 6,
+          "point": [
+            860,
+            414
+          ],
+          "block_title": "Media & Bias",
+          "lessons": [
+            {
+              "id": "volcano/6.1",
+              "code": "6.1",
+              "title": "How news shapes opinion",
+              "type": "speaking"
+            },
+            {
+              "id": "volcano/6.2",
+              "code": "6.2",
+              "title": "Fake news and trust",
+              "type": "speaking"
+            },
+            {
+              "id": "volcano/6.3",
+              "code": "6.3",
+              "title": "Analysing an article",
+              "type": "chat"
+            },
+            {
+              "id": "volcano/6.4",
+              "code": "6.4",
+              "title": "Проверка: Media & Bias",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "volcano/point_7",
+          "number": 7,
+          "point": [
+            482,
+            321
+          ],
+          "block_title": "Academic Discussion",
+          "lessons": [
+            {
+              "id": "volcano/7.1",
+              "code": "7.1",
+              "title": "Presenting an argument",
+              "type": "speaking"
+            },
+            {
+              "id": "volcano/7.2",
+              "code": "7.2",
+              "title": "Referring to sources",
+              "type": "speaking"
+            },
+            {
+              "id": "volcano/7.3",
+              "code": "7.3",
+              "title": "A short academic talk",
+              "type": "chat"
+            },
+            {
+              "id": "volcano/7.4",
+              "code": "7.4",
+              "title": "Проверка: Academic Discussion",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "volcano/point_8",
+          "number": 8,
+          "point": [
+            237,
+            288
+          ],
+          "block_title": "Presentations",
+          "lessons": [
+            {
+              "id": "volcano/8.1",
+              "code": "8.1",
+              "title": "Structuring a talk",
+              "type": "speaking"
+            },
+            {
+              "id": "volcano/8.2",
+              "code": "8.2",
+              "title": "Handling questions",
+              "type": "speaking"
+            },
+            {
+              "id": "volcano/8.3",
+              "code": "8.3",
+              "title": "My mini presentation",
+              "type": "chat"
+            },
+            {
+              "id": "volcano/8.4",
+              "code": "8.4",
+              "title": "Проверка: Presentations",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "volcano/point_9",
+          "number": 9,
+          "point": [
+            311,
+            159
+          ],
+          "block_title": "Debating Complex Topics",
+          "lessons": [
+            {
+              "id": "volcano/9.1",
+              "code": "9.1",
+              "title": "A structured debate",
+              "type": "speaking"
+            },
+            {
+              "id": "volcano/9.2",
+              "code": "9.2",
+              "title": "Rebuttals and evidence",
+              "type": "speaking"
+            },
+            {
+              "id": "volcano/9.3",
+              "code": "9.3",
+              "title": "A controversial question",
+              "type": "chat"
+            },
+            {
+              "id": "volcano/9.4",
+              "code": "9.4",
+              "title": "Проверка: Debating Complex Topics",
+              "type": "check"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ice",
+      "title": "Ледяные пещеры",
+      "level": "B2",
+      "image": "assets/map/ice.jpg",
+      "size": [
+        1248,
+        832
+      ],
+      "points": [
+        {
+          "id": "ice/point_1",
+          "number": 1,
+          "point": [
+            252,
+            676
+          ],
+          "block_title": "Nuanced Emotions",
+          "lessons": [
+            {
+              "id": "ice/1.1",
+              "code": "1.1",
+              "title": "Expressing how you really feel",
+              "type": "speaking"
+            },
+            {
+              "id": "ice/1.2",
+              "code": "1.2",
+              "title": "Empathy and support",
+              "type": "speaking"
+            },
+            {
+              "id": "ice/1.3",
+              "code": "1.3",
+              "title": "A difficult conversation",
+              "type": "chat"
+            },
+            {
+              "id": "ice/1.4",
+              "code": "1.4",
+              "title": "Проверка: Nuanced Emotions",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "ice/point_2",
+          "number": 2,
+          "point": [
+            235,
+            530
+          ],
+          "block_title": "Abstract Ideas",
+          "lessons": [
+            {
+              "id": "ice/2.1",
+              "code": "2.1",
+              "title": "Freedom, success, happiness",
+              "type": "speaking"
+            },
+            {
+              "id": "ice/2.2",
+              "code": "2.2",
+              "title": "Defining an idea",
+              "type": "speaking"
+            },
+            {
+              "id": "ice/2.3",
+              "code": "2.3",
+              "title": "What success means to me",
+              "type": "chat"
+            },
+            {
+              "id": "ice/2.4",
+              "code": "2.4",
+              "title": "Проверка: Abstract Ideas",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "ice/point_3",
+          "number": 3,
+          "point": [
+            637,
+            623
+          ],
+          "block_title": "Ethics & Dilemmas",
+          "lessons": [
+            {
+              "id": "ice/3.1",
+              "code": "3.1",
+              "title": "What is the right thing?",
+              "type": "speaking"
+            },
+            {
+              "id": "ice/3.2",
+              "code": "3.2",
+              "title": "A moral dilemma",
+              "type": "speaking"
+            },
+            {
+              "id": "ice/3.3",
+              "code": "3.3",
+              "title": "Right and wrong",
+              "type": "chat"
+            },
+            {
+              "id": "ice/3.4",
+              "code": "3.4",
+              "title": "Проверка: Ethics & Dilemmas",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "ice/point_4",
+          "number": 4,
+          "point": [
+            910,
+            646
+          ],
+          "block_title": "Emphasis (Cleft Sentences)",
+          "lessons": [
+            {
+              "id": "ice/4.1",
+              "code": "4.1",
+              "title": "What I really need is…",
+              "type": "speaking"
+            },
+            {
+              "id": "ice/4.2",
+              "code": "4.2",
+              "title": "It was him who…",
+              "type": "speaking"
+            },
+            {
+              "id": "ice/4.3",
+              "code": "4.3",
+              "title": "Emphasising a point",
+              "type": "chat"
+            },
+            {
+              "id": "ice/4.4",
+              "code": "4.4",
+              "title": "Проверка: Emphasis (Cleft Sentences)",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "ice/point_5",
+          "number": 5,
+          "point": [
+            1024,
+            542
+          ],
+          "block_title": "Inversion",
+          "lessons": [
+            {
+              "id": "ice/5.1",
+              "code": "5.1",
+              "title": "Never have I…",
+              "type": "speaking"
+            },
+            {
+              "id": "ice/5.2",
+              "code": "5.2",
+              "title": "Rarely does she…",
+              "type": "speaking"
+            },
+            {
+              "id": "ice/5.3",
+              "code": "5.3",
+              "title": "Dramatic emphasis",
+              "type": "chat"
+            },
+            {
+              "id": "ice/5.4",
+              "code": "5.4",
+              "title": "Проверка: Inversion",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "ice/point_6",
+          "number": 6,
+          "point": [
+            860,
+            414
+          ],
+          "block_title": "Advanced Modals",
+          "lessons": [
+            {
+              "id": "ice/6.1",
+              "code": "6.1",
+              "title": "It might have been…",
+              "type": "speaking"
+            },
+            {
+              "id": "ice/6.2",
+              "code": "6.2",
+              "title": "He must have forgotten",
+              "type": "speaking"
+            },
+            {
+              "id": "ice/6.3",
+              "code": "6.3",
+              "title": "Deducing the past",
+              "type": "chat"
+            },
+            {
+              "id": "ice/6.4",
+              "code": "6.4",
+              "title": "Проверка: Advanced Modals",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "ice/point_7",
+          "number": 7,
+          "point": [
+            482,
+            321
+          ],
+          "block_title": "Cohesion & Linking",
+          "lessons": [
+            {
+              "id": "ice/7.1",
+              "code": "7.1",
+              "title": "Connecting ideas smoothly",
+              "type": "speaking"
+            },
+            {
+              "id": "ice/7.2",
+              "code": "7.2",
+              "title": "However, moreover, therefore",
+              "type": "speaking"
+            },
+            {
+              "id": "ice/7.3",
+              "code": "7.3",
+              "title": "A coherent answer",
+              "type": "chat"
+            },
+            {
+              "id": "ice/7.4",
+              "code": "7.4",
+              "title": "Проверка: Cohesion & Linking",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "ice/point_8",
+          "number": 8,
+          "point": [
+            237,
+            288
+          ],
+          "block_title": "Precision in Vocabulary",
+          "lessons": [
+            {
+              "id": "ice/8.1",
+              "code": "8.1",
+              "title": "Choosing the exact word",
+              "type": "speaking"
+            },
+            {
+              "id": "ice/8.2",
+              "code": "8.2",
+              "title": "Avoiding repetition",
+              "type": "speaking"
+            },
+            {
+              "id": "ice/8.3",
+              "code": "8.3",
+              "title": "Rich descriptions",
+              "type": "chat"
+            },
+            {
+              "id": "ice/8.4",
+              "code": "8.4",
+              "title": "Проверка: Precision in Vocabulary",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "ice/point_9",
+          "number": 9,
+          "point": [
+            311,
+            159
+          ],
+          "block_title": "Fluency Under Pressure",
+          "lessons": [
+            {
+              "id": "ice/9.1",
+              "code": "9.1",
+              "title": "Thinking on your feet",
+              "type": "speaking"
+            },
+            {
+              "id": "ice/9.2",
+              "code": "9.2",
+              "title": "Speaking without preparation",
+              "type": "speaking"
+            },
+            {
+              "id": "ice/9.3",
+              "code": "9.3",
+              "title": "A spontaneous answer",
+              "type": "chat"
+            },
+            {
+              "id": "ice/9.4",
+              "code": "9.4",
+              "title": "Проверка: Fluency Under Pressure",
+              "type": "check"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sky",
+      "title": "Небесные острова",
+      "level": "C1",
+      "image": "assets/map/sky.jpg",
+      "size": [
+        1248,
+        832
+      ],
+      "points": [
+        {
+          "id": "sky/point_1",
+          "number": 1,
+          "point": [
+            252,
+            676
+          ],
+          "block_title": "Idiomatic Fluency",
+          "lessons": [
+            {
+              "id": "sky/1.1",
+              "code": "1.1",
+              "title": "Idioms in natural speech",
+              "type": "speaking"
+            },
+            {
+              "id": "sky/1.2",
+              "code": "1.2",
+              "title": "Using idioms sparingly and well",
+              "type": "speaking"
+            },
+            {
+              "id": "sky/1.3",
+              "code": "1.3",
+              "title": "A story full of idioms",
+              "type": "chat"
+            },
+            {
+              "id": "sky/1.4",
+              "code": "1.4",
+              "title": "Проверка: Idiomatic Fluency",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "sky/point_2",
+          "number": 2,
+          "point": [
+            235,
+            530
+          ],
+          "block_title": "Nuance & Register",
+          "lessons": [
+            {
+              "id": "sky/2.1",
+              "code": "2.1",
+              "title": "Shades of meaning",
+              "type": "speaking"
+            },
+            {
+              "id": "sky/2.2",
+              "code": "2.2",
+              "title": "Speaking appropriately",
+              "type": "speaking"
+            },
+            {
+              "id": "sky/2.3",
+              "code": "2.3",
+              "title": "Formal and colloquial versions",
+              "type": "chat"
+            },
+            {
+              "id": "sky/2.4",
+              "code": "2.4",
+              "title": "Проверка: Nuance & Register",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "sky/point_3",
+          "number": 3,
+          "point": [
+            637,
+            623
+          ],
+          "block_title": "Discourse Markers",
+          "lessons": [
+            {
+              "id": "sky/3.1",
+              "code": "3.1",
+              "title": "Structuring a long answer",
+              "type": "speaking"
+            },
+            {
+              "id": "sky/3.2",
+              "code": "3.2",
+              "title": "Signposting and linking",
+              "type": "speaking"
+            },
+            {
+              "id": "sky/3.3",
+              "code": "3.3",
+              "title": "A well-organised opinion",
+              "type": "chat"
+            },
+            {
+              "id": "sky/3.4",
+              "code": "3.4",
+              "title": "Проверка: Discourse Markers",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "sky/point_4",
+          "number": 4,
+          "point": [
+            910,
+            646
+          ],
+          "block_title": "Mixed Conditionals",
+          "lessons": [
+            {
+              "id": "sky/4.1",
+              "code": "4.1",
+              "title": "If I had taken that job…",
+              "type": "speaking"
+            },
+            {
+              "id": "sky/4.2",
+              "code": "4.2",
+              "title": "Complex hypotheticals",
+              "type": "speaking"
+            },
+            {
+              "id": "sky/4.3",
+              "code": "4.3",
+              "title": "Looking back and forward",
+              "type": "chat"
+            },
+            {
+              "id": "sky/4.4",
+              "code": "4.4",
+              "title": "Проверка: Mixed Conditionals",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "sky/point_5",
+          "number": 5,
+          "point": [
+            1024,
+            542
+          ],
+          "block_title": "Advanced Phrasal Verbs",
+          "lessons": [
+            {
+              "id": "sky/5.1",
+              "code": "5.1",
+              "title": "Put up with, come across",
+              "type": "speaking"
+            },
+            {
+              "id": "sky/5.2",
+              "code": "5.2",
+              "title": "Natural phrasal usage",
+              "type": "speaking"
+            },
+            {
+              "id": "sky/5.3",
+              "code": "5.3",
+              "title": "Phrasal verbs in context",
+              "type": "chat"
+            },
+            {
+              "id": "sky/5.4",
+              "code": "5.4",
+              "title": "Проверка: Advanced Phrasal Verbs",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "sky/point_6",
+          "number": 6,
+          "point": [
+            860,
+            414
+          ],
+          "block_title": "Collocations & Chunks",
+          "lessons": [
+            {
+              "id": "sky/6.1",
+              "code": "6.1",
+              "title": "Words that go together",
+              "type": "speaking"
+            },
+            {
+              "id": "sky/6.2",
+              "code": "6.2",
+              "title": "Speaking in chunks",
+              "type": "speaking"
+            },
+            {
+              "id": "sky/6.3",
+              "code": "6.3",
+              "title": "Fluent formulations",
+              "type": "chat"
+            },
+            {
+              "id": "sky/6.4",
+              "code": "6.4",
+              "title": "Проверка: Collocations & Chunks",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "sky/point_7",
+          "number": 7,
+          "point": [
+            482,
+            321
+          ],
+          "block_title": "Professional Speaking",
+          "lessons": [
+            {
+              "id": "sky/7.1",
+              "code": "7.1",
+              "title": "Interviews and meetings",
+              "type": "speaking"
+            },
+            {
+              "id": "sky/7.2",
+              "code": "7.2",
+              "title": "Presenting with confidence",
+              "type": "speaking"
+            },
+            {
+              "id": "sky/7.3",
+              "code": "7.3",
+              "title": "A professional discussion",
+              "type": "chat"
+            },
+            {
+              "id": "sky/7.4",
+              "code": "7.4",
+              "title": "Проверка: Professional Speaking",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "sky/point_8",
+          "number": 8,
+          "point": [
+            237,
+            288
+          ],
+          "block_title": "Implicit Meaning",
+          "lessons": [
+            {
+              "id": "sky/8.1",
+              "code": "8.1",
+              "title": "Reading between the lines",
+              "type": "speaking"
+            },
+            {
+              "id": "sky/8.2",
+              "code": "8.2",
+              "title": "Sarcasm, irony, hints",
+              "type": "speaking"
+            },
+            {
+              "id": "sky/8.3",
+              "code": "8.3",
+              "title": "What did they really mean?",
+              "type": "chat"
+            },
+            {
+              "id": "sky/8.4",
+              "code": "8.4",
+              "title": "Проверка: Implicit Meaning",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "sky/point_9",
+          "number": 9,
+          "point": [
+            311,
+            159
+          ],
+          "block_title": "Long Turns",
+          "lessons": [
+            {
+              "id": "sky/9.1",
+              "code": "9.1",
+              "title": "Speaking for two minutes",
+              "type": "speaking"
+            },
+            {
+              "id": "sky/9.2",
+              "code": "9.2",
+              "title": "Developing an argument",
+              "type": "speaking"
+            },
+            {
+              "id": "sky/9.3",
+              "code": "9.3",
+              "title": "A monologue on any topic",
+              "type": "chat"
+            },
+            {
+              "id": "sky/9.4",
+              "code": "9.4",
+              "title": "Проверка: Long Turns",
+              "type": "check"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "space",
+      "title": "Космическая станция",
+      "level": "C1",
+      "image": "assets/map/space.jpg",
+      "size": [
+        1248,
+        832
+      ],
+      "points": [
+        {
+          "id": "space/point_1",
+          "number": 1,
+          "point": [
+            252,
+            676
+          ],
+          "block_title": "Speculating About the Future",
+          "lessons": [
+            {
+              "id": "space/1.1",
+              "code": "1.1",
+              "title": "Where we are heading",
+              "type": "speaking"
+            },
+            {
+              "id": "space/1.2",
+              "code": "1.2",
+              "title": "Technology in 2050",
+              "type": "speaking"
+            },
+            {
+              "id": "space/1.3",
+              "code": "1.3",
+              "title": "My vision of the future",
+              "type": "chat"
+            },
+            {
+              "id": "space/1.4",
+              "code": "1.4",
+              "title": "Проверка: Speculating About the Future",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "space/point_2",
+          "number": 2,
+          "point": [
+            235,
+            530
+          ],
+          "block_title": "Philosophical Debate",
+          "lessons": [
+            {
+              "id": "space/2.1",
+              "code": "2.1",
+              "title": "What makes us human?",
+              "type": "speaking"
+            },
+            {
+              "id": "space/2.2",
+              "code": "2.2",
+              "title": "Arguing a philosophical point",
+              "type": "speaking"
+            },
+            {
+              "id": "space/2.3",
+              "code": "2.3",
+              "title": "A deep question",
+              "type": "chat"
+            },
+            {
+              "id": "space/2.4",
+              "code": "2.4",
+              "title": "Проверка: Philosophical Debate",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "space/point_3",
+          "number": 3,
+          "point": [
+            637,
+            623
+          ],
+          "block_title": "Persuasive Rhetoric",
+          "lessons": [
+            {
+              "id": "space/3.1",
+              "code": "3.1",
+              "title": "Building a persuasive case",
+              "type": "speaking"
+            },
+            {
+              "id": "space/3.2",
+              "code": "3.2",
+              "title": "Rhetorical devices",
+              "type": "speaking"
+            },
+            {
+              "id": "space/3.3",
+              "code": "3.3",
+              "title": "A speech",
+              "type": "chat"
+            },
+            {
+              "id": "space/3.4",
+              "code": "3.4",
+              "title": "Проверка: Persuasive Rhetoric",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "space/point_4",
+          "number": 4,
+          "point": [
+            910,
+            646
+          ],
+          "block_title": "Storytelling Masterclass",
+          "lessons": [
+            {
+              "id": "space/4.1",
+              "code": "4.1",
+              "title": "Voice, pace, detail",
+              "type": "speaking"
+            },
+            {
+              "id": "space/4.2",
+              "code": "4.2",
+              "title": "A story that holds attention",
+              "type": "speaking"
+            },
+            {
+              "id": "space/4.3",
+              "code": "4.3",
+              "title": "Your best story",
+              "type": "chat"
+            },
+            {
+              "id": "space/4.4",
+              "code": "4.4",
+              "title": "Проверка: Storytelling Masterclass",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "space/point_5",
+          "number": 5,
+          "point": [
+            1024,
+            542
+          ],
+          "block_title": "Humour & Cultural Nuance",
+          "lessons": [
+            {
+              "id": "space/5.1",
+              "code": "5.1",
+              "title": "Jokes that travel",
+              "type": "speaking"
+            },
+            {
+              "id": "space/5.2",
+              "code": "5.2",
+              "title": "Understanding humour",
+              "type": "speaking"
+            },
+            {
+              "id": "space/5.3",
+              "code": "5.3",
+              "title": "A funny misunderstanding",
+              "type": "chat"
+            },
+            {
+              "id": "space/5.4",
+              "code": "5.4",
+              "title": "Проверка: Humour & Cultural Nuance",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "space/point_6",
+          "number": 6,
+          "point": [
+            860,
+            414
+          ],
+          "block_title": "High-level Negotiation",
+          "lessons": [
+            {
+              "id": "space/6.1",
+              "code": "6.1",
+              "title": "Finding common ground",
+              "type": "speaking"
+            },
+            {
+              "id": "space/6.2",
+              "code": "6.2",
+              "title": "Handling disagreement",
+              "type": "speaking"
+            },
+            {
+              "id": "space/6.3",
+              "code": "6.3",
+              "title": "A difficult negotiation",
+              "type": "chat"
+            },
+            {
+              "id": "space/6.4",
+              "code": "6.4",
+              "title": "Проверка: High-level Negotiation",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "space/point_7",
+          "number": 7,
+          "point": [
+            482,
+            321
+          ],
+          "block_title": "Public Speaking",
+          "lessons": [
+            {
+              "id": "space/7.1",
+              "code": "7.1",
+              "title": "Managing nerves and delivery",
+              "type": "speaking"
+            },
+            {
+              "id": "space/7.2",
+              "code": "7.2",
+              "title": "Engaging an audience",
+              "type": "speaking"
+            },
+            {
+              "id": "space/7.3",
+              "code": "7.3",
+              "title": "A short public talk",
+              "type": "chat"
+            },
+            {
+              "id": "space/7.4",
+              "code": "7.4",
+              "title": "Проверка: Public Speaking",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "space/point_8",
+          "number": 8,
+          "point": [
+            237,
+            288
+          ],
+          "block_title": "Precision & Hedging",
+          "lessons": [
+            {
+              "id": "space/8.1",
+              "code": "8.1",
+              "title": "Softeners and qualifiers",
+              "type": "speaking"
+            },
+            {
+              "id": "space/8.2",
+              "code": "8.2",
+              "title": "Saying exactly what you mean",
+              "type": "speaking"
+            },
+            {
+              "id": "space/8.3",
+              "code": "8.3",
+              "title": "Careful but clear",
+              "type": "chat"
+            },
+            {
+              "id": "space/8.4",
+              "code": "8.4",
+              "title": "Проверка: Precision & Hedging",
+              "type": "check"
+            }
+          ]
+        },
+        {
+          "id": "space/point_9",
+          "number": 9,
+          "point": [
+            311,
+            159
+          ],
+          "block_title": "Exam Simulation",
+          "lessons": [
+            {
+              "id": "space/9.1",
+              "code": "9.1",
+              "title": "Picture description",
+              "type": "speaking"
+            },
+            {
+              "id": "space/9.2",
+              "code": "9.2",
+              "title": "Discussion questions",
+              "type": "speaking"
+            },
+            {
+              "id": "space/9.3",
+              "code": "9.3",
+              "title": "A long turn on a topic",
+              "type": "chat"
+            },
+            {
+              "id": "space/9.4",
+              "code": "9.4",
+              "title": "Проверка: Exam Simulation",
+              "type": "check"
             }
           ]
         }

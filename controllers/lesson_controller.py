@@ -59,7 +59,8 @@ class LessonController:
     def start(self, lesson_id: str, point_id: Optional[str] = None,
               lesson_type: Any = lesson_mod.SPEAKING, title: str = "",
               topic: str = "", block_number: Optional[int] = None,
-              block_title: str = "", reply_target: Optional[int] = None):
+              block_title: str = "", reply_target: Optional[int] = None,
+              code: str = ""):
         """Начать занятие. Возвращает сессию (или None, если уже идёт)."""
         if self.is_active:
             _log.info("Урок уже идёт (%s) — новый не начинаю", self.lesson_id)
@@ -67,7 +68,7 @@ class LessonController:
         self.session = lesson_mod.LessonSession(
             lesson_id, point_id=point_id, lesson_type=lesson_type, title=title,
             topic=topic, block_number=block_number, block_title=block_title,
-            reply_target=reply_target)
+            reply_target=reply_target, code=code)
         session = self.session
         self._emit(self.on_started, session)
         return session

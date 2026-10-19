@@ -48,10 +48,11 @@ def write_curriculum(folder, data):
 
 
 def real_cases():
-    """Настоящий учебный план: 27 уроков, строгий линейный порядок."""
+    """Настоящий учебный план: 468 уроков, строгий линейный порядок."""
     print("\n[1] next_lesson на реальном curriculum.json")
     pm = ProgressMap()
-    check("уроков в плане — 27", len(pm._lesson_order) == 27, len(pm._lesson_order))
+    # 13 локаций × 9 блоков × 4 урока (три урока + проверка)
+    check("уроков в плане — 468", len(pm._lesson_order) == 468, len(pm._lesson_order))
     check("первый урок — 1.1", pm.next_lesson({}) == "1.1", pm.next_lesson({}))
     check("1.1 пройден → 1.2",
           pm.next_lesson({"completed_lessons": ["1.1"]}) == "1.2")
@@ -60,9 +61,12 @@ def real_cases():
     check("перескок вперёд не считается: 1.2 пройден → 1.1",
           pm.next_lesson({"completed_lessons": ["1.2"]}) == "1.1",
           pm.next_lesson({"completed_lessons": ["1.2"]}))
-    check("конец блока → первый урок следующего блока (1.3 → 2.1)",
-          pm.next_lesson({"completed_lessons": ["1.1", "1.2", "1.3"]}) == "2.1",
+    check("после трёх уроков блока — его ПРОВЕРКА (1.3 → 1.4)",
+          pm.next_lesson({"completed_lessons": ["1.1", "1.2", "1.3"]}) == "1.4",
           pm.next_lesson({"completed_lessons": ["1.1", "1.2", "1.3"]}))
+    check("после проверки — первый урок следующего блока (1.4 → 2.1)",
+          pm.next_lesson({"completed_lessons": ["1.1", "1.2", "1.3", "1.4"]}) == "2.1",
+          pm.next_lesson({"completed_lessons": ["1.1", "1.2", "1.3", "1.4"]}))
     check("вся карта пройдена → None",
           pm.next_lesson({"completed_lessons": list(pm._lesson_order)}) is None)
     check("пустой профиль (None) → 1.1", pm.next_lesson(None) == "1.1")
