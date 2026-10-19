@@ -712,8 +712,9 @@ class EnglishTeacherApp:
                                     before=self.chat_view)
 
         # ---------- подсказка перевода (RU → EN) ----------
-        # English-вариант фразы ученика. В режиме "suggest" — только текст и
-        # 🔊, ученик сам решает; в "hybrid" — ещё кнопка «Отправить».
+        # English-вариант фразы ученика. Отправки нет: ученик сам решает.
+        # Кнопки-динамика больше нет — произношение слушают КЛИКОМ по слову
+        # или примеру (см. ui/widgets/hint_bar.py).
         self.hint_bar = HintBar(self.chat_tab, p,
                                 on_insert=self._hint_insert,
                                 on_listen=self._hint_listen,
@@ -1363,7 +1364,7 @@ class EnglishTeacherApp:
         return self.input_bar.insert_at_cursor(english)
 
     def _hint_listen(self, english):
-        """Кнопка 🔊: послушать, как фраза звучит по-английски."""
+        """Нажатие на слово/пример в подсказке: озвучить ровно этот текст."""
         self._say(english)
 
     # -----------------------------------------------------
@@ -1682,7 +1683,7 @@ class EnglishTeacherApp:
             self._character_state("happy")
             return False
         self.hint_bar.show_note(
-            str(report.message) + "\n   🔊 послушай, как надо, и повтори",
+            str(report.message) + "\n   нажми на фразу, чтобы послушать, и повтори",
             report.reference)
         self._character_state("thinking")
         return True
