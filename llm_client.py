@@ -27,6 +27,53 @@ import requests
 import config
 
 
+# Вид ошибки «не влезло в память модели». Сервер llama.cpp НЕ обрезает
+# запрос сам: при переполнении он отвечает 400 с телом
+#   {"error":{"code":400,"type":"exceed_context_size_error",
+#            "message":"request (5215 tokens) exceeds the available context
+#                       size (4096 tokens)","n_prompt_tokens":5215,"n_ctx":4096}}
+# Раньше это превращалось в безликое «Error: 400», и ученик слышал
+# заглушку «Sorry, I can't respond.» без объяснения. Теперь такой ответ
+# помечается CONTEXT_PREFIX: вызывающий код (ChatController) повторяет
+# запрос с укороченной историей (см. config.CONTEXT_RETRY_LINES).
+CONTEXT_PREFIX = "context:"
+
+
+def is_context_error(message) -> bool:
+    """Причина ошибки — переполнение памяти модели (а не сбой сети/сервера)?"""
+    return str(message or "").startswith(CONTEXT_PREFIX)
+
+
+def _context_overflow(response):
+    """Разобрать ответ 4xx: это переполнение контекста? None — если нет.
+
+    Возвращает короткий словарь {"prompt": …, "ctx": …} для сообщения.
+    Смотрим и JSON (тип/код ошибки), и текст тела — формат у llama.cpp
+    может отличаться от версии к версии.
+    """
+    try:
+        data = response.json()
+    except Exception:                              # noqa: BLE001
+        data = None
+    payload, message = {}, ""
+    if isinstance(data, dict):
+        payload = data
+        err = data.get("error")
+        if isinstance(err, dict):
+            message = str(err.get("message") or "")
+            kind = str(err.get("type") or "")
+            if kind == "exceed_context_size_error":
+                return {"prompt": err.get("n_prompt_tokens"),
+                        "ctx": err.get("n_ctx")}
+        elif err:
+            message = str(err)
+    low = message.lower()
+    if "context" in low and ("exceed" in low or "too long" in low):
+        return {"prompt": payload.get("n_prompt_tokens"),
+                "ctx": payload.get("n_ctx")}
+    return None
+
+
 class LLMClient:
     """Клиент локальной модели (OpenAI-совместимый эндпоинт llama.cpp)."""
 
@@ -91,6 +138,13 @@ class LLMClient:
 
         if resp.status_code != 200:
             print(f"❌ Сервер вернул ошибку: {resp.status_code}")
+            overflow = _context_overflow(resp)
+            if overflow is not None:
+                prompt, ctx = overflow.get("prompt"), overflow.get("ctx")
+                if prompt and ctx:
+                    return False, ("%s запрос (%s токенов) больше памяти модели "
+                                   "(%s)." % (CONTEXT_PREFIX, prompt, ctx))
+                return False, CONTEXT_PREFIX + " запрос не влез в память модели."
             return False, f"Error: {resp.status_code}"
 
         try:

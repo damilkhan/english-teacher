@@ -24,6 +24,7 @@ import threading
 from datetime import datetime
 
 import config
+import llm_client
 import profile_store
 import prompt_builder
 import vocabulary
@@ -203,23 +204,63 @@ class ChatController:
             lesson=lesson_block, now=datetime.now(), variety=True,
             english_only=bool(getattr(config, "ENGLISH_ONLY", False)),
             words=words)
-        messages = prompt_builder.build_messages(system_prompt, self.history, user_text)
 
         print(f"📤 Язык ответа: {'РУССКИЙ' if lang == 'ru' else 'ENGLISH'}")
 
-        ok, raw = self.llm.complete(
-            messages,
-            max_tokens=config.LLM_CHAT_MAX_TOKENS,
-            temperature=0.5,
-            stop=["<|thought|>", "<end_of_turn>"],
-        )
+        ok, raw = self._ask_model(system_prompt, user_text)
+        if not ok and llm_client.is_context_error(raw):
+            # Запрос не влез в память модели. Сервер сам ничего не обрезает —
+            # повторяем с КОРОТКОЙ историей (и, если надо, без RAG), чтобы
+            # ученик получил ответ, а не бессмысленную заглушку.
+            print("✂️ Не влезло в память модели → повторяю с короткой историей")
+            system_prompt = prompt_builder.build_system_prompt(
+                self.mode, profile_store.load(self.user_id), lang,
+                level=level, student=student,
+                context="" if getattr(config, "CONTEXT_RETRY_RAG", True) else context,
+                plan=plan_text,
+                lesson=lesson_block, now=datetime.now(), variety=True,
+                english_only=bool(getattr(config, "ENGLISH_ONLY", False)),
+                words=words)
+            ok, raw = self._ask_model(system_prompt, user_text, short_history=True)
         if not ok:
-            return False, raw
+            return False, self._explain(raw)
 
         cleaned = prompt_builder.clean_response(raw)
         if not cleaned:
             cleaned = prompt_builder.fallback_response(lang)
         return True, cleaned
+
+    def _ask_model(self, system_prompt, user_text, short_history=False):
+        """Один вызов Учителя: промпт + история + реплика ученика.
+
+        short_history=True — оставить только последние строки истории
+        (config.CONTEXT_RETRY_LINES): так делаем повтор, если запрос не
+        влез в память модели.
+        """
+        history = self.history
+        if short_history:
+            keep = max(0, int(getattr(config, "CONTEXT_RETRY_LINES", 2) or 0))
+            history = self.history[-keep:] if keep else []
+        messages = prompt_builder.build_messages(system_prompt, history, user_text)
+        return self.llm.complete(
+            messages,
+            max_tokens=config.LLM_CHAT_MAX_TOKENS,
+            temperature=0.5,
+            stop=["<|thought|>", "<end_of_turn>"],
+        )
+
+    @staticmethod
+    def _explain(raw):
+        """Причина сбоя понятными словами (было: безликое «Error: 400»).
+
+        Повтор с короткой историей не помог — значит, запрос не влезает в
+        память модели сам по себе. Ученику нужно знать, что делать.
+        """
+        if llm_client.is_context_error(raw):
+            return ("⚠️ Ответ не уместился в память модели даже с короткой "
+                    "историей. Скажи короткую фразу или начни урок с карты — "
+                    "история диалога сбросится.")
+        return raw
 
     def _prompt_words(self):
         """Слова ученика для необязательного блока промпта (этап C).
