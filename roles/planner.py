@@ -52,7 +52,13 @@ Rules:
 - Match the difficulty to the CEFR level.
 - Build on the weak topics and recent mistakes when they are given.
 - 2 to 4 activities, each short (2-6 minutes) and doable in a chat.
-- target_vocab: up to 12 useful words/phrases for this lesson.
+- AMERICAN English only: US spelling (color, favorite, traveling) and US words
+  (movie, apartment, elevator, vacation, store). Never British forms.
+- target_vocab: up to 12 words/phrases the student would really SAY. Everyday
+  spoken English only — the word a person uses in conversation, not the
+  dictionary label. Never bookish words (greeting, salutation, commence,
+  purchase). For the "hello" topic give "hi", "hey", "how's it going",
+  NOT "greeting" or "salutation".
 - Keep every value short. Write field values in English.
 %(context)s
 Return ONLY valid JSON, no markdown, exactly in this shape:

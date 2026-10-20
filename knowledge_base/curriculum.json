@@ -18,7 +18,7 @@
             252,
             676
           ],
-          "block_title": "Greetings & Hello",
+          "block_title": "Saying Hi",
           "lessons": [
             {
               "id": "1.1",
@@ -41,7 +41,7 @@
             {
               "id": "1.4",
               "code": "1.4",
-              "title": "Проверка: Greetings & Hello",
+              "title": "Проверка: Saying Hi",
               "type": "check"
             }
           ]
@@ -158,30 +158,30 @@
             1024,
             542
           ],
-          "block_title": "Colours",
+          "block_title": "Colors",
           "lessons": [
             {
               "id": "5.1",
               "code": "5.1",
-              "title": "Basic colours",
+              "title": "Basic colors",
               "type": "speaking"
             },
             {
               "id": "5.2",
               "code": "5.2",
-              "title": "What colour is it?",
+              "title": "What color is it?",
               "type": "speaking"
             },
             {
               "id": "5.3",
               "code": "5.3",
-              "title": "Colours I like",
+              "title": "Colors I like",
               "type": "chat"
             },
             {
               "id": "5.4",
               "code": "5.4",
-              "title": "Проверка: Colours",
+              "title": "Проверка: Colors",
               "type": "check"
             }
           ]
@@ -415,7 +415,7 @@
             637,
             623
           ],
-          "block_title": "In the Shop",
+          "block_title": "At the Store",
           "lessons": [
             {
               "id": "forest/3.1",
@@ -438,7 +438,7 @@
             {
               "id": "forest/3.4",
               "code": "3.4",
-              "title": "Проверка: In the Shop",
+              "title": "Проверка: At the Store",
               "type": "check"
             }
           ]
@@ -467,7 +467,7 @@
             {
               "id": "forest/4.3",
               "code": "4.3",
-              "title": "My favourite clothes",
+              "title": "My favorite clothes",
               "type": "chat"
             },
             {
@@ -607,7 +607,7 @@
             {
               "id": "forest/8.3",
               "code": "8.3",
-              "title": "Travelling in town",
+              "title": "Getting around town",
               "type": "chat"
             },
             {
@@ -718,7 +718,7 @@
             {
               "id": "river/2.2",
               "code": "2.2",
-              "title": "At the doctor's",
+              "title": "At the doctor",
               "type": "speaking"
             },
             {
@@ -887,7 +887,7 @@
             {
               "id": "river/7.1",
               "code": "7.1",
-              "title": "My favourite subject",
+              "title": "My favorite subject",
               "type": "speaking"
             },
             {
@@ -917,7 +917,7 @@
             237,
             288
           ],
-          "block_title": "Holidays & Trips",
+          "block_title": "Vacation & Trips",
           "lessons": [
             {
               "id": "river/8.1",
@@ -940,7 +940,7 @@
             {
               "id": "river/8.4",
               "code": "8.4",
-              "title": "Проверка: Holidays & Trips",
+              "title": "Проверка: Vacation & Trips",
               "type": "check"
             }
           ]
@@ -1518,7 +1518,7 @@
             {
               "id": "mountain/6.3",
               "code": "6.3",
-              "title": "My favourite place",
+              "title": "My favorite place",
               "type": "chat"
             },
             {
@@ -1582,13 +1582,13 @@
             {
               "id": "mountain/8.2",
               "code": "8.2",
-              "title": "I watched a great film",
+              "title": "I watched a great movie",
               "type": "speaking"
             },
             {
               "id": "mountain/8.3",
               "code": "8.3",
-              "title": "Films and music",
+              "title": "Movies and music",
               "type": "chat"
             },
             {
@@ -3702,7 +3702,7 @@
             {
               "id": "sky/3.3",
               "code": "3.3",
-              "title": "A well-organised opinion",
+              "title": "A well-organized opinion",
               "type": "chat"
             },
             {

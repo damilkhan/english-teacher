@@ -260,7 +260,11 @@ TRANSLATE_MAX_TOKENS = 90
 #   PRON_GOOD — от какого сходства говорим «✅ Похоже!»;
 #   PRON_ALMOST — от какого — «🟡 Почти» (ниже этого — «🔁 Попробуй ещё»);
 #   PRON_RELATED — ниже этого сходства считаем, что ученик сказал СВОЁ
-#                  (тогда подсказку не показываем, идёт обычный диалог).
+#                  (тогда подсказку не показываем, идёт обычный диалог);
+#   AMERICAN_ENGLISH — учить американскому английскому (написание и слова:
+#                  color, favorite, movie, apartment; никаких «greeting»,
+#                  «salutation», «colour», «film»). Выключатель — False.
+AMERICAN_ENGLISH = True
 # СТРОЖЕ: поднять PRON_GOOD (напр. 0.90) и PRON_ALMOST (0.60).
 # МЯГЧЕ:  опустить (напр. 0.75 и 0.40).
 PRON_CHECK_ENABLED = True

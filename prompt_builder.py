@@ -276,7 +276,7 @@ def _variety_block(variety=False):
 # обучении полезно полное погружение. ВАЖНО: блок добавляется только при
 # english_only=True — без него промпт прежний (см. tests/smoke_test).
 ENGLISH_ONLY_BLOCK = """
-\n\U0001F1EC\U0001F1E7 ALWAYS ANSWER IN ENGLISH:
+\n\U0001F1FA\U0001F1F8 ALWAYS ANSWER IN ENGLISH:
 Reply in English ONLY, in every message, even if the student writes in Russian.
 If the student switches to Russian, answer in simple English anyway — they
 need the English input. If you must clarify something, use very simple English
@@ -288,6 +288,33 @@ speaking English — just speak it.
 def _english_only_block(english_only=False):
     """Блок «только по-английски». Пусто, если не запрошен."""
     return ENGLISH_ONLY_BLOCK if english_only else ""
+
+
+# ---------- американский английский (необязательно) ----------
+# Жалоба ученика 20.10.2026: Джейн учила книжным словам (greeting,
+# salutation, «it is a warm greeting») и британским формам. Модель по
+# умолчанию тянется к учебниковому регистру, поэтому просим прямо:
+# американский английский и слова, которые люди реально говорят.
+# ВАЖНО: блок добавляется только при american=True — без него промпт
+# остаётся прежним байт-в-байт (правило §10, см. tests/smoke_test).
+AMERICAN_ENGLISH_BLOCK = """
+\n\U0001F1FA\U0001F1F8 USE AMERICAN ENGLISH (US):
+Spell and speak American English, never British: color, favorite, traveling,
+organize, apartment, elevator, movie, vacation, store, soccer, fall, math,
+"at the doctor". Never «colour», «favourite», «travelling», «film», «shop»,
+«holiday», «practise».
+Use the words people really say in the US today. Never bookish or
+dictionary-style words: greeting, salutation, commence, purchase, assist.
+Teach the everyday word first: "hi" (not "greetings"), "say hello" (not
+"exchange greetings"), "thanks" (not "I am grateful").
+When you teach a new word, give ONE natural word plus a short example the
+student could really say, not a list of synonyms.
+"""
+
+
+def _american_block(american=False):
+    """Блок про американский английский. Пусто, если не запрошен."""
+    return AMERICAN_ENGLISH_BLOCK if american else ""
 
 
 def detect_language(text):
@@ -340,7 +367,7 @@ def _mistake_line(err):
         text = str(err.get("jane_response") or "")
     return text[:50]
 
-def build_system_prompt(mode, profile, lang="en", level=None, student=None, context=None, plan=None, lesson=None, now=None, variety=False, english_only=False, words=None):
+def build_system_prompt(mode, profile, lang="en", level=None, student=None, context=None, plan=None, lesson=None, now=None, variety=False, english_only=False, words=None, american=False):
     """Собирает system-промпт (персона + профиль ученика).
 
     mode:    'lesson' | 'free'
@@ -359,6 +386,8 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
     english_only: True → отвечать ТОЛЬКО по-английски (полное погружение)
     words:   слова ученика для вплетения в разговор ["ключ — key", …] —
              необязательно; None/пусто → блок не добавляется
+    american: True → американский английский (слова и написание), False →
+             блок не добавляется (промпт прежний байт-в-байт)
     """
     language_rule = language_instruction(lang)
 
@@ -405,6 +434,7 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
             + _weak_topics_block(profile) + _student_block(student)
             + _lesson_block(lesson) + _now_block(now)
             + _variety_block(variety) + _english_only_block(english_only)
+            + _american_block(american)
             + _plan_block(plan) + _knowledge_block(context)
             + _words_block(words))
 

@@ -1415,7 +1415,9 @@ class EnglishTeacherApp:
             parsed = vocabulary.parse_meanings(meanings)
             if not parsed:
                 return None
-            word = str(source or "").strip()
+            # «привет.» и «привет» — одно слово: точку/запятую снимаем,
+            # иначе в словаре заводились две карточки на одно слово
+            word = translate.normalize_word(source) or str(source or "").strip()
             added = profile_store.add_vocabulary(
                 word, meanings, (self.current_user or {}).get("id"))
             if added:

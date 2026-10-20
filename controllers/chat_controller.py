@@ -203,6 +203,7 @@ class ChatController:
             level=level, student=student, context=context, plan=plan_text,
             lesson=lesson_block, now=datetime.now(), variety=True,
             english_only=bool(getattr(config, "ENGLISH_ONLY", False)),
+            american=bool(getattr(config, "AMERICAN_ENGLISH", True)),
             words=words)
 
         print(f"📤 Язык ответа: {'РУССКИЙ' if lang == 'ru' else 'ENGLISH'}")
@@ -220,6 +221,7 @@ class ChatController:
                 plan=plan_text,
                 lesson=lesson_block, now=datetime.now(), variety=True,
                 english_only=bool(getattr(config, "ENGLISH_ONLY", False)),
+                american=bool(getattr(config, "AMERICAN_ENGLISH", True)),
                 words=words)
             ok, raw = self._ask_model(system_prompt, user_text, short_history=True)
         if not ok:

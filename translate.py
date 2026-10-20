@@ -45,18 +45,38 @@ _CYR_RE = re.compile(r"[А-Яа-яЁё]")
 # Инструкция для ОДНОГО СЛОВА: до трёх значений с примером — у слова
 # обычно несколько смыслов («ключ» — key / wrench), и без примеров
 # ученик не поймёт, какое значение ему нужно.
+#
+# ПОЧЕМУ ТАК СТРОГО (жалоба ученика 20.10.2026): на русское «привет» модель
+# отдавала ТРИ строки — hello / greeting / salutation, и все три становились
+# карточками повторения. Ученик потом зубрил «a quick salutation before
+# speaking» — книжные слова, которых в живой речи нет. Поэтому:
+#   * СИНОНИМЫ — не «другие значения»: одно значение = одна строка;
+#   * только обиходный АМЕРИКАНСКИЙ английский (movie, apartment, color);
+#   * книжные/словарные слова прямо запрещены списком примеров.
 WORD_SYSTEM_PROMPT = (
-    "The user gives ONE Russian word. Give up to {n} DIFFERENT English words "
-    "for its DIFFERENT meanings — never repeat the same English word twice. "
-    "Most frequent meaning first. Format, one meaning per line:\n"
-    "    english word — short example sentence showing THIS meaning\n"
+    "The user gives ONE Russian word. Reply with the English word an American "
+    "would actually SAY in everyday conversation, plus at most {n} lines in "
+    "total. Format, one meaning per line:\n"
+    "    english word — short example sentence\n"
     "Rules:"
+    "\n- Everyday American English only (movie, apartment, elevator, vacation, "
+    "color, store). Never British spellings or British-only words."
+    "\n- SYNONYMS ARE NOT DIFFERENT MEANINGS: two words for the same sense are "
+    "forbidden. Give a second line ONLY for a clearly different sense or part "
+    "of speech. Good reason for two lines: ключ → key / wrench (a tool), "
+    "ручка → pen / handle (дверная ручка)."
+    "\n- If the second line is just another word for the SAME thing or a "
+    "British variant, DROP it: фильм → movie ONLY (not «film»), квартира → "
+    "apartment ONLY (not «flat»), магазин → store ONLY (not «shop»), "
+    "отпуск → vacation ONLY (not «holiday»)."
+    "\n- Never give bookish, formal or dictionary-style words: greeting, "
+    "salutation, commence, purchase, assist, inquire, utilize, beverage."
+    "\n- Most common meaning first."
     "\n- The example must make the meaning clear (not «This is a key»)."
-    "\n- Examples: 4-7 words, beginner level, natural English."
+    "\n- Examples: 4-7 words, beginner level, natural spoken English."
     "\n- No numbering, no bullets, no Russian text, no explanations."
-    "\n- If the word has only ONE common meaning, return exactly one line."
-    "\n- If a meaning is a part of speech or a phrase, still give the word "
-    "and one example."
+    "\n- If the word has only ONE everyday meaning (most words do), return "
+    "exactly ONE line. {n} lines is the maximum, not the goal."
 )
 
 # Сколько значений показываем максимум.
@@ -107,6 +127,53 @@ def _normalize(text: str) -> str:
     low = str(text or "").strip().lower()
     low = low.strip(" .,!?…;:—-\u00ab\u00bb\"'")
     return re.sub(r"\s+", " ", low)
+
+
+# Британские (или «книжные») варианты: в США так не говорят. Если модель
+# всё же прислала такой вариант ВТОРЫМ значением — это синоним, а не другое
+# значение, и в карточки ему нельзя (ученик потом зубрит «flat» и «film»).
+BRITISH_OR_FORMAL = frozenset((
+    "film", "flat", "shop", "holiday", "holidays", "lift", "autumn",
+    "biscuit", "petrol", "mobile", "torch", "rubbish", "queue", "maths",
+    "cheque", "programme", "centre", "theatre", "colour", "favourite",
+    "travelling", "travelled", "organised", "practise", "greeting",
+    "salutation", "commence", "purchase", "assist", "inquire", "utilize",
+    "beverage",
+))
+
+
+def _trim_meanings(lines, limit=3):
+    """Убрать повторы и британские синонимы из ответа модели.
+
+    Первая строка не трогается никогда (это самое частое значение), а со
+    второй убираем: (1) то же английское слово второй раз, (2) британский
+    вариант вместо американского (film при movie, flat при apartment).
+    """
+    out = []
+    seen = set()
+    for line in (lines or []):
+        text = str(line or "").strip()
+        if not text:
+            continue
+        en = text.split("—")[0].split("-")[0].strip().lower()
+        en = re.sub(r"[^a-z' ]", "", en).strip()
+        if en:
+            if out and (en in seen or en in BRITISH_OR_FORMAL):
+                continue                     # синоним/британский вариант — мимо
+            seen.add(en)
+        out.append(text)
+        if len(out) >= int(limit):
+            break
+    return out
+
+
+def normalize_word(text: str) -> str:
+    """Слово для карточки: без точек/запятых/кавычек и лишних пробелов.
+
+    «привет.» и «привет» — одно и то же слово: иначе в словаре повторения
+    появлялись две разные карточки (и слово с точкой видел ученик).
+    """
+    return _normalize(text)
 
 
 def phrase_lookup(text: str) -> Optional[str]:
@@ -195,7 +262,7 @@ class Translator:
             self.stats["failed"] += 1
             return False, [_short_error(answer)]
 
-        lines = _clean_word_lines(answer)
+        lines = _trim_meanings(_clean_word_lines(answer), WORD_MEANINGS)
         if not lines:
             self.stats["failed"] += 1
             return False, ["не удалось перевести"]
