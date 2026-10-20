@@ -466,13 +466,22 @@ def test_download_failure():
             raise RuntimeError("нет сети")
 
         tts._download = boom
+        # Локальный запас (piper) здесь ВЫКЛЮЧЕН: раздел проверяет именно
+        # СЕТЕВОЙ сбой. Что английский кусок при этом всё равно звучит
+        # локально — отдельная проверка: tests/test_tts_local_fallback.py
+        # (раздел 5), чтобы не подменять смысл этого раздела.
+        orig_piper = getattr(config, "PIPER_FALLBACK", False)
+        config.PIPER_FALLBACK = False
         try:
             tts.speak("Hello")
             ok = True
         except Exception:            # noqa: BLE001
             ok = False
+        finally:
+            config.PIPER_FALLBACK = orig_piper
         check("падение скачивания не роняет speak", ok)
-        check("ничего не проиграно", fp.mixer.music.played == 0)
+        check("из сети ничего не проиграно (локальный запас выключен)",
+              fp.mixer.music.played == 0)
 
 
 # =========================================================

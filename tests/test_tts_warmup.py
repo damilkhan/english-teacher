@@ -107,6 +107,11 @@ def test_download_budget():
     tts._download_once = slow
     tts.DOWNLOAD_TIMEOUT = 1.0
     tts.DOWNLOAD_BUDGET = 2.0
+    # Здесь проверяется ЛЕСТНИЦА ПОВТОРОВ ПО ОЧЕРЕДИ — фиксируем её режим.
+    # Параллельные запросы (config.TTS_PARALLEL_JOBS) — отдельный раздел:
+    # tests/test_tts_local_fallback.py (раздел 1).
+    orig_parallel = config.TTS_PARALLEL_JOBS
+    config.TTS_PARALLEL_JOBS = 1
     with tts._warm_lock:            # не даём фону прогрева мешать счёту
         tts._warm_running = True
     try:
@@ -121,6 +126,7 @@ def test_download_budget():
     finally:
         tts._download_once = orig
         tts.DOWNLOAD_BUDGET, tts.DOWNLOAD_TIMEOUT = orig_budget, orig_timeout
+        config.TTS_PARALLEL_JOBS = orig_parallel
         time.sleep(0.05)
         reset_warm_state()
 
