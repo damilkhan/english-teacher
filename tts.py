@@ -35,6 +35,7 @@ import tempfile
 import threading
 import time
 import queue
+import wave
 from collections import OrderedDict
 from typing import Dict, Optional, Tuple
 
@@ -522,8 +523,18 @@ def _speak_chunk(text: str, voice: str, my_gen: int) -> bool:
     except Exception as exc:                   # noqa: BLE001 — синтез не должен ронять поток
         print(f"⚠️ TTS ошибка синтеза: {exc}")
         data = None
-    if not data or my_gen != _current_generation():
-        return False                           # синтез устарел/не удался — не играем
+    if not data:
+        # Сети нет — последний рубеж: локальный голос (только английский).
+        if my_gen != _current_generation():
+            return False
+        wav = piper_synth(text) if voice != VOICE_RU else None
+        if not wav:
+            return False
+        print("🔉 TTS: кусок прочитан локально (piper)")
+        _play(wav, my_gen, suffix=".wav")
+        return True
+    if my_gen != _current_generation():
+        return False                           # синтез устарел — не играем
     _play(data, my_gen)
     return True
 
@@ -548,16 +559,61 @@ def _synthesize(text: str, voice: str) -> Optional[bytes]:
     return data
 
 
-def _download(text: str, voice: str) -> Optional[bytes]:
-    """Скачивает mp3 С ПОВТОРАМИ (403/сеть) во временный файл. Файл убираем.
+def _download_race(text: str, voice: str, jobs: int) -> Optional[bytes]:
+    """Несколько ОДНОВРЕМЕННЫХ запросов одного куска — берём первый удачный.
 
-    Повторы ограничены ОБЩИМ временем DOWNLOAD_BUDGET: раньше три попытки по
-    таймауту 7 с давали до 26 с тишины посреди фразы (замер). Теперь дольше
-    ~7 с на один кусок не ждём.
+    edge-tts эпизодически «болеет»: замер 20.10.2026 — 18 запросов подряд дали
+    8 сбоёв (44%), а через минуту те же 18 прошли все. Один запрос — лотерея.
+    Три параллельных на кусок: 10/10 успешно, медиана 1.08 с. Поэтому вместо
+    «ждать по очереди» стреляем сразу несколькими и берём первый ответ.
+    Проигравшие потоки просто бросаем (daemon): они не держат приложение.
+    """
+    jobs = max(1, int(jobs))
+    results: "queue.Queue" = queue.Queue()
+    for _ in range(jobs):
+        threading.Thread(target=lambda: results.put(_download_once(text, voice)),
+                         daemon=True).start()
+    deadline = time.monotonic() + DOWNLOAD_TIMEOUT + 0.5
+    for _ in range(jobs):
+        left = deadline - time.monotonic()
+        if left <= 0:
+            break
+        try:
+            data = results.get(timeout=left)
+        except queue.Empty:
+            break
+        if data:
+            return data
+    return None
+
+
+def _download(text: str, voice: str) -> Optional[bytes]:
+    """Скачивает mp3 во временный файл: сначала ПАРАЛЛЕЛЬНО, потом по очереди.
+
+    Вся загрузка ограничена ОБЩИМ временем DOWNLOAD_BUDGET: раньше три попытки
+    по таймауту 7 с давали до 26 с тишины посреди фразы (замер).
+
+    Сколько запросов делать разом — config.TTS_PARALLEL_JOBS (3 по умолчанию,
+    1 — прежнее поведение, строго по очереди). Общее число попыток остаётся
+    RETRY_ATTEMPTS: параллельный залп СЧИТАЕТСЯ попытками, поэтому при jobs=3
+    и трёх неудачах повторов уже не будет (ждать дольше незачем — сервис
+    всё равно лежит).
     """
     deadline = time.monotonic() + DOWNLOAD_BUDGET
-    for _attempt in range(RETRY_ATTEMPTS):
+    try:
+        jobs = int(getattr(config, "TTS_PARALLEL_JOBS", 1) or 1)
+    except (TypeError, ValueError):
+        jobs = 1
+    jobs = max(1, min(jobs, RETRY_ATTEMPTS))
+    attempts = 0
+    if jobs > 1:
+        data = _download_race(text, voice, jobs)
+        attempts = jobs
+        if data:
+            return data
+    while attempts < RETRY_ATTEMPTS:
         data = _download_once(text, voice)
+        attempts += 1
         if data:
             return data
         # повторяем, только если СЛЕДУЮЩАЯ попытка успеет в бюджет:
@@ -603,9 +659,13 @@ def _download_once(text: str, voice: str) -> Optional[bytes]:
 # ---------------------------------------------------------
 # Проигрывание
 # ---------------------------------------------------------
-def _play(data: bytes, my_gen: int) -> None:
-    """Проигрывает mp3 из временного файла. Прерываемо (stop/новая реплика)."""
-    handle, path = tempfile.mkstemp(prefix="jane_tts_", suffix=".mp3")
+def _play(data: bytes, my_gen: int, suffix: str = ".mp3") -> None:
+    """Проигрывает mp3 (или wav локального голоса) из временного файла.
+
+    Прерываемо (stop/новая реплика). suffix — расширение временного файла:
+    pygame определяет формат по нему, поэтому для piper нужен ".wav".
+    """
+    handle, path = tempfile.mkstemp(prefix="jane_tts_", suffix=suffix)
     os.close(handle)
     try:
         with open(path, "wb") as fh:
@@ -802,10 +862,16 @@ class _Prefetch:
         return self._data
 
 
-def _decode_into(out, data, samplerate, channels, my_gen) -> bool:
-    """Декодирует mp3-байты (в памяти) и пишет PCM в ОБЩИЙ поток вывода."""
+def _decode_bytes_into(out, data, samplerate, channels, my_gen,
+                       fmt: str = STREAM_FORMAT) -> bool:
+    """Декодирует аудио-байты (в памяти) и пишет PCM в ОБЩИЙ поток вывода.
+
+    fmt — формат контейнера: "mp3" (edge-tts) или "wav" (локальный piper).
+    Раньше здесь был жёстко mp3; для локального запаса понадобился wav,
+    а дублировать разбор кадров, ресемплинг и уровень громкости незачем.
+    """
     try:
-        container = av.open(io.BytesIO(data), format=STREAM_FORMAT)
+        container = av.open(io.BytesIO(data), format=fmt)
     except Exception as exc:                   # noqa: BLE001 — битый кусок
         _log.warning("TTS: кусок не декодировался (%s)", exc)
         return False
@@ -843,6 +909,12 @@ def _decode_into(out, data, samplerate, channels, my_gen) -> bool:
         except Exception:
             pass
     return played
+
+
+def _decode_into(out, data, samplerate, channels, my_gen) -> bool:
+    """Декодирует mp3-байты edge-tts (совместимость: прежняя сигнатура)."""
+    return _decode_bytes_into(out, data, samplerate, channels, my_gen,
+                              STREAM_FORMAT)
 
 
 def _decode_stream_into(out, text, voice, samplerate, channels, my_gen) -> bool:
@@ -891,14 +963,124 @@ def _decode_stream_into(out, text, voice, samplerate, channels, my_gen) -> bool:
     return played
 
 
+# ---------------------------------------------------------
+# Локальный запас: piper (работает без интернета)
+# ---------------------------------------------------------
+# edge-tts — ОНЛАЙН. Когда сервис недоступен (нет сети, «No audio was
+# received», 403), кусок раньше пропадал МОЛЧА. Теперь английский кусок
+# читает локальный piper: замер 20.10.2026 — файл 60 МБ, загрузка 0.93 с,
+# RTF 0.05, память 156 МБ, частота 22050 Гц. Русский piper не годится по
+# качеству (решение пользователя), поэтому русские куски — только edge-tts,
+# но и они больше не теряются: их берёт параллельный залп запросов.
+_piper_lock = threading.Lock()
+_piper_voice = None
+_piper_failed = False
+_piper_cache: "OrderedDict[str, bytes]" = OrderedDict()
+PIPER_CACHE_LIMIT = 16
+
+
+def piper_path() -> str:
+    """Полный путь к файлу голоса piper (из config, папка — от корня проекта)."""
+    name = str(getattr(config, "PIPER_VOICE_EN", "") or "")
+    if not name:
+        return ""
+    folder = str(getattr(config, "PIPER_MODEL_DIR", "models/piper"))
+    base = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base, folder.replace("/", os.sep), name)
+
+
+def piper_available() -> bool:
+    """Есть ли локальный запас: включён, ещё не падал и файл голоса на месте."""
+    if not getattr(config, "PIPER_FALLBACK", False):
+        return False
+    if _piper_failed:
+        return False
+    path = piper_path()
+    return bool(path) and os.path.exists(path)
+
+
+def piper_synth(text: str) -> Optional[bytes]:
+    """WAV-байты локального голоса. None — не вышло (кусок тогда молчит).
+
+    Голос грузится ЛЕНИВО при первой нужде (0.93 с) и живёт в памяти
+    (~156 МБ). Падение piper не ломает озвучку: ставим флаг и больше не
+    пробуем — приложение работает как раньше, только без запаса.
+    """
+    global _piper_voice, _piper_failed
+    if not text:
+        return None
+    cached = _piper_cache.get(text)
+    if cached is not None:
+        _piper_cache.move_to_end(text)
+        return cached
+    with _piper_lock:
+        if not piper_available():
+            return None
+        if _piper_voice is None:
+            try:
+                from piper import PiperVoice
+                started = time.monotonic()
+                _piper_voice = PiperVoice.load(piper_path())
+                print("🔉 TTS: локальный голос готов за %.2f с"
+                      % (time.monotonic() - started))
+            except Exception as exc:           # noqa: BLE001 — нет piper/файла
+                _piper_failed = True
+                _log.warning("TTS: piper не загрузился (%s)", exc)
+                return None
+        try:
+            from piper import SynthesisConfig
+            buffer = io.BytesIO()
+            with wave.open(buffer, "wb") as wav_file:
+                _piper_voice.synthesize_wav(
+                    text, wav_file,
+                    syn_config=SynthesisConfig(
+                        length_scale=float(getattr(config, "PIPER_LENGTH_SCALE", 1.0))))
+            data = buffer.getvalue()
+        except Exception as exc:               # noqa: BLE001 — синтез не критичен
+            _log.warning("TTS: piper не синтезировал (%s)", exc)
+            return None
+    if not data:
+        return None
+    _piper_cache[text] = data
+    _piper_cache.move_to_end(text)
+    while len(_piper_cache) > PIPER_CACHE_LIMIT:
+        _piper_cache.popitem(last=False)
+    return data
+
+
+def _piper_play(out, text, lang, samplerate, channels, my_gen) -> bool:
+    """Прочитать кусок локальным голосом (только английский).
+
+    Русский piper не годится по качеству, поэтому для "ru" сразу False:
+    лучше тишина, чем неправильные ударения (решение 20.10.2026).
+    """
+    if lang is None:
+        lang = detect_language(text)
+    if lang != "en":
+        return False
+    data = piper_synth(text)
+    if not data:
+        return False
+    if _stop.is_set() or my_gen != _current_generation():
+        return False
+    played = _decode_bytes_into(out, data, samplerate, channels, my_gen, "wav")
+    if played:
+        print("🔉 TTS: кусок прочитан локально (piper)")
+    return played
+
+
 def _play_segment(out, text, voice, samplerate, channels, my_gen,
-                  data=None) -> bool:
+                  data=None, lang=None) -> bool:
     """Проиграть ОДИН кусок так, чтобы НИ ОДНО слово не пропало.
 
-    Порядок попыток: готовые mp3-байты (предзагрузка) → поток → повторная
-    загрузка целиком. Раньше при неудачной предзагрузке кусок МОЛЧА
-    выбрасывался — и из смешанной фразы исчезало слово (например, русское).
-    Теперь слово звучит всегда, если сеть хоть как-то отвечает.
+    Порядок попыток: готовые mp3-байты (предзагрузка) → поток → загрузка
+    целиком (уже с параллельными запросами) → ЛОКАЛЬНЫЙ голос piper.
+    Раньше при неудачной предзагрузке кусок МОЛЧА выбрасывался — и из
+    смешанной фразы исчезало слово (например, русское). Теперь английское
+    слово звучит всегда: либо из сети, либо локально.
+
+    lang — язык куска ("ru"/"en"); нужен локальному запасу. Без него язык
+    определяется по тексту (совместимость со старыми вызовами).
 
     True — что-то прозвучало; False — не вышло (или реплику прервали).
     """
@@ -911,7 +1093,10 @@ def _play_segment(out, text, voice, samplerate, channels, my_gen,
     if _stop.is_set() or my_gen != _current_generation():
         return False
     data = _download(text, voice)                # последняя попытка целиком
-    return bool(data) and _decode_into(out, data, samplerate, channels, my_gen)
+    if data and _decode_into(out, data, samplerate, channels, my_gen):
+        return True
+    # Последний рубеж: интернета нет — читаем локальным голосом.
+    return _piper_play(out, text, lang, samplerate, channels, my_gen)
 
 
 def _stream_play_segments(segments, my_gen, tracker=None) -> bool:
@@ -960,7 +1145,7 @@ def _stream_play_segments(segments, my_gen, tracker=None) -> bool:
             if tracker is not None:
                 tracker.start(index0)
             if _play_segment(out, chunk0, voice_for(lang0),
-                             samplerate, channels, my_gen):
+                             samplerate, channels, my_gen, lang=lang0):
                 played = True
             # остальные куски — из предзагрузки (без пауз между языками)
             for i in range(1, len(segments)):
@@ -977,7 +1162,7 @@ def _stream_play_segments(segments, my_gen, tracker=None) -> bool:
                         if prefs[i] is not None else None)
                 waits.append(round(time.monotonic() - t_wait, 2))
                 if _play_segment(out, chunk, voice_for(lang),
-                                 samplerate, channels, my_gen, data):
+                                 samplerate, channels, my_gen, data, lang=lang):
                     played = True
                 if not prefetch_all:
                     _start(i + 2)
