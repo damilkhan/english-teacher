@@ -157,9 +157,11 @@ def test_curriculum():
     check("у «Лесной тропы» id с префиксом",
           locations[1]["points"][0]["lessons"][0]["id"] == "forest/1.1",
           locations[1]["points"][0]["lessons"][0]["id"])
+    # координата снята с новой картинки «Пустыни» (белый кружок с цифрой 1);
+    # раскладки всех локаций и попадание в кружки — tests/test_map_points.py
     check("координаты точек на месте (9 у «Пустыни»)",
           len(desert["points"]) == 9
-          and desert["points"][0]["point"] == [252, 676],
+          and desert["points"][0]["point"] == [231, 697],
           desert["points"][0]["point"])
 
 

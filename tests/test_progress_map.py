@@ -54,7 +54,7 @@ def sample():
         "version": 1,
         "locations": [{
             "id": "desert", "title": "Пустыня", "level": "A0",
-            "image": "assets/map/desert.jpg", "size": [1248, 832],
+            "image": "assets/map/desert.png", "size": [1248, 832],
             "points": [
                 {"id": "p1", "number": 1, "point": [10, 10], "block_title": "One",
                  "lessons": [{"id": "1.1", "title": "a", "type": "speaking"},
@@ -83,7 +83,7 @@ def main():
     check("13 локаций по программе", len(ids) == 13, ids)
     loc = pm.get_location("desert")
     check("у локации есть image и size",
-          loc.get("image") == "assets/map/desert.jpg" and loc.get("size") == [1248, 832],
+          loc.get("image") == "assets/map/desert.png" and loc.get("size") == [1248, 832],
           (loc.get("image"), loc.get("size")))
     pts = pm.points_of("desert")
     check("9 точек", len(pts) == 9, len(pts))
