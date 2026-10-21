@@ -65,6 +65,7 @@ DARK = {
     "map_bg":               "#14161F",   # фон карты, если картинки нет
     "map_tooltip_bg":       "#1F2331",
     "map_tooltip_text":     "#E7E9F0",
+    "map_hover":            "#FFFFFF",   # кольцо вокруг жетона под курсором
 }
 
 # Светлая палитра специально МЯГКАЯ: без чистой белизны (#FFFFFF) и почти
@@ -111,6 +112,7 @@ LIGHT = {
     "map_bg":               "#EFE6D2",
     "map_tooltip_bg":       "#FFFFFF",
     "map_tooltip_text":     "#2C3040",
+    "map_hover":            "#2C3040",
 }
 
 PALETTES = {"dark": DARK, "light": LIGHT}

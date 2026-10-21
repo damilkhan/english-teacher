@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 """ui.widgets.map_view — интерактивная карта прогресса (вкладка «Карта»).
 
-Карта — это картинка локации (assets/map/desert.jpg), поверх которой лежат
-КРУЖКИ-ЖЕТОНЫ по числу точек (блоков) из curriculum.json. Жетон показывает
-номер точки и её состояние:
+Карта — это картинка локации (assets/map/<id>.png), поверх которой лежат
+КРУЖКИ-ЖЕТОНЫ по числу точек (блоков) из curriculum.json. Координаты жетонов
+у каждой локации СВОИ (tools/build_curriculum.py, POINTS_XY) — они сняты с
+белых кружков, нарисованных на самой карте, поэтому номер блока на карте
+совпадает с номером в плане. Жетон показывает номер точки и её состояние:
 
     * пройдено    — приглушённый зелёный + цифра;
     * активная    — яркий зелёный, плавно «дышит» (пульсирует) + цифра;
@@ -292,6 +294,7 @@ class MapView(ctk.CTkFrame):
         self._tip_job = None
         self._pulse_job = None
         self._phase = 0.0
+        self._hover_id: Optional[str] = None   # жетон под курсором
         self._resize_job = None
         self._last_size = (0, 0)
 
@@ -312,7 +315,7 @@ class MapView(ctk.CTkFrame):
         self.canvas.pack(side="top", fill="both", expand=True, padx=8, pady=(0, 4))
         self.canvas.bind("<Configure>", self._on_resize)
         self.canvas.bind("<Motion>", self._on_motion)
-        self.canvas.bind("<Leave>", lambda _e: self._hide_tooltip())
+        self.canvas.bind("<Leave>", self._on_leave)
         self.canvas.bind("<Button-1>", self._on_click)
 
         self.legend = ctk.CTkFrame(self, fg_color="transparent")
@@ -502,6 +505,7 @@ class MapView(ctk.CTkFrame):
             return
         self._last_size = (w, h)
         self._hide_tooltip()
+        self._hover_id = None            # жетоны пересозданы — подсветки нет
         self.canvas.delete("all")
 
         src = self._location.get("size") or [1248, 832]
@@ -659,10 +663,48 @@ class MapView(ctk.CTkFrame):
     def _on_motion(self, event) -> None:
         pid = hit_test(event.x, event.y, self._tokens,
                        (self._tokens[0]["radius"] * 1.4) if self._tokens else 14)
+        self._set_hover(pid)
         if pid:
             self._show_tooltip(pid)
         else:
             self._hide_tooltip()
+
+    def _on_leave(self, _event=None) -> None:
+        """Курсор ушёл с карты: убрать подсказку и подсветку."""
+        self._hide_tooltip()
+        self._set_hover(None)
+
+    def _set_hover(self, pid) -> None:
+        """Кольцо вокруг жетона под курсором + курсор-рука.
+
+        Перерисовываем ТОЛЬКО при смене жетона: <Motion> приходит десятки
+        раз в секунду, и постоянное создание кольца давало мерцание.
+        """
+        pid = str(pid) if pid else None
+        if pid == self._hover_id:
+            return
+        self._hover_id = pid
+        try:
+            self.canvas.configure(cursor="hand2" if pid else "")
+        except Exception:                          # noqa: BLE001
+            pass
+        try:
+            self.canvas.delete("hover")
+        except Exception:                          # noqa: BLE001
+            return
+        if not pid:
+            return
+        token = next((t for t in self._tokens if t["id"] == pid), None)
+        if token is None:
+            return
+        r = int(token.get("radius", TOKEN_RADIUS)) + 6
+        x, y = token["x"], token["y"]
+        try:
+            self.canvas.create_oval(
+                x - r, y - r, x + r, y + r, tags="hover",
+                outline=self.palette.get("map_hover", "#FFFFFF"), width=2)
+        except Exception:                          # noqa: BLE001
+            pass
 
     def _show_tooltip(self, pid: str) -> None:
         token = next((t for t in self._tokens if t["id"] == pid), None)
