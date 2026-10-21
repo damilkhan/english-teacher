@@ -5,7 +5,7 @@
       "id": "desert",
       "title": "Пустыня",
       "level": "A0",
-      "image": "assets/map/desert.jpg",
+      "image": "assets/map/desert.png",
       "size": [
         1248,
         832

@@ -68,7 +68,7 @@ def build():
     locations = []
 
     # ---------- A0 ----------
-    locations.append(location("desert", "Пустыня", "A0", "assets/map/desert.jpg", [
+    locations.append(location("desert", "Пустыня", "A0", "assets/map/desert.png", [
         ("Saying Hi", [("Hello / Hi", "speaking"),
                                ("Good morning / Good evening", "speaking"),
                                ("How are you?", "chat")]),
