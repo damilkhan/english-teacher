@@ -5,8 +5,9 @@
     python tools\\build_curriculum.py
 
 Файл knowledge_base/curriculum.json ПЕРЕЗАПИСЫВАЕТСЯ (он в git, история цела).
-Координаты точек берутся из раскладки «Пустыни» — она уже проверена на
-картинке 1248×832; для новых локаций их можно сдвинуть под свою картинку.
+Координаты жетонов у КАЖДОЙ локации свои: они сняты с самой картинки — на
+карте нарисованы 9 белых кружков с номерами, жетон встаёт точно в свой
+кружок. Все картинки приведены к 1248×832.
 """
 import io
 import json
@@ -16,21 +17,38 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "knowledge_base", "curriculum.json")
 
-# раскладка точек по тропе карты (низ-слева → вверх)
-POINTS_XY = [(252, 676), (235, 530), (637, 623), (910, 646), (1024, 542),
-             (860, 414), (482, 321), (237, 288), (311, 159)]
+# Раскладка жетонов — СВОЯ у каждой локации (пиксели картинки 1248×832).
+# Порядок в списке = номер блока: 1 — старт, дальше по пунктиру.
+# Проверки: tests/test_map_points.py.
+POINTS_XY = {
+    "desert": [(231, 697), (210, 529), (640, 637), (930, 662), (1053, 541),
+               (876, 396), (474, 292), (214, 257), (293, 109)],
+    "forest": [(1037, 730), (802, 591), (832, 336), (687, 464), (596, 618),
+               (255, 552), (454, 323), (234, 272), (288, 113)],
+    "river": [(1178, 583), (966, 724), (718, 554), (490, 433), (778, 376),
+              (570, 275), (914, 271), (729, 177), (857, 102)],
+    "city": [(137, 780), (281, 670), (545, 493), (337, 326), (112, 202),
+             (388, 135), (714, 295), (1017, 440), (1219, 284)],
+}
+
+# Локации без картинки рисовать не по чему (карта показывает заглушку
+# «карта скоро»), но жетоны всё равно нужны — берём прежнюю раскладку.
+POINTS_FALLBACK = [(252, 676), (235, 530), (637, 623), (910, 646), (1024, 542),
+                   (860, 414), (482, 321), (237, 288), (311, 159)]
 
 
-def point(number, title, lessons, prefix=""):
+def point(number, title, lessons, prefix="", layout=None):
     """Блок: заголовок + список (название, тип) для трёх уроков.
 
     Четвёртый урок — ПРОВЕРОЧНОЕ занятие — добавляется автоматически.
+    layout — координаты жетонов ЭТОЙ локации (номер блока = индекс + 1).
     """
+    layout = layout if layout else POINTS_FALLBACK
     out = {
         # id блока тоже уникален во всём плане (в каждой локации свои 9 блоков)
         "id": "%spoint_%d" % (prefix, number),
         "number": number,
-        "point": list(POINTS_XY[number - 1]),
+        "point": list(layout[number - 1]),
         "block_title": title,
         "lessons": [],
     }
@@ -48,7 +66,7 @@ def point(number, title, lessons, prefix=""):
     return out
 
 
-def location(loc_id, title, level, image, points):
+def location(loc_id, title, level, points):
     # «Пустыня» — историческая локация: её уроки остаются с простыми id
     # (1.1, 1.2 …), чтобы НЕ потерять уже пройденное в профиле ученика.
     # Все остальные локации получают префикс: "forest/1.1".
@@ -57,9 +75,10 @@ def location(loc_id, title, level, image, points):
         "id": loc_id,
         "title": title,
         "level": level,
-        "image": image,
+        # картинка локации: assets/map/<id>.png, все приведены к 1248×832
+        "image": "assets/map/%s.png" % loc_id,
         "size": [1248, 832],
-        "points": [point(n, t, l, prefix)
+        "points": [point(n, t, l, prefix, POINTS_XY.get(loc_id))
                    for n, (t, l) in enumerate(points, start=1)],
     }
 
@@ -68,7 +87,7 @@ def build():
     locations = []
 
     # ---------- A0 ----------
-    locations.append(location("desert", "Пустыня", "A0", "assets/map/desert.png", [
+    locations.append(location("desert", "Пустыня", "A0", [
         ("Saying Hi", [("Hello / Hi", "speaking"),
                                ("Good morning / Good evening", "speaking"),
                                ("How are you?", "chat")]),
@@ -99,7 +118,7 @@ def build():
     ]))
 
     # ---------- A1 ----------
-    locations.append(location("forest", "Лесная тропа", "A1", "assets/map/forest.jpg", [
+    locations.append(location("forest", "Лесная тропа", "A1", [
         ("Daily Routine", [("My morning", "speaking"),
                            ("What time do you…?", "speaking"),
                            ("My usual day", "chat")]),
@@ -129,7 +148,7 @@ def build():
                                       ("My last weekend", "chat")]),
     ]))
 
-    locations.append(location("river", "Речная долина", "A1", "assets/map/river.jpg", [
+    locations.append(location("river", "Речная долина", "A1", [
         ("Directions & Places", [("Where is the bank?", "speaking"),
                                  ("Turn left / go straight", "speaking"),
                                  ("My town", "chat")]),
@@ -160,7 +179,7 @@ def build():
     ]))
 
     # ---------- A2 ----------
-    locations.append(location("city", "Городские улицы", "A2", "assets/map/city.jpg", [
+    locations.append(location("city", "Городские улицы", "A2", [
         ("Making Arrangements", [("Shall we meet at six?", "speaking"),
                                  ("Sorry, I can't — I'm busy", "speaking"),
                                  ("Agreeing on a time", "chat")]),
@@ -190,7 +209,7 @@ def build():
                                                ("A funny story", "chat")]),
     ]))
 
-    locations.append(location("mountain", "Горный перевал", "A2", "assets/map/mountain.jpg", [
+    locations.append(location("mountain", "Горный перевал", "A2", [
         ("Travel & Booking", [("I'd like to book a room", "speaking"),
                               ("At the airport", "speaking"),
                               ("Planning a trip", "chat")]),
@@ -221,7 +240,7 @@ def build():
     ]))
 
     # ---------- B1 ----------
-    locations.append(location("coast", "Морской берег", "B1", "assets/map/coast.jpg", [
+    locations.append(location("coast", "Морской берег", "B1", [
         ("Ambitions & Dreams", [("I've always wanted to…", "speaking"),
                                 ("My goals for this year", "speaking"),
                                 ("Dreams and plans", "chat")]),
@@ -251,7 +270,7 @@ def build():
                             ("Should students wear uniforms?", "chat")]),
     ]))
 
-    locations.append(location("bazaar", "Ночной рынок", "B1", "assets/map/bazaar.jpg", [
+    locations.append(location("bazaar", "Ночной рынок", "B1", [
         ("Negotiating", [("Could you lower the price?", "speaking"),
                          ("That's my final offer", "speaking"),
                          ("Bargaining politely", "chat")]),
@@ -281,7 +300,7 @@ def build():
                               ("A decision I made", "chat")]),
     ]))
 
-    locations.append(location("aurora", "Северное сияние", "B1", "assets/map/aurora.jpg", [
+    locations.append(location("aurora", "Северное сияние", "B1", [
         ("Nature & Wildlife", [("Animals in my region", "speaking"),
                                ("Protecting nature", "speaking"),
                                ("The wild world", "chat")]),
@@ -312,7 +331,7 @@ def build():
     ]))
 
     # ---------- B2 ----------
-    locations.append(location("ruins", "Заброшенные руины", "B2", "assets/map/ruins.jpg", [
+    locations.append(location("ruins", "Заброшенные руины", "B2", [
         ("Second Conditional", [("If I had more time…", "speaking"),
                                 ("What would you do?", "speaking"),
                                 ("Imaginary situations", "chat")]),
@@ -342,7 +361,7 @@ def build():
                                ("Tell a complete story", "chat")]),
     ]))
 
-    locations.append(location("volcano", "Вулкан", "B2", "assets/map/volcano.jpg", [
+    locations.append(location("volcano", "Вулкан", "B2", [
         ("Arguments & Persuasion", [("Convincing someone", "speaking"),
                                     ("Handling objections", "speaking"),
                                     ("Persuasive speaking", "chat")]),
@@ -372,7 +391,7 @@ def build():
                                      ("A controversial question", "chat")]),
     ]))
 
-    locations.append(location("ice", "Ледяные пещеры", "B2", "assets/map/ice.jpg", [
+    locations.append(location("ice", "Ледяные пещеры", "B2", [
         ("Nuanced Emotions", [("Expressing how you really feel", "speaking"),
                               ("Empathy and support", "speaking"),
                               ("A difficult conversation", "chat")]),
@@ -403,7 +422,7 @@ def build():
     ]))
 
     # ---------- C1 ----------
-    locations.append(location("sky", "Небесные острова", "C1", "assets/map/sky.jpg", [
+    locations.append(location("sky", "Небесные острова", "C1", [
         ("Idiomatic Fluency", [("Idioms in natural speech", "speaking"),
                                ("Using idioms sparingly and well", "speaking"),
                                ("A story full of idioms", "chat")]),
@@ -433,7 +452,7 @@ def build():
                         ("A monologue on any topic", "chat")]),
     ]))
 
-    locations.append(location("space", "Космическая станция", "C1", "assets/map/space.jpg", [
+    locations.append(location("space", "Космическая станция", "C1", [
         ("Speculating About the Future", [("Where we are heading", "speaking"),
                                           ("Technology in 2050", "speaking"),
                                           ("My vision of the future", "chat")]),

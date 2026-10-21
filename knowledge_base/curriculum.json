@@ -15,8 +15,8 @@
           "id": "point_1",
           "number": 1,
           "point": [
-            252,
-            676
+            231,
+            697
           ],
           "block_title": "Saying Hi",
           "lessons": [
@@ -50,8 +50,8 @@
           "id": "point_2",
           "number": 2,
           "point": [
-            235,
-            530
+            210,
+            529
           ],
           "block_title": "Introducing Yourself",
           "lessons": [
@@ -85,8 +85,8 @@
           "id": "point_3",
           "number": 3,
           "point": [
-            637,
-            623
+            640,
+            637
           ],
           "block_title": "Numbers 0–10",
           "lessons": [
@@ -120,8 +120,8 @@
           "id": "point_4",
           "number": 4,
           "point": [
-            910,
-            646
+            930,
+            662
           ],
           "block_title": "Numbers 11–100 & Age",
           "lessons": [
@@ -155,8 +155,8 @@
           "id": "point_5",
           "number": 5,
           "point": [
-            1024,
-            542
+            1053,
+            541
           ],
           "block_title": "Colors",
           "lessons": [
@@ -190,8 +190,8 @@
           "id": "point_6",
           "number": 6,
           "point": [
-            860,
-            414
+            876,
+            396
           ],
           "block_title": "Objects & This is…",
           "lessons": [
@@ -225,8 +225,8 @@
           "id": "point_7",
           "number": 7,
           "point": [
-            482,
-            321
+            474,
+            292
           ],
           "block_title": "Family & People",
           "lessons": [
@@ -260,8 +260,8 @@
           "id": "point_8",
           "number": 8,
           "point": [
-            237,
-            288
+            214,
+            257
           ],
           "block_title": "Days & Time",
           "lessons": [
@@ -295,8 +295,8 @@
           "id": "point_9",
           "number": 9,
           "point": [
-            311,
-            159
+            293,
+            109
           ],
           "block_title": "Likes & My Day",
           "lessons": [
@@ -332,7 +332,7 @@
       "id": "forest",
       "title": "Лесная тропа",
       "level": "A1",
-      "image": "assets/map/forest.jpg",
+      "image": "assets/map/forest.png",
       "size": [
         1248,
         832
@@ -342,8 +342,8 @@
           "id": "forest/point_1",
           "number": 1,
           "point": [
-            252,
-            676
+            1037,
+            730
           ],
           "block_title": "Daily Routine",
           "lessons": [
@@ -377,8 +377,8 @@
           "id": "forest/point_2",
           "number": 2,
           "point": [
-            235,
-            530
+            802,
+            591
           ],
           "block_title": "Food & Drinks",
           "lessons": [
@@ -412,8 +412,8 @@
           "id": "forest/point_3",
           "number": 3,
           "point": [
-            637,
-            623
+            832,
+            336
           ],
           "block_title": "At the Store",
           "lessons": [
@@ -447,8 +447,8 @@
           "id": "forest/point_4",
           "number": 4,
           "point": [
-            910,
-            646
+            687,
+            464
           ],
           "block_title": "Clothes",
           "lessons": [
@@ -482,8 +482,8 @@
           "id": "forest/point_5",
           "number": 5,
           "point": [
-            1024,
-            542
+            596,
+            618
           ],
           "block_title": "House & Rooms",
           "lessons": [
@@ -517,8 +517,8 @@
           "id": "forest/point_6",
           "number": 6,
           "point": [
-            860,
-            414
+            255,
+            552
           ],
           "block_title": "Weather & Seasons",
           "lessons": [
@@ -552,8 +552,8 @@
           "id": "forest/point_7",
           "number": 7,
           "point": [
-            482,
-            321
+            454,
+            323
           ],
           "block_title": "Hobbies & Free Time",
           "lessons": [
@@ -587,8 +587,8 @@
           "id": "forest/point_8",
           "number": 8,
           "point": [
-            237,
-            288
+            234,
+            272
           ],
           "block_title": "Transport",
           "lessons": [
@@ -622,8 +622,8 @@
           "id": "forest/point_9",
           "number": 9,
           "point": [
-            311,
-            159
+            288,
+            113
           ],
           "block_title": "My Weekend (Past Simple)",
           "lessons": [
@@ -659,7 +659,7 @@
       "id": "river",
       "title": "Речная долина",
       "level": "A1",
-      "image": "assets/map/river.jpg",
+      "image": "assets/map/river.png",
       "size": [
         1248,
         832
@@ -669,8 +669,8 @@
           "id": "river/point_1",
           "number": 1,
           "point": [
-            252,
-            676
+            1178,
+            583
           ],
           "block_title": "Directions & Places",
           "lessons": [
@@ -704,8 +704,8 @@
           "id": "river/point_2",
           "number": 2,
           "point": [
-            235,
-            530
+            966,
+            724
           ],
           "block_title": "Health & Doctor",
           "lessons": [
@@ -739,8 +739,8 @@
           "id": "river/point_3",
           "number": 3,
           "point": [
-            637,
-            623
+            718,
+            554
           ],
           "block_title": "Phone Calls",
           "lessons": [
@@ -774,8 +774,8 @@
           "id": "river/point_4",
           "number": 4,
           "point": [
-            910,
-            646
+            490,
+            433
           ],
           "block_title": "Invitations & Plans",
           "lessons": [
@@ -809,8 +809,8 @@
           "id": "river/point_5",
           "number": 5,
           "point": [
-            1024,
-            542
+            778,
+            376
           ],
           "block_title": "Feelings & Opinions",
           "lessons": [
@@ -844,8 +844,8 @@
           "id": "river/point_6",
           "number": 6,
           "point": [
-            860,
-            414
+            570,
+            275
           ],
           "block_title": "Describing People",
           "lessons": [
@@ -879,8 +879,8 @@
           "id": "river/point_7",
           "number": 7,
           "point": [
-            482,
-            321
+            914,
+            271
           ],
           "block_title": "School & Studies",
           "lessons": [
@@ -914,8 +914,8 @@
           "id": "river/point_8",
           "number": 8,
           "point": [
-            237,
-            288
+            729,
+            177
           ],
           "block_title": "Vacation & Trips",
           "lessons": [
@@ -949,8 +949,8 @@
           "id": "river/point_9",
           "number": 9,
           "point": [
-            311,
-            159
+            857,
+            102
           ],
           "block_title": "Future Plans",
           "lessons": [
@@ -986,7 +986,7 @@
       "id": "city",
       "title": "Городские улицы",
       "level": "A2",
-      "image": "assets/map/city.jpg",
+      "image": "assets/map/city.png",
       "size": [
         1248,
         832
@@ -996,8 +996,8 @@
           "id": "city/point_1",
           "number": 1,
           "point": [
-            252,
-            676
+            137,
+            780
           ],
           "block_title": "Making Arrangements",
           "lessons": [
@@ -1031,8 +1031,8 @@
           "id": "city/point_2",
           "number": 2,
           "point": [
-            235,
-            530
+            281,
+            670
           ],
           "block_title": "At the Restaurant",
           "lessons": [
@@ -1066,8 +1066,8 @@
           "id": "city/point_3",
           "number": 3,
           "point": [
-            637,
-            623
+            545,
+            493
           ],
           "block_title": "Shopping & Money",
           "lessons": [
@@ -1101,8 +1101,8 @@
           "id": "city/point_4",
           "number": 4,
           "point": [
-            910,
-            646
+            337,
+            326
           ],
           "block_title": "Comparing Things",
           "lessons": [
@@ -1136,8 +1136,8 @@
           "id": "city/point_5",
           "number": 5,
           "point": [
-            1024,
-            542
+            112,
+            202
           ],
           "block_title": "Experiences (Present Perfect)",
           "lessons": [
@@ -1171,8 +1171,8 @@
           "id": "city/point_6",
           "number": 6,
           "point": [
-            860,
-            414
+            388,
+            135
           ],
           "block_title": "Rules & Obligations",
           "lessons": [
@@ -1206,8 +1206,8 @@
           "id": "city/point_7",
           "number": 7,
           "point": [
-            482,
-            321
+            714,
+            295
           ],
           "block_title": "Technology",
           "lessons": [
@@ -1241,8 +1241,8 @@
           "id": "city/point_8",
           "number": 8,
           "point": [
-            237,
-            288
+            1017,
+            440
           ],
           "block_title": "Work & Jobs",
           "lessons": [
@@ -1276,8 +1276,8 @@
           "id": "city/point_9",
           "number": 9,
           "point": [
-            311,
-            159
+            1219,
+            284
           ],
           "block_title": "Telling a Story (Past Continuous)",
           "lessons": [
@@ -1313,7 +1313,7 @@
       "id": "mountain",
       "title": "Горный перевал",
       "level": "A2",
-      "image": "assets/map/mountain.jpg",
+      "image": "assets/map/mountain.png",
       "size": [
         1248,
         832
@@ -1640,7 +1640,7 @@
       "id": "coast",
       "title": "Морской берег",
       "level": "B1",
-      "image": "assets/map/coast.jpg",
+      "image": "assets/map/coast.png",
       "size": [
         1248,
         832
@@ -1967,7 +1967,7 @@
       "id": "bazaar",
       "title": "Ночной рынок",
       "level": "B1",
-      "image": "assets/map/bazaar.jpg",
+      "image": "assets/map/bazaar.png",
       "size": [
         1248,
         832
@@ -2294,7 +2294,7 @@
       "id": "aurora",
       "title": "Северное сияние",
       "level": "B1",
-      "image": "assets/map/aurora.jpg",
+      "image": "assets/map/aurora.png",
       "size": [
         1248,
         832
@@ -2621,7 +2621,7 @@
       "id": "ruins",
       "title": "Заброшенные руины",
       "level": "B2",
-      "image": "assets/map/ruins.jpg",
+      "image": "assets/map/ruins.png",
       "size": [
         1248,
         832
@@ -2948,7 +2948,7 @@
       "id": "volcano",
       "title": "Вулкан",
       "level": "B2",
-      "image": "assets/map/volcano.jpg",
+      "image": "assets/map/volcano.png",
       "size": [
         1248,
         832
@@ -3275,7 +3275,7 @@
       "id": "ice",
       "title": "Ледяные пещеры",
       "level": "B2",
-      "image": "assets/map/ice.jpg",
+      "image": "assets/map/ice.png",
       "size": [
         1248,
         832
@@ -3602,7 +3602,7 @@
       "id": "sky",
       "title": "Небесные острова",
       "level": "C1",
-      "image": "assets/map/sky.jpg",
+      "image": "assets/map/sky.png",
       "size": [
         1248,
         832
@@ -3929,7 +3929,7 @@
       "id": "space",
       "title": "Космическая станция",
       "level": "C1",
-      "image": "assets/map/space.jpg",
+      "image": "assets/map/space.png",
       "size": [
         1248,
         832
