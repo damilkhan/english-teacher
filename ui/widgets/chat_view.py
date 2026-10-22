@@ -183,6 +183,52 @@ class ChatView(ctk.CTkFrame):
         self._replay_marks.add(mark)
         self._msg_widgets[mark] = widget
 
+    def update_message(self, mark, text, body_tag="body"):
+        """Заменить текст УЖЕ показанной реплики, не добавляя новую.
+
+        Нужно, когда данные изменились, а второй реплики быть не должно:
+        например, после теста уровня строка «уровень пока не определён» в
+        приветствии заменяется на «твой уровень: A2» (решение ученика
+        22.10.2026: вступительного текста было слишком много).
+
+        mark — метка реплики, её вернул add_message (только для Джейн).
+        Возвращает True, если текст заменён.
+        """
+        if not mark or mark not in self._msg_text:
+            return False
+        # тег всей реплики: msg_3 для метки replay_msg_3
+        msg_tag = str(mark).replace("replay_", "", 1)
+        ranges = self.text.tag_ranges(msg_tag)
+        if not ranges:
+            return False
+        start, end = ranges[0], ranges[-1]
+        try:
+            # сразу после метки идёт перевод строки — с него начинается текст
+            body_start = self.text.index("%s + 1c" % mark)
+        except Exception:
+            return False
+
+        self.text.configure(state="normal")
+        try:
+            self.text.delete(body_start, end)
+            # Вставляем ИМЕННО на место старого текста. Если писать в "end",
+            # у реплики, за которой уже есть другие сообщения, текст уехал бы
+            # в самый низ чата. Метка с гравитацией вправо остаётся ПОСЛЕ
+            # вставленного текста — по ней и дописываем перевод строки.
+            self.text.mark_set("upd_tail", body_start)
+            self.text.mark_gravity("upd_tail", tk.RIGHT)
+            self._insert_text(text, body_tag, index="upd_tail")
+            self.text.insert("upd_tail", "\n", body_tag)
+            self.text.mark_unset("upd_tail")
+            # тег реплики заново покрывает заголовок + новый текст
+            self.text.tag_add(msg_tag, start, "end-1c")
+        finally:
+            self.text.configure(state="disabled")
+
+        self._msg_text[mark] = text
+        self._schedule_avoid()
+        return True
+
     def set_character_reserve(self, width=0, height=0):
         """Робот занимает правый нижний угол: текст его ОБТЕКАЕТ слева.
 
@@ -359,7 +405,7 @@ class ChatView(ctk.CTkFrame):
         return "".join(parts)
 
     # ---------- внутреннее ----------
-    def _insert_text(self, text, tag):
+    def _insert_text(self, text, tag, index="end"):
         """Вставляет текст реплики, подменяя эмодзи цветными картинками.
 
         Если картинку получить не удалось (нет Pillow, не нашёлся шрифт,
@@ -370,17 +416,17 @@ class ChatView(ctk.CTkFrame):
             return
         for is_emoji, chunk in emoji_render.split(text):
             if not is_emoji:
-                self.text.insert("end", chunk, tag)
+                self.text.insert(index, chunk, tag)
                 continue
 
             photo = self._emoji.photo(chunk, master=self.text)
             if photo is None:
-                self.text.insert("end", chunk, tag)
+                self.text.insert(index, chunk, tag)
                 continue
 
             self._image_seq += 1
             name = f"emj{self._image_seq}"
-            self.text.image_create("end", image=photo, name=name,
+            self.text.image_create(index, image=photo, name=name,
                                    align=emoji_render.ALIGN, padx=EMOJI_PAD)
             # картинку тоже помечаем тегом реплики: если эмодзи стоит первым
             # символом строки, отступ абзаца (lmargin1) Tk берёт именно с него

@@ -85,7 +85,6 @@ STATUS_COLOR = {"ready": "ok", "loading": "warn", "offline": "err"}
 # иначе бейдж показывал «Готов», хотя микрофон ещё не готов работать.
 STT_LOADING_TEXT = "● Готовлю распознавание…"
 
-NEW_PROFILE_NOTE = "📊 Создан профиль ученика. Я буду запоминать твой прогресс!"
 SETUP_HINT = ("✋ Чтобы начать, заполни профиль: имя и пол. "
               "Нажми «👥 Пользователи», затем ✏️ у активного профиля.")
 LEVEL_TEST_NOTE = "🎯 Уровень определён: %s. Подстрою уроки под него."
@@ -224,6 +223,9 @@ class EnglishTeacherApp:
         self.current_model_id = settings_store.get_selected_model_id()
         self.current_lang = "en"
         self._jane_mark = None     # метка последней реплики Джейн (для повтора)
+        # метка ВСТУПИТЕЛЬНОЙ реплики: по ней после теста уровня ЗАМЕНЯЕТСЯ
+        # строка «уровень пока не определён» (второй реплики не появляется)
+        self._greeting_mark = None
         self.panel_visible = False
         self.active_panel = None      # "settings" | "users" | None
         self.busy = False
@@ -371,9 +373,11 @@ class EnglishTeacherApp:
         )
 
         # ---------- старт ----------
-        _, created = profile_store.ensure_profile(self.current_user["id"])
-        if created:
-            self.add_message("Джейн", NEW_PROFILE_NOTE)
+        # Файл прогресса заводим молча: раньше здесь появлялась третья
+        # вступительная реплика «📊 Создан профиль ученика…», и чат встречал
+        # ученика тремя абзацами (решение 22.10.2026 — оставить приветствие
+        # и строку уровня, всё остальное лишнее).
+        profile_store.ensure_profile(self.current_user["id"])
         self.check_server()
         self.monitor.start()
         self.stt.preload()                      # Whisper — в фоне, окно не ждёт
@@ -469,7 +473,7 @@ class EnglishTeacherApp:
         self.vocab.user_id = target       # слова копятся у нового профиля
         self.chat_view.clear()
         self.info_bar.clear()
-        self.add_message("Джейн", self._greeting())
+        self._show_greeting()
         self._refresh_hero()
         self._refresh_input_state()
         self._refresh_side_views()
@@ -497,11 +501,18 @@ class EnglishTeacherApp:
         }
 
     def _greeting(self):
+        """Вступительная реплика: приветствие + строка уровня.
+
+        Решение ученика (22.10.2026): вступительного текста было слишком много
+        (три абзаца), а строка «уровень пока не определён» после теста
+        оставалась висеть рядом с новой «уровень определён: A2». Теперь две
+        строки, и строка уровня ЗАМЕНЯЕТСЯ на месте (см.
+        _update_greeting_level), а не дописывается второй репликой.
+        """
         u = self.current_user or {}
         text = (f"{user_manager.display_avatar(u.get('avatar'))} Привет, "
                 f"{u.get('name') or 'друг'}! "
-                f"Я Джейн, твой преподаватель английского.\n"
-                f"Я буду запоминать твои ошибки и подстраивать уроки под тебя.")
+                f"Я Джейн, твой преподаватель английского.")
         level = u.get("level")
         if level:
             text += f"\n🎯 Твой уровень: {level} — буду подбирать задания под него."
@@ -565,7 +576,7 @@ class EnglishTeacherApp:
         self.vocab.user_id = user_id      # слова следующего ученика — его
         self.chat_view.clear()
         self.info_bar.clear()
-        self.add_message("Джейн", self._greeting())
+        self._show_greeting()
         self._refresh_hero()
         self._refresh_input_state()
         self._refresh_side_views()
@@ -656,7 +667,13 @@ class EnglishTeacherApp:
             return None
         if level:
             self.current_user = user_manager.get_user(user_id) or self.current_user
-            self.add_message("Джейн", LEVEL_TEST_NOTE % level)
+            # Строку уровня меняем ПРЯМО В ПРИВЕТСТВИИ: раньше рядом с
+            # «уровень не определён» появлялась вторая реплика «уровень
+            # определён: A2», и в чате висели два противоположных сообщения.
+            # Отдельная реплика остаётся только если приветствия нет
+            # (например, чат очистили или уровень перепроходят позже).
+            if not self._update_greeting_level():
+                self.add_message("Джейн", LEVEL_TEST_NOTE % level)
             self._refresh_hero()          # уровень — в шапку (это картинка)
         if self.users_panel is not None:
             self.users_panel.refresh((self.current_user or {}).get("id"))
@@ -692,9 +709,9 @@ class EnglishTeacherApp:
 
         self._ui_ready = False      # до конца сборки на смену вкладок не реагируем
 
-        self.chat_view = ChatView(self.chat_tab, p,
-                                  greeting=("Джейн", self._greeting()),
-                                  on_replay=self._replay_reply)
+        # Приветствие показываем НЕ через параметр greeting: нам нужна его
+        # метка, чтобы потом заменить строку уровня в этом же сообщении.
+        self.chat_view = ChatView(self.chat_tab, p, on_replay=self._replay_reply)
 
         # ---------- робот-персонаж Джейн (idle-анимация) ----------
         # Робот — украшение области чата: его сбой не должен ломать окно,
@@ -715,6 +732,8 @@ class EnglishTeacherApp:
         except Exception as exc:
             print("⚠️ Робот-персонаж не подключился: %s" % exc)
             self.character = None
+        self._show_greeting()          # первая реплика (её метку запоминаем)
+
         self.input_bar = InputBar(self.chat_tab, p, on_send=self.send_text)
         self.control_bar = ControlBar(self.chat_tab, p,
                                       on_record=self._start_recording,
@@ -1328,11 +1347,33 @@ class EnglishTeacherApp:
     # Обратная связь от контроллеров
     # =====================================================
     def add_message(self, sender, text):
+        """Показать реплику; возвращает метку (для Джейн — можно обновить)."""
         mark = self.chat_view.add_message(sender, text)
         # запоминаем метку последней реплики Джейн: к ней привяжем кнопку
         # «прослушать повторно», когда озвучка этой реплики закончится
         if sender == "Джейн" and mark:
             self._jane_mark = mark
+        return mark
+
+    def _show_greeting(self):
+        """Показать приветствие и запомнить его метку.
+
+        Метка нужна, чтобы после теста уровня ЗАМЕНИТЬ строку «уровень пока не
+        определён» прямо в этом сообщении, а не дописывать вторую реплику.
+        """
+        self._greeting_mark = self.add_message("Джейн", self._greeting())
+        return self._greeting_mark
+
+    def _update_greeting_level(self):
+        """Обновить строку уровня в приветствии. True — если получилось."""
+        mark = getattr(self, "_greeting_mark", None)
+        if not mark:
+            return False
+        try:
+            return bool(self.chat_view.update_message(mark, self._greeting()))
+        except Exception as exc:
+            print("⚠️ Строка уровня в приветствии не обновилась: %s" % exc)
+            return False
 
     def _set_status(self, text, color_key="ok"):
         """Пилюля статуса в шапке.
@@ -2284,6 +2325,9 @@ class EnglishTeacherApp:
         self.hint_bar.clear()
         self.input_bar.set_locked(False)
         self.control_bar.set_record_enabled(True)
+        # Раньше «Очистить» оставлял пустое окно. Возвращаем приветствие —
+        # в нём актуальный уровень, и метка снова известна.
+        self._show_greeting()
 
     def _show_panel(self, name):
         """Показать правую панель: только одну из двух."""
