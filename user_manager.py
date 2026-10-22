@@ -257,13 +257,21 @@ def save_user(user_id, data):
 
 
 def create_user(name, gender="other", age=None, level=None, goal="", avatar=AVATARS[0],
-                complete=True):
+                complete=True, name_latin=None):
     """Создаёт новый профиль в первом свободном слоте 1..MAX_USERS.
 
     Возвращает профиль или None, если лимит исчерпан / имя пустое.
     Уровень по умолчанию НЕ задан (None): его выставит вводный тест.
     complete=False — профиль-заготовка (без формы): общение запрещено,
     пока его не заполнят.
+
+    name_latin — латинская форма имени из формы (её заполняет пользователь
+    или автотранслитерация). Параметр НЕОБЯЗАТЕЛЬНЫЙ и стоит ПОСЛЕДНИМ:
+    форма профиля (ui/app._form_profile) передаёт его всегда, а старые
+    вызовы с позиционными аргументами должны работать как раньше.
+    Раньше параметра не было, и create_user(**форма) падал с TypeError —
+    «+ Добавить пользователя» и создание профиля после удаления молча
+    не срабатывали (профиль не сохранялся).
     """
     if not str(name or "").strip():
         return None
@@ -276,7 +284,8 @@ def create_user(name, gender="other", age=None, level=None, goal="", avatar=AVAT
         return None
 
     profile = _normalize(
-        {"name": name, "gender": gender, "age": age, "level": level,
+        {"name": name, "name_latin": name_latin or "",
+         "gender": gender, "age": age, "level": level,
          "goal": goal, "avatar": avatar, "complete": complete,
          "created": datetime.now().isoformat()},
         user_id,

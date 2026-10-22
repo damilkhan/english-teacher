@@ -528,9 +528,16 @@ class EnglishTeacherApp:
         except Exception as exc:
             print(f"⚠️ Шапка не обновилась: {exc}")
 
-    def select_user(self, user_id):
-        """Сделать профиль активным: контроллер, история и прогресс — его."""
-        if user_id == (self.current_user or {}).get("id"):
+    def select_user(self, user_id, force=False):
+        """Сделать профиль активным: контроллер, история и прогресс — его.
+
+        force=True — перечитать профиль, даже если id СОВПАДАЕТ. Это нужно
+        после удаления: новый профиль занимает освободившийся слот и получает
+        тот же id, а прежняя проверка «id тот же» молча выходила — в памяти
+        оставался УДАЛЁННЫЙ ученик (в шапке висел его уровень, история и
+        прогресс не переключались).
+        """
+        if not force and user_id == (self.current_user or {}).get("id"):
             return
         user = user_manager.get_user(user_id)
         if not user:
@@ -572,9 +579,13 @@ class EnglishTeacherApp:
         if not data:
             return
         created = user_manager.create_user(**self._form_profile(data))
-        if created:
-            self.select_user(created["id"])
-            self.window.after(300, lambda: self.run_level_test(created["id"]))
+        if not created:
+            # профиль не сохранился — не молчим, иначе выглядит как «не нажалось»
+            self.add_message("Джейн", "⚠️ Не удалось сохранить профиль. "
+                                      "Проверь папку profiles\\ и попробуй ещё раз.")
+            return
+        self.select_user(created["id"], force=True)
+        self.window.after(300, lambda: self.run_level_test(created["id"]))
 
     def edit_user(self, user_id):
         user = user_manager.get_user(user_id)
@@ -610,10 +621,19 @@ class EnglishTeacherApp:
                 # заготовка (неполный профиль): чат останется закрыт до заполнения
                 created = user_manager.create_user("Ученик", "other", None, None, "", "🙂",
                                                    complete=False)
-            remaining = [created] if created else user_manager.list_users()
+            if created is None:
+                # профиль так и не создался — говорим прямо, а не молчим
+                self.add_message("Джейн", "⚠️ Не удалось сохранить профиль. "
+                                          "Проверь папку profiles\\ и попробуй ещё раз.")
+                if self.users_panel is not None:
+                    self.users_panel.refresh(None)
+                return
+            remaining = [created]
 
         if was_active and remaining:
-            self.select_user(remaining[0]["id"])
+            # force: новый профиль занимает освободившийся слот (тот же id);
+            # без этого в памяти оставался удалённый ученик с его уровнем
+            self.select_user(remaining[0]["id"], force=True)
         elif self.users_panel is not None:
             self.users_panel.refresh((self.current_user or {}).get("id"))
 
