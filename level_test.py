@@ -81,6 +81,10 @@ QUESTION_PROMPT_TEMPLATE = (
     "- Exactly 4 options; exactly one is correct; three are plausible.\n"
     "- Vocabulary, grammar and sentence length MUST match level %(level)s.\n"
     "- Do NOT add explanations, comments, numbering or markdown.\n"
+    "- The \"question\" value is ONLY the question sentence: never put the\n"
+    "  answer options inside it, and never add \"A)\" \"B)\" \"C)\" \"D)\"\n"
+    "  markers — the options belong to the \"options\" list only.\n"
+    "- Do NOT join anything with a pipe character (|).\n"
     "%(avoid)s"
     "Return ONLY valid JSON in exactly this shape:\n"
     + QUESTION_JSON_SHAPE + "\n"
@@ -244,6 +248,93 @@ def _ask_llm(prompt):
     return payload if ok else None
 
 
+# ---------------------------------------------------------
+# Чистка вариантов внутри вопроса (баг 22.10.2026)
+# ---------------------------------------------------------
+# Модель иногда кладёт в поле "question" не только вопрос, но и весь список
+# вариантов: «... this afternoon? | A) ... | B) ... | C) ... | D) ...».
+# Панель рисует вопрос как есть и ОТДЕЛЬНО ставит options в кнопки — ученик
+# видит варианты два раза. Чистим текст здесь, до показа.
+
+# ведущий маркер варианта: «A) », «(B) », «C. », «D: »
+_OPTION_PREFIX = re.compile(r"^\s*[\(\[]?([A-Da-d])[\)\].:]\s+")
+# маркер где угодно в тексте (после пробела/разделителя)
+_OPTION_MARKER = re.compile(r"(?:^|[\s|;:,])[\(\[]?([A-Da-d])[\)\].:](?=\s|$)")
+# сегмент, который целиком является маркером: «A)»
+_BARE_MARKER = re.compile(r"^[\(\[]?[A-Da-d][\)\].:]$")
+
+
+def _flat(text):
+    """Нормализация для сравнения: один пробел, нижний регистр."""
+    return " ".join(str(text or "").split()).lower()
+
+
+def _strip_option_prefixes(options):
+    """Убирает ведущие маркеры вариантов: «A) text» → «text».
+
+    Только если маркер есть у БОЛЬШИНСТВА вариантов — иначе можно съесть
+    начало настоящего ответа («A)» как часть текста).
+    """
+    options = [str(o or "").strip() for o in (options or [])]
+    marked = sum(1 for o in options if _OPTION_PREFIX.match(o))
+    if marked < max(2, len(options) - 1):
+        return options
+    return [_OPTION_PREFIX.sub("", o).strip() or o for o in options]
+
+
+def _is_option_segment(part, flat):
+    """Кусок текста — это вариант ответа (или его маркер)?"""
+    part = str(part or "").strip()
+    if not part:
+        return False
+    if _BARE_MARKER.match(part) or _OPTION_PREFIX.match(part):
+        return True
+    return _flat(part) in flat
+
+
+def _strip_inline_options(question, options):
+    """Убирает из текста вопроса перечисление вариантов.
+
+    Режем ТОЛЬКО по явным признакам, чтобы не испортить живой вопрос:
+      • вертикальная черта «|» — по ней модель склеивает список вариантов;
+      • маркеры «A) … B) …» (минимум два разных).
+    Вопрос без этих признаков остаётся байт-в-байт: проверено на всём
+    резервном банке и на фразах, где ответ упомянут по делу
+    («Choose the best option: is or are?»).
+    """
+    text = str(question or "").strip()
+    if not text:
+        return text
+    flat = [_flat(o) for o in (options or []) if _flat(o)]
+    cut_done = False
+
+    # 1) вертикальная черта — самый явный признак перечисления вариантов
+    if "|" in text:
+        keep = []
+        for part in (p.strip() for p in text.split("|")):
+            if not part:
+                continue
+            if _is_option_segment(part, flat):
+                cut_done = True
+                break
+            keep.append(part)
+        if keep:
+            text = " ".join(keep)
+
+    # 2) маркеры «A) … B) …» без вертикальной черты
+    markers = list(_OPTION_MARKER.finditer(text))
+    if len({m.group(1).upper() for m in markers}) >= 2:
+        text = text[:markers[0].start()]
+        cut_done = True
+
+    if cut_done:
+        # хвост «… afternoon? | A)»: разделители и висячий маркер
+        text = re.sub(r"[\s|;:,\u2013\u2014-]+$", "", text)
+        text = re.sub(r"\s+[\(\[]?[A-Da-d][\)\].:]\s*$", "", text)
+        text = text.strip(" |;:,\t")
+    return text.strip()
+
+
 def _parse_question(raw, difficulty, topic):
     """Разбирает JSON-ответ модели в вопрос. Мусор → None."""
     if not raw:
@@ -263,7 +354,13 @@ def _parse_question(raw, difficulty, topic):
     if not question or not isinstance(options, list) or len(options) != 4:
         return None
     options = [str(o).strip() for o in options]
+    # «A) She is a teacher.» → «She is a teacher.» (иначе маркер виден в кнопке)
+    options = _strip_option_prefixes(options)
     if any(not o for o in options):
+        return None
+    # варианты могли приехать ВНУТРИ вопроса — вырезаем список
+    question = _strip_inline_options(question, options)
+    if len(question) < 8:
         return None
 
     if isinstance(correct, str):
@@ -314,7 +411,12 @@ def _avoid_block(used_texts):
     if not items:
         return ""
     items = items[-MAX_AVOID_LIST:]
-    return AVOID_RULE % " | ".join(t[:120] for t in items)
+    # ВАЖНО: разделитель — точко-с-запятой, а НЕ вертикальная черта.
+    # Раньше список склеивался через « | », и модель копировала этот приём в
+    # свой ответ: в поле "question" вместе с вопросом приезжал весь список
+    # вариантов («... this afternoon? | A) ... | B) ...»), и ученик видел
+    # варианты ДВА раза — в тексте и в кнопках (баг 22.10.2026).
+    return AVOID_RULE % " ;; ".join(t[:120] for t in items)
 
 
 def _shuffle_options(question):
