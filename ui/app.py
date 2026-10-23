@@ -720,9 +720,12 @@ class EnglishTeacherApp:
         # (полоса прокрутки при этом остаётся у правого края, не в середине).
         self.character = None
         try:
-            self.character = character.Character(self.chat_view,
-                                                 width=CHARACTER_WIDTH,
-                                                 dispatch=self._dispatch)
+            self.character = character.Character(
+                self.chat_view,
+                width=CHARACTER_WIDTH,
+                dispatch=self._dispatch,
+                # робот не должен накрывать полосу прокрутки чата
+                inset_right=self.chat_view.robot_inset)
             if self.character.available:
                 # робот занимает правый нижний угол: чат занимает ВСЁ поле,
                 # а сообщения на полосе робота обтекают его слева

@@ -46,9 +46,13 @@ class Character:
     """Робот-персонаж в области чата: лицо из слоёв + анимация."""
 
     def __init__(self, parent, image_path=None, width=DEFAULT_WIDTH, bg=None,
-                 dispatch=None, layers_dir=None):
+                 dispatch=None, layers_dir=None, inset_right=0):
         self.parent = parent
         self.width = int(width)
+        # Сколько места справа отступить от края (полоса прокрутки чата).
+        # Робот лежит ПОВЕРХ чата, и раньше его холст накрывал полосу —
+        # при прокрутке вниз её просто не было видно.
+        self._inset_right = max(0, int(inset_right))
         self.height = 0
         self.canvas = None
         self.available = False
@@ -140,7 +144,8 @@ class Character:
             self.canvas = None
             self.available = False
             return
-        self.canvas.place(relx=1.0, rely=1.0, anchor="se", x=-GAP, y=-GAP)
+        self.canvas.place(relx=1.0, rely=1.0, anchor="se",
+                          x=-(GAP + self._inset_right), y=-GAP)
 
     def _parent_bg(self):
         """Фон Canvas — как у области чата (Tk настоящей прозрачности не умеет)."""

@@ -32,6 +32,12 @@ EMOJI_PAD = 1          # px воздуха вокруг картинки-эмо�
 SCROLL_PAD_X = 8
 SCROLL_PAD_Y = 12
 
+# Ширина полосы прокрутки. Было 6 px — ученик её просто не находил глазами
+# («ползунок слишком тонкий»), а робот в правом нижнем углу ещё и накрывал
+# её своим холстом. Теперь 12 px, и робот отодвинут влево на robot_inset.
+SCROLLBAR_WIDTH = 12
+ROBOT_GUTTER = 4        # ещё немного воздуха между роботом и полосой
+
 # Кнопка «прослушать повторно» (появляется рядом с именем Джейн ПОСЛЕ того,
 # как реплика впервые озвучена до конца, и повторяет её по клику).
 REPLAY_ICON = "\U0001F50A"          # 🔊 динамик
@@ -66,6 +72,7 @@ class ChatView(ctk.CTkFrame):
         # те сообщения, которые попадают на «полосу» робота.
         self._robot_w = 0            # ширина полосы робота, px
         self._robot_h = 0            # высота полосы робота, px
+        self._avoid_marked = {}      # тег → стоит ли уже отступ (для мертвой зоны)
         self._avoid_tags = []        # теги сообщений (для пересчёта обтекания)
         self._avoid_job = None
 
@@ -94,7 +101,8 @@ class ChatView(ctk.CTkFrame):
         # Ползунок — узкий, скруглённый и приглушённый: широкий светлый «btn»
         # вплотную к краю читался как вторая рамка справа.
         self.scrollbar = ctk.CTkScrollbar(
-            self, command=self.text.yview, width=6, corner_radius=3,
+            self, command=self.text.yview,
+            width=SCROLLBAR_WIDTH, corner_radius=SCROLLBAR_WIDTH // 2,
             fg_color="transparent",
             button_color=palette["muted"],
             button_hover_color=palette["btn_hover"],
@@ -250,11 +258,23 @@ class ChatView(ctk.CTkFrame):
             print("⚠️ Обтекание робота не настроено: %s" % exc)
 
     # ---------- обтекание робота ----------
+    @property
+    def robot_inset(self):
+        """Сколько места справа робот обязан оставить полосе прокрутки, px.
+
+        Робот стоит ПОВЕРХ чата в правом нижнем углу и своим холстом
+        накрывал полосу прокрутки (её не было видно при прокрутке вниз).
+        Это значение передаётся роботу как отступ справа.
+        """
+        return SCROLL_PAD_X + SCROLLBAR_WIDTH + ROBOT_GUTTER
+
     def _configure_avoid_tag(self):
         """Правый отступ для сообщений, попавших на полосу робота."""
         try:
             self.text.tag_configure(
-                "avoid_robot", rmargin=self._robot_w + 12 if self._robot_w else 14)
+                "avoid_robot",
+                rmargin=(self._robot_w + self.robot_inset + 8)
+                if self._robot_w else 14)
         except Exception as exc:
             print("⚠️ Отступ обтекания не задан: %s" % exc)
 
@@ -269,44 +289,77 @@ class ChatView(ctk.CTkFrame):
     def _on_text_resize(self, _event=None):
         self._schedule_avoid()
 
-    def _schedule_avoid(self):
-        """Пересчёт обтекания — не чаще одного раза за кадр."""
-        if self._avoid_job is not None:
-            return
+    def _schedule_avoid(self, delay=120):
+        """Запланировать пересчёт обтекания; каждое событие откладывает его.
+
+        Раньше пересчёт шёл через 30 мс и срабатывал ПРЯМО ВО ВРЕМЯ
+        прокрутки: у реплик менялся правый отступ → менялся перенос слов →
+        текст подпрыгивал (замер: 11 переворотов на 20 шагов колеса).
+        Теперь таймер перезаводится на каждое событие, поэтому пересчёт
+        случается только когда прокрутка остановилась.
+        """
         try:
-            self._avoid_job = self.after(30, self._apply_avoid)
+            if self._avoid_job is not None:
+                self.after_cancel(self._avoid_job)
+        except Exception:
+            pass
+        try:
+            self._avoid_job = self.after(delay, self._apply_avoid)
         except Exception:
             self._avoid_job = None
 
     def _apply_avoid(self):
         """Пометить сообщения, попадающие на полосу робота.
 
-        Идём по сообщениям С КОНЦА (они у нижнего края), пока их последняя
-        видимая строка ниже начала полосы робота. Так обтекание не «дёргает»
-        всё поле и считается за один проход.
+        Замер делается БЕЗ нашего же тега: сначала снимаем avoid_robot со
+        всех реплик и пересчитываем раскладку, потом читаем положение. Иначе
+        отступ сам меняет перенос слов, перенос меняет положение реплики, и
+        решение «дёргается»: замер показал 11 переворотов на 20 шагов колеса,
+        а ученик видел, как текст прыгает. Теперь положение при замере всегда
+        одно и то же, поэтому решение устойчиво.
+
+        Мертвая зона: пометку снимаем только когда реплика ЯВНО выше полосы
+        (band_top - HYSTERESIS), иначе на самой границе она мигает.
         """
         self._avoid_job = None
         if not self._robot_w or not self._avoid_tags:
             return
+        hysteresis = 14
         try:
             height = self.text.winfo_height()
             if height < 40:
                 return
             band_top = height - self._robot_h - 6
+
+            # --- 1. снять прошлые пометки и пересчитать раскладку ---
+            for tag in self._avoid_tags:
+                ranges = self.text.tag_ranges(tag)
+                if ranges:
+                    self.text.tag_remove("avoid_robot", ranges[0], ranges[-1])
+            self.text.update_idletasks()
+
+            # --- 2. решить по «чистой» раскладке ---
+            want = []
             for tag in self._avoid_tags:
                 ranges = self.text.tag_ranges(tag)
                 if not ranges:
                     continue
-                start, end = ranges[0], ranges[-1]
-                info = self.text.dlineinfo("%s-1c" % end)
-                if info is None:          # строка не видна — полоса не важна
-                    self.text.tag_remove("avoid_robot", start, end)
+                info = self.text.dlineinfo("%s-1c" % ranges[-1])
+                if info is None:      # реплика не видна — отступ не нужен
                     continue
-                y = info[1]
-                if y + info[3] > band_top:
-                    self.text.tag_add("avoid_robot", start, end)
-                else:
-                    self.text.tag_remove("avoid_robot", start, end)
+                y, h = info[1], info[3]
+                was = self._avoid_marked.get(tag, False)
+                limit = band_top - (hysteresis if was else 0)
+                if y + h > limit:
+                    want.append(tag)
+
+            # --- 3. поставить отступ ---
+            for tag in want:
+                ranges = self.text.tag_ranges(tag)
+                if ranges:
+                    self.text.tag_add("avoid_robot", ranges[0], ranges[-1])
+            self._avoid_marked = {tag: tag in want for tag in self._avoid_tags}
+            self.text.update_idletasks()
         except Exception as exc:
             print("⚠️ Обтекание не пересчитано: %s" % exc)
 
