@@ -1,16 +1,18 @@
 # -*- coding: utf-8 -*-
 # =========================================================
-# TESTS/TEST_CHAT_REPLAY.PY — кнопка «прослушать повторно»
+# TESTS/TEST_CHAT_REPLAY.PY — кнопка «прослушать повторно» в облачке
 # =========================================================
 #   python tests\test_chat_replay.py
 #
-# Проверяем (нужен экран — создаётся Tk-окно):
-#   1) у реплики Джейн есть метка (для вставки кнопки), у «Вы» — нет;
+# Чат переписан на облачка (23.10.2026), поэтому кнопка живёт не в общем
+# tk.Text, а в шапке облачка своей реплики. Проверяем то же самое:
+#   1) у реплики преподавателя есть метка (для кнопки), у «Вы» — нет;
 #   2) до enable_replay кнопки нет; после — есть, ровно одна;
 #   3) повторный enable_replay не дублирует кнопку;
 #   4) клик по кнопке зовёт on_replay с текстом ИМЕННО этой реплики;
 #   5) get_text() не включает кнопку (это не текст);
-#   6) clear() убирает кнопки.
+#   6) clear() убирает кнопки;
+#   7) неизвестная метка и реплика ученика игнорируются.
 # =========================================================
 
 import os
@@ -40,6 +42,12 @@ def check(name, ok, detail=""):
     return ok
 
 
+def replay_buttons(view):
+    """Сколько реплик сейчас показывают кнопку «прослушать повторно»."""
+    return [mark for mark in view._order
+            if view._messages[mark].replay is not None]
+
+
 def main():
     print("=" * 60)
     print("Проверка кнопки «прослушать повторно» (ChatView)")
@@ -54,29 +62,31 @@ def main():
     root.update()
 
     print("\n[1] Метки реплик")
-    jane_mark = view.add_message("Джейн", "Hello, my friend! 😊")
+    jane_mark = view.add_message("Verbot", "Hello, my friend! 😊")
     user_mark = view.add_message("Вы", "Привет")
-    check("реплика Джейн вернула метку", bool(jane_mark), jane_mark)
+    check("реплика преподавателя вернула метку", bool(jane_mark), jane_mark)
     check("реплика «Вы» метки не вернула", user_mark is None, user_mark)
     root.update()
 
     print("\n[2] Появление кнопки")
-    check("до enable_replay кнопки нет", len(view.text.window_names()) == 0,
-          view.text.window_names())
+    check("до enable_replay кнопки нет", replay_buttons(view) == [],
+          replay_buttons(view))
     view.enable_replay(jane_mark)
     root.update()
-    windows = view.text.window_names()
-    check("после enable_replay кнопка появилась", len(windows) == 1, windows)
+    check("после enable_replay кнопка появилась",
+          replay_buttons(view) == [jane_mark], replay_buttons(view))
+    widget = view._messages[jane_mark].replay
+    check("кнопка стоит в шапке своей реплики",
+          widget is not None and widget.master is view._messages[jane_mark].header,
+          getattr(widget, "master", None))
 
     print("\n[3] Идемпотентность")
     view.enable_replay(jane_mark)
     root.update()
     check("повторный enable_replay не дублирует кнопку",
-          len(view.text.window_names()) == 1, view.text.window_names())
+          replay_buttons(view) == [jane_mark], replay_buttons(view))
 
     print("\n[4] Клик по кнопке")
-    name = view.text.window_names()[0]
-    widget = view.text.nametowidget(name)
     widget.event_generate("<Button-1>")
     root.update()
     check("клик вызвал on_replay с текстом реплики",
@@ -85,22 +95,27 @@ def main():
     print("\n[5] get_text не включает кнопку")
     text = view.get_text()
     check("текст реплики на месте", "Hello, my friend!" in text, text[-80:])
-    check("в get_text нет служебной метки/иконки", "🔊" not in text, text[-80:])
+    check("в get_text нет служебной иконки", "🔊" not in text, text[-80:])
+    check("имя отправителя в get_text есть", "Verbot" in text, text[:60])
 
     print("\n[6] clear убирает кнопки")
     view.clear()
     root.update()
-    check("после clear кнопок нет", len(view.text.window_names()) == 0,
-          view.text.window_names())
+    check("после clear кнопок нет", replay_buttons(view) == [], replay_buttons(view))
+    check("после clear реплик нет", view._order == [], view._order)
+    check("после clear в списке нет виджетов",
+          len(view.list_frame.winfo_children()) == 0,
+          view.list_frame.winfo_children())
 
-    print("\n[7] Неизвестная метка не роняет")
+    print("\n[7] Неизвестная метка и реплика ученика не роняют")
     try:
-        view.enable_replay("нет-такой-метки")
-        ok = True
+        ok_unknown = view.enable_replay("нет-такой-метки") is False
+        ok_user = view.enable_replay(view.add_message("Вы", "ещё реплика")) is False
+        ok = ok_unknown and ok_user
     except Exception as exc:          # noqa: BLE001
         ok = False
         print("     ", exc)
-    check("неизвестная метка игнорируется", ok)
+    check("неизвестная метка и реплика ученика игнорируются", ok)
 
     root.destroy()
 

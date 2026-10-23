@@ -126,7 +126,8 @@ def subtitle_text(teacher_name=""):
         getattr(config, "TEACHER_NAME", "Verbot") or "Verbot").strip() or "Verbot"
     return "%s · локальный преподаватель английского" % teacher
 INITIAL_STATUS = ("● Проверяю сервер…", "muted")
-CHARACTER_WIDTH = 300        # ширина робота-персонажа в области чата, px
+CHARACTER_WIDTH = 300        # ширина робота по умолчанию, px (см. config.ROBOT_WIDTH)
+ROBOT_GAP = 12              # воздух между роботом и блоком ввода/кнопок
 REDRAW_DELAY_MS = 90
 
 # Подписи разбора Аналитика для тонкой строки «учительского» вида.
@@ -762,37 +763,34 @@ class EnglishTeacherApp:
         # метка, чтобы потом заменить строку уровня в этом же сообщении.
         self.chat_view = ChatView(self.chat_tab, p, on_replay=self._replay_reply)
 
-        # ---------- робот-персонаж Джейн (idle-анимация) ----------
-        # Робот — украшение области чата: его сбой не должен ломать окно,
-        # поэтому весь блок в try/except. Робот лежит ПОВЕРХ области чата,
-        # но текст чата заканчивается выше него — реплики не перекрываются
-        # (полоса прокрутки при этом остаётся у правого края, не в середине).
-        self.character = None
-        try:
-            self.character = character.Character(
-                self.chat_view,
-                width=CHARACTER_WIDTH,
-                dispatch=self._dispatch,
-                # робот не должен накрывать полосу прокрутки чата
-                inset_right=self.chat_view.robot_inset)
-            if self.character.available:
-                # робот занимает правый нижний угол: чат занимает ВСЁ поле,
-                # а сообщения на полосе робота обтекают его слева
-                reserve_w, reserve_h = self.character.reserve
-                self.chat_view.set_character_reserve(reserve_w, reserve_h)
-                self.character.start_idle()
-        except Exception as exc:
-            print("⚠️ Робот-персонаж не подключился: %s" % exc)
-            self.character = None
-        self._show_greeting()          # первая реплика (её метку запоминаем)
+        # ---------- нижняя часть вкладки «Чат» ----------
+        # Решение ученика 23.10.2026: робот живёт ПОД чатом отдельным блоком
+        # справа, а поле ввода и кнопки уезжают влево (config.ROBOT_IN_CHAT =
+        # False). Раньше робот лежал ПОВЕРХ чата, и реплики обтекали его —
+        # правый край текста менялся при прокрутке, а полоса прокрутки
+        # пряталась под роботом.
+        self.bottom_row = ctk.CTkFrame(self.chat_tab, fg_color="transparent")
+        self.input_control = ctk.CTkFrame(self.bottom_row, fg_color="transparent")
+        self.input_control.pack(side="left", fill="both", expand=True)
 
-        self.input_bar = InputBar(self.chat_tab, p, on_send=self.send_text)
-        self.control_bar = ControlBar(self.chat_tab, p,
+        self.input_bar = InputBar(self.input_control, p, on_send=self.send_text)
+        self.control_bar = ControlBar(self.input_control, p,
                                       on_record=self._start_recording,
                                       on_record_release=self._stop_recording,
                                       on_settings=self.open_panel,
                                       on_clear=self.clear_chat,
                                       on_users=self.open_users_panel)
+        # кнопки — в самый низ, поле ввода — над ними
+        self.control_bar.pack(side="bottom", fill="x", pady=(8, 0))
+        self.input_bar.pack(side="bottom", fill="x")
+
+        # ---------- робот-персонаж (idle-анимация) ----------
+        # Робот — украшение: его сбой не должен ломать окно, поэтому весь
+        # блок в try/except (см. _build_character).
+        self.character = None
+        self.robot_host = None
+        self._build_character(p)
+        self._show_greeting()          # первая реплика (её метку запоминаем)
 
         # ---------- тонкая строка «учительского» вида ----------
         # Разбор Аналитика и фокус плана урока — ОТДЕЛЬНОЙ полосой над
@@ -828,10 +826,9 @@ class EnglishTeacherApp:
         self.tabs.pack(side="top", fill="both", expand=True,
                        padx=theme.CARD_PAD - 6, pady=(0, theme.CARD_PAD - 6))
 
-        # ---- вкладка «Чат»: кнопки и ввод прижаты к низу, чат растёт ----
-        self.control_bar.pack(side="bottom", fill="x", padx=6,
-                              pady=(0, theme.CARD_PAD - 6))
-        self.input_bar.pack(side="bottom", fill="x", padx=6, pady=(0, 8))
+        # ---- вкладка «Чат»: нижний ряд прижат к низу, чат растёт ----
+        self.bottom_row.pack(side="bottom", fill="x", padx=6,
+                             pady=(0, theme.CARD_PAD - 6))
 
         # чат — последним: он и только он растягивается
         self.chat_view.pack(side="top", fill="both", expand=True,
@@ -862,6 +859,35 @@ class EnglishTeacherApp:
         # (иначе, уведя курсор и отпустив вне кнопки, запись зависла бы).
         self.window.bind("<ButtonRelease-1>", self._on_global_release, add="+")
         self._ui_ready = True      # с этого момента реагируем на смену вкладок
+
+    def _build_character(self, p):
+        """Создать робота ПОД чатом, справа от поля ввода и кнопок.
+
+        Решение ученика 23.10.2026: робот больше не лежит поверх чата.
+        Поэтому чат не знает про робота вообще (нет ни обтекания, ни отступа
+        под полосу прокрутки) — облачка занимают всю ширину.
+
+        Любая ошибка (нет картинки, нет слоёв лица) не должна ломать окно:
+        ученик просто останется без робота.
+        """
+        width = int(getattr(config, "ROBOT_WIDTH", CHARACTER_WIDTH) or CHARACTER_WIDTH)
+        try:
+            # Фон блока — как у карточки: Tk не умеет прозрачность, иначе
+            # Canvas робота нарисовал бы прямоугольник другого цвета.
+            # Размер блока = reserve робота, поэтому рисунок встаёт ровно.
+            self.robot_host = ctk.CTkFrame(self.bottom_row, fg_color=p["surface"],
+                                           corner_radius=0, width=1, height=1)
+            self.robot_host.pack(side="right", padx=(ROBOT_GAP, 0))
+            self.robot_host.pack_propagate(False)
+            self.character = character.Character(self.robot_host, width=width,
+                                                 dispatch=self._dispatch)
+            if self.character.available:
+                reserve_w, reserve_h = self.character.reserve
+                self.robot_host.configure(width=reserve_w, height=reserve_h)
+                self.character.start_idle()
+        except Exception as exc:
+            print("⚠️ Робот-персонаж не подключился: %s" % exc)
+            self.character = None
 
     def _build_hero(self):
         """Шапка — ОДНА картинка: градиент, заголовок, подпись и пилюля статуса.
