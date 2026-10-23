@@ -332,6 +332,11 @@ class ChatView(ctk.CTkFrame):
             selectforeground=p["text_strong"],
         )
         msg.body.pack(fill="x")
+        # Высота окна текста подгоняется по факту размещения: <Configure>
+        # приходит, когда Tk уже знает настоящие высоты строк (у строк с
+        # эмодзи они больше). Так обрезка снизу лечится сама и без таймеров.
+        msg.body.bind("<Configure>",
+                      lambda _e, b=msg.body: self._fit_body_height(b), add="+")
         self._fill_body(msg)
 
     def _fill_body(self, msg):
@@ -375,6 +380,74 @@ class ChatView(ctk.CTkFrame):
                     body.insert("end", chunk)
         body.configure(width=width, height=max(1, len(lines)))
         body.configure(state="disabled")
+        try:
+            body._fit_extra = 0        # новый текст — новый отсчёт подгонки
+        except Exception:
+            pass
+        self._schedule_fit(body)
+
+    def _schedule_fit(self, body):
+        """Попросить подгонку высоты в следующем простое (виджет ещё не размещён)."""
+        try:
+            self.after_idle(lambda: self._fit_body_height(body))
+        except Exception:
+            pass
+
+    def _fit_body_height(self, body, max_extra=4):
+        """Подогнать высоту окна текста ПО ПИКСЕЛЯМ, а не по числу строк.
+
+        ГРАБЛЯ (снимок ученика 23.10.2026): у строки с эмодзи высота больше
+        обычной (`dlineinfo` даёт 21 px вместо 19 — картинка-эмодзи поднимает
+        строку над базовой линией). `height` у tk.Text задаётся в СТРОКАХ и
+        такого не учитывает: замер — тексту нужно 61 px, а окно 59 px, и
+        нижние пиксели последней строки срезаны (в пиксельном шрифте это
+        видно как «обрезанная вторая строка»).
+
+        Вызывается из <Configure> самого окна текста: к этому моменту высоты
+        строк настоящие. Если нужно больше — добавляем строки, Tk снова
+        пришлёт <Configure>, и цикл сойдётся (защита `max_extra` — от
+        бесконечной «раскачки»).
+        """
+        if getattr(body, "_fitting", False):
+            return
+        try:
+            if body is None or not body.winfo_exists():
+                return
+            height = body.winfo_height()
+            if height <= 1:
+                return                 # ещё не размещён — <Configure> придёт сам
+            # Меряем по ГЕОМЕТРИИ последней строки (dlineinfo), а не по
+            # count(ypixels): до размещения Tk занижает высоты строк с эмодзи
+            # (замер: 133 px против 147 px после размещения).
+            # Сколько пикселей занимает текст (без учёта обрезки) и есть ли
+            # 2 px запаса: у пиксельного шрифта нижние точки букв могут выходить
+            # за «коробку» строки.
+            need = body.count("1.0", "end", "ypixels")[0]
+            line = int(round(float(body.winfo_reqheight())
+                             / max(1.0, float(body.cget("height"))))) or 19
+            if need + 2 <= height:
+                body._fit_extra = 0
+                # лишняя строка? убираем, но только если текст всё равно
+                # помещается с запасом (иначе начнётся «раскачка»)
+                if need + 2 + line <= height and float(body.cget("height")) > 1:
+                    body._fitting = True
+                    try:
+                        body.configure(height=int(float(body.cget("height"))) - 1)
+                    finally:
+                        body._fitting = False
+                return
+            # строку отрезало (или её не видно вовсе) — добавляем строки
+            extra = int(getattr(body, "_fit_extra", 0)) + 1
+            if extra > max_extra:
+                return
+            body._fitting = True
+            try:
+                body._fit_extra = extra
+                body.configure(height=int(float(body.cget("height"))) + 1)
+            finally:
+                body._fitting = False
+        except Exception:
+            pass
 
     def _wrap_parts(self, parts, max_px, font, emoji_px):
         """Разбить реплику на строки по ширине max_px.
@@ -664,12 +737,32 @@ class ChatView(ctk.CTkFrame):
             return emoji_render.DEFAULT_PX
 
     def _emoji_size(self):
-        """Размер картинок-эмодзи под шрифт чата (в пикселях, не «на глаз»)."""
+        """Размер картинок-эмодзи под шрифт чата (в пикселях, не «на глаз»).
+
+        ВАЖНО: не больше ASCENT шрифта. Картинка вставляется с align="baseline",
+        и если она выше подъёма букв, строка становится выше обычной (замер:
+        эмодзи 17 px при ascent 16 давали строку 21 px вместо 19). Тогда
+        высота окна текста (она в СТРОКАХ) оказывается меньше содержимого, и
+        низ последней строки обрезается — ровно баг со снимка 23.10.2026.
+        При эмодзи <= ascent строка держится ровно linespace, и обрезки нет.
+        """
         try:
             font = tkfont.Font(root=self, font=theme.FONT_BODY)
             points = abs(font.actual("size"))
             scaling = float(self.tk.call("tk", "scaling"))
-            return emoji_render.size_from_font(points, scaling)
+            size = emoji_render.size_from_font(points, scaling)
+            # ВАЖНО: подъём букв спрашиваем через metrics(), а НЕ actual():
+            # у tkfont.Font.actual нет ключа "ascent" — вызов бросает
+            # TclError, и код молча падал в DEFAULT_PX = 18 px. А 18 при
+            # ascent 16 поднимало строку → низ последней строки обрезался
+            # (ровно баг со снимка 23.10.2026).
+            # -1: замер показал, что картинка РОВНО в ascent всё равно делает
+            # строку на 1 px выше (16+3 = 19 при linespace 21 → 20), а лишний
+            # пиксель на каждой строке с эмодзи и обрезает низ окна текста.
+            ascent = int(font.metrics("ascent") or 0)
+            if ascent > 1:
+                size = min(size, ascent - 1)
+            return max(emoji_render.MIN_PX, size)
         except Exception:
             return emoji_render.DEFAULT_PX
 
