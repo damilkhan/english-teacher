@@ -7,8 +7,9 @@
 # Проверяем:
 #   1) LessonBar: скрыта без урока, показывает урок/тип/прогресс, обновляет
 #      счётчик, прячется по clear(), перекрашивается темой;
-#   2) InputBar.set_locked: мягкая блокировка текста (поле не редактируется,
-#      подсказка-замок на месте) и правильное снятие блокировки;
+#   2) InputBar.set_locked: замок урока отнимает ОТПРАВКУ английского, но НЕ
+#      ввод: с русскими буквами кнопка становится «💡 Перевести» и живой,
+#      английский текст по-прежнему не отправить, ↺ вставляет и в уроке;
 #   3) сосуществование ДВУХ состояний поля: гейт (профиль/сервер) и занятие
 #      не «перетирают» друг друга;
 #   4) ControlBar.set_record_enabled: кнопка записи гаснет в chat-уроке.
@@ -30,7 +31,8 @@ for _stream in (sys.stdout, sys.stderr):
 import customtkinter as ctk                                     # noqa: E402
 import theme                                                    # noqa: E402
 from ui.widgets.control_bar import ControlBar                   # noqa: E402
-from ui.widgets.input_bar import InputBar, LOCK_HINT            # noqa: E402
+from ui.widgets.input_bar import (InputBar, LOCK_HINT,          # noqa: E402
+                                  LOCK_BUTTON_TEXT, TRANSLATE_TEXT)
 from ui.widgets.lesson_bar import LessonBar                     # noqa: E402
 
 FAILED = []
@@ -109,24 +111,65 @@ def main():
     bar.clear()
     pump(root)
 
-    # ---------- 2. Мягкая блокировка ввода ----------
-    print("\n[2] Блокировка текста в уроке «говорение»")
+    # ---------- 2. Замок урока: печатать можно, отправлять — нет ----------
+    print("\n[2] Замок урока: клавиатура жива, отправка английского — нет")
     check("поле изначально редактируемо", "disabled" not in str(input_bar._field.cget("state")))
     check("is_locked = False", input_bar.is_locked is False)
 
     input_bar.set_locked(True, "🔒 Слушай и отвечай голосом")
     pump(root)
     check("is_locked = True", input_bar.is_locked is True)
-    check("поле НЕ редактируется", str(input_bar._field.cget("state")) == "disabled",
+    check("поле ОСТАЁТСЯ редактируемым (можно набрать русское слово)",
+          "disabled" not in str(input_bar._field.cget("state")),
           input_bar._field.cget("state"))
     check("подсказка-замок видна",
           input_bar.textbox.get("0.0", "end-1c") == "🔒 Слушай и отвечай голосом",
           input_bar.textbox.get("0.0", "end-1c"))
     check("get_text() не отдаёт подсказку", input_bar.get_text() == "", repr(input_bar.get_text()))
-    check("кнопка отправки показывает «голосом»", "Голосом" in input_bar.send_btn.cget("text"),
+    check("кнопка отправки показывает «голосом»", LOCK_BUTTON_TEXT == input_bar.send_btn.cget("text"),
           input_bar.send_btn.cget("text"))
+    check("кнопка выключена, пока в поле пусто/английский",
+          str(input_bar.send_btn.cget("state")) == "disabled",
+          input_bar.send_btn.cget("state"))
 
+    # ученик написал слово ПО-РУССКИ: это просьба о переводе, а не ответ
+    input_bar.set_text("ключ")
+    pump(root)
+    check("с русскими буквами кнопка — «💡 Перевести»",
+          input_bar.send_btn.cget("text") == TRANSLATE_TEXT,
+          input_bar.send_btn.cget("text"))
+    check("и она нажимается", str(input_bar.send_btn.cget("state")) == "normal",
+          input_bar.send_btn.cget("state"))
+
+    # английский текст в уроке по-прежнему не отправить
+    input_bar.set_text("I need a key")
+    pump(root)
+    check("с английским кнопка снова «Голосом» и выключена",
+          input_bar.send_btn.cget("text") == LOCK_BUTTON_TEXT
+          and str(input_bar.send_btn.cget("state")) == "disabled",
+          (input_bar.send_btn.cget("text"), input_bar.send_btn.cget("state")))
+
+    # кнопка ↺ (вставить перевод) обязана работать и в уроке: иначе подсказкой
+    # не воспользоваться, а ученик должен ПРОИЗНЕСТИ вставленное слово
+    input_bar.clear_text()
+    pump(root)
+    check("после очистки подсказка-замок вернулась",
+          LOCK_HINT in input_bar.textbox.get("0.0", "end-1c")
+          or "Слушай" in input_bar.textbox.get("0.0", "end-1c"),
+          input_bar.textbox.get("0.0", "end-1c"))
+    check("↺ вставляет перевод и в уроке",
+          input_bar.insert_at_cursor("key") is True and input_bar.get_text() == "key",
+          repr(input_bar.get_text()))
+    check("вставленный английский не делает кнопку живой",
+          str(input_bar.send_btn.cget("state")) == "disabled",
+          input_bar.send_btn.cget("state"))
+
+    input_bar.clear_text()
+    pump(root)
     input_bar.set_locked(False)
+    # подсказка возвращается, когда курсор НЕ в поле (так было и до правки:
+    # в фокусе пустое поле подсказку не показывает)
+    root.focus_force()
     pump(root)
     check("после снятия поле снова редактируемо",
           "disabled" not in str(input_bar._field.cget("state")))
@@ -152,13 +195,22 @@ def main():
     input_bar.set_enabled(True)
     input_bar.set_locked(True, LOCK_HINT)
     pump(root)
-    check("занятие заблокировало текст поверх включённого гейта",
-          input_bar.is_locked and "disabled" in str(input_bar._field.cget("state")))
+    check("занятие заблокировало ОТПРАВКУ поверх включённого гейта",
+          input_bar.is_locked and input_bar.send_btn.cget("text") == LOCK_BUTTON_TEXT,
+          input_bar.send_btn.cget("text"))
+    check("но поле осталось редактируемым",
+          "disabled" not in str(input_bar._field.cget("state")),
+          input_bar._field.cget("state"))
 
-    # гейт закрылся ВО ВРЕМЯ урока — поле остаётся заблокированным занятием
+    # гейт закрылся ВО ВРЕМЯ урока — причина на кнопке важнее замка, а ввод жив
     input_bar.set_enabled(False, "Загружаю модель…")
     pump(root)
-    check("занятие остаётся главным для поля", "disabled" in str(input_bar._field.cget("state")))
+    check("гейт важнее замка на кнопке",
+          input_bar.send_btn.cget("text") == "Загружаю модель…",
+          input_bar.send_btn.cget("text"))
+    check("поле всё равно редактируемо",
+          "disabled" not in str(input_bar._field.cget("state")),
+          input_bar._field.cget("state"))
     check("на кнопке причина гейта (он важнее)",
           input_bar.send_btn.cget("text") == "Загружаю модель…",
           input_bar.send_btn.cget("text"))

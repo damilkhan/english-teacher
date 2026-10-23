@@ -27,16 +27,31 @@ self.textbox.focus_get() == self.textbox. Но CTkTextbox — это фрейм,
     пользователя хуже, чем один раз показать пустое поле.
 """
 
+import re
+
 import customtkinter as ctk
 
 import theme
 
 PLACEHOLDER = "Напиши сообщение…"
 SEND_TEXT = "Отправить"
-# Подсказка в поле, когда идёт урок «только голосом» — текст запрещён.
-LOCK_HINT = "🔒 Говорите в микрофон"
+# Подсказка в поле во время урока «только голосом». ВАЖНО: печатать МОЖНО —
+# нельзя ОТПРАВЛЯТЬ английский. Русское слово уходит в переводчик: ученик
+# видит вариант, произносит его вслух и только так отвечает преподавателю.
+LOCK_HINT = "🎤 Говори в микрофон · слово по-русски → перевод"
 # Подпись кнопки отправки, пока текст заблокирован занятием.
 LOCK_BUTTON_TEXT = "🎤 Голосом"
+# Подпись кнопки, когда в поле есть русские буквы: это запрос перевода.
+TRANSLATE_TEXT = "💡 Перевести"
+
+# Русские буквы (кириллица) — признак «ученик просит перевода», а не ответа.
+_CYRILLIC = re.compile(r"[а-яёА-ЯЁ]")
+
+
+def has_cyrillic(text):
+    """Есть ли в тексте русские буквы (быстро, без модели и сети)."""
+    return bool(_CYRILLIC.search(str(text or "")))
+
 
 # Клавиши, после которых подсказка обязана уйти: печатающие символы плюс те,
 # что меняют содержимое (Backspace/Delete) и вставку из буфера (Ctrl+V).
@@ -95,6 +110,8 @@ class InputBar(ctk.CTkFrame):
         self._field.bind("<FocusOut>", self._on_focus_out, add="+")
         self._field.bind("<KeyPress>", self._on_key_press, add="+")
         self._field.bind("<Button-1>", self._on_click_in_field, add="+")
+        # кнопка «💡 Перевести» включается, как только в поле появилась кириллица
+        self._field.bind("<KeyRelease>", self._on_key_release, add="+")
         self.textbox.bind("<Return>", self._on_return)
         self._show_placeholder()
 
@@ -107,11 +124,7 @@ class InputBar(ctk.CTkFrame):
     def clear_text(self):
         self._placeholder_on = False
         self._replace_field_text("", self.palette["text"])
-        if self._locked:
-            self._show_placeholder(self._lock_hint)
-        # если поле не в фокусе — снова показываем подсказку
-        elif not self._is_focused():
-            self._show_placeholder()
+        self._apply_state()      # подсказка и подпись кнопки — по обстановке
 
     def insert_at_cursor(self, text):
         """Вставить текст В МЕСТО КУРСОРА, не стирая уже набранное.
@@ -124,7 +137,7 @@ class InputBar(ctk.CTkFrame):
         Возвращает True, если вставка удалась.
         """
         text = str(text or "")
-        if not text or self._locked:
+        if not text:
             return False
         try:
             if self._placeholder_on:
@@ -152,6 +165,7 @@ class InputBar(ctk.CTkFrame):
             field.mark_set("insert", "1.0+%dc" % caret)
             self._placeholder_on = False
             self.textbox.configure(text_color=self.palette["text"])
+            self._apply_state()      # вставили английское — кнопка снова «голосом»
             self.focus_input()
             return True
         except Exception as exc:
@@ -161,6 +175,7 @@ class InputBar(ctk.CTkFrame):
     def set_text(self, text):
         self._placeholder_on = False
         self._replace_field_text(str(text), self.palette["text"])
+        self._apply_state()
 
     def set_busy(self, busy):
         self._busy = bool(busy)
@@ -196,30 +211,40 @@ class InputBar(ctk.CTkFrame):
         """Единая точка состояния поля и кнопки.
 
         Приоритет: гейт (нет профиля/сервера) > «Думаю…» > блокировка урока.
-        Поле редактируемо только когда НЕТ блокировки урока.
+
+        ВАЖНО (решение ученика, 23.10.2026): урок «только голосом» больше НЕ
+        отключает клавиатуру. Ученик вправе написать слово по-русски и получить
+        перевод — смысл подсказки в том, чтобы ПРОИЗНЕСТИ английский вариант
+        вслух, а не вставить его в чат. Поэтому замок урока отнимает ОТПРАВКУ
+        английского текста, а не ввод, и остаётся такой, пока в поле нет
+        кириллицы.
         """
         if not self._enabled:
             self.send_btn.configure(state="disabled", text=(self._hint or "Недоступно"))
         elif self._busy:
             self.send_btn.configure(state="disabled", text="Думаю…")
         elif self._locked:
-            self.send_btn.configure(state="disabled", text=LOCK_BUTTON_TEXT)
+            if has_cyrillic(self._real_text()):
+                # «ключ» — это не ответ, а просьба о переводе: кнопка живая
+                self.send_btn.configure(state="normal", text=TRANSLATE_TEXT)
+            else:
+                self.send_btn.configure(state="disabled", text=LOCK_BUTTON_TEXT)
         else:
             self.send_btn.configure(state="normal", text=SEND_TEXT)
 
-        self._set_editable(not self._locked)
-        if self._locked:
-            self._show_placeholder(self._lock_hint)
-        elif self._placeholder_on or not self._real_text().strip():
-            # снимаем «замок»: на экране была подсказка — вернём обычную
-            self._show_placeholder()
+        self._refresh_placeholder()
 
-    def _set_editable(self, editable):
-        """Разрешить/запретить РУЧНОЙ ввод (программный текст всё равно пишем)."""
-        try:
-            self._field.configure(state="normal" if editable else "disabled")
-        except Exception:
-            pass
+    def _refresh_placeholder(self):
+        """Показать подсказку по обстановке (обычную, «замок» или ничего).
+        """
+        if self._locked:
+            if not self._real_text().strip():
+                self._show_placeholder(self._lock_hint)
+            return
+        if self._placeholder_on:
+            self._show_placeholder()
+        elif not self._real_text().strip() and not self._is_focused():
+            self._show_placeholder()
 
     def focus_input(self):
         try:
@@ -293,17 +318,15 @@ class InputBar(ctk.CTkFrame):
     # ---------- события ----------
     def _on_focus_in(self, _event=None):
         self.textbox.configure(border_color=self.palette["accent"])
-        if not self._locked:
-            self._drop_placeholder()
+        self._drop_placeholder()
 
     def _on_focus_out(self, _event=None):
         self.textbox.configure(border_color=self.palette["border"])
         if not self._real_text().strip():
-            self._show_placeholder()
+            # в уроке подсказка другая: печатать можно, отправлять — нет
+            self._show_placeholder(self._lock_hint if self._locked else None)
 
     def _on_key_press(self, event=None):
-        if self._locked:
-            return None
         if not self._placeholder_on:
             return None
         # Shift и стрелки подсказку не трогают: иначе она пропадала бы от
@@ -318,10 +341,14 @@ class InputBar(ctk.CTkFrame):
     def _on_click_in_field(self, _event=None):
         # клик по полю с подсказкой: поле должно стать обычным пустым полем,
         # курсор встанет в начало — клик дальше Tk обработает сам.
-        # При блокировке урока подсказка-замок остаётся на месте.
-        if self._locked:
-            return None
         self._drop_placeholder()
+        return None
+
+    def _on_key_release(self, _event=None):
+        """Кнопка следит за кириллицей: есть русское слово — «💡 Перевести».
+        """
+        if self._locked:
+            self._apply_state()
         return None
 
     def _on_return(self, event):
