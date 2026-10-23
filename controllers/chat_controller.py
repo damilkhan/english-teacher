@@ -42,6 +42,10 @@ class ChatController:
         self.mode = mode
         self.current_lang = lang
         self.user_id = user_id
+        # Имя преподавателя у ЭТОГО ученика (поле профиля teacher_name, пусто →
+        # config.TEACHER_NAME). Обновляется при смене ученика и на каждом
+        # запросе: имя видно и в чате (подпись реплики), и в промпте.
+        self.teacher = user_manager.teacher_name(user_manager.get_user(user_id))
         self.history = []
         self.busy = False
         # роль-Аналитик (необязательна): разбирает реплики ПОСЛЕ ответа Учителя
@@ -83,6 +87,7 @@ class ChatController:
     def set_user(self, user_id):
         """Переключить ученика: история диалога у каждого своя, поэтому чистим."""
         self.user_id = user_id
+        self.teacher = user_manager.teacher_name(user_manager.get_user(user_id))
         self.history = []
         self._reset_plan()
         profile_store.set_active_user(user_id)
@@ -148,7 +153,7 @@ class ChatController:
             return False
         self.busy = True
         self._emit(self.on_busy, True)
-        self._emit(self.on_status, "● Джейн думает...", "warn")
+        self._emit(self.on_status, "● %s думает..." % self.teacher, "warn")
         threading.Thread(target=self._worker, args=(user_text,), daemon=True).start()
         return True
 
@@ -185,6 +190,7 @@ class ChatController:
         # личность ученика (имя/пол) — чтобы Джейн знала имя и НЕ путала
         # грамматический род ученика со своим (женским)
         user = user_manager.get_user(self.user_id) or {}
+        self.teacher = user_manager.teacher_name(user)   # имя из профиля
         level = user.get("level")
         student = {"name": user.get("name"),
                    "name_latin": user.get("name_latin"),
@@ -204,7 +210,7 @@ class ChatController:
             lesson=lesson_block, now=datetime.now(), variety=True,
             english_only=bool(getattr(config, "ENGLISH_ONLY", False)),
             american=bool(getattr(config, "AMERICAN_ENGLISH", True)),
-            words=words)
+            words=words, teacher=self.teacher)
 
         print(f"📤 Язык ответа: {'РУССКИЙ' if lang == 'ru' else 'ENGLISH'}")
 
@@ -222,7 +228,7 @@ class ChatController:
                 lesson=lesson_block, now=datetime.now(), variety=True,
                 english_only=bool(getattr(config, "ENGLISH_ONLY", False)),
                 american=bool(getattr(config, "AMERICAN_ENGLISH", True)),
-                words=words)
+                words=words, teacher=self.teacher)
             ok, raw = self._ask_model(system_prompt, user_text, short_history=True)
         if not ok:
             return False, self._explain(raw)
@@ -326,7 +332,7 @@ class ChatController:
 
     def _show_reply(self, user_text, response):
         """Главный поток: показать ответ Учителя как можно раньше."""
-        self._emit(self.on_message, "Джейн", response)
+        self._emit(self.on_message, self.teacher, response)
         self._emit(self.on_response, user_text, response)
 
     def _finish_error(self, payload):
@@ -337,7 +343,7 @@ class ChatController:
         """
         self.busy = False
         self._emit(self.on_busy, False)
-        self._emit(self.on_message, "Джейн", f"[Ошибка] {payload}")
+        self._emit(self.on_message, self.teacher, f"[Ошибка] {payload}")
         self._emit(self.on_status, "● Ошибка", "err")
 
     def _safe_analyze(self, user_text, reply):

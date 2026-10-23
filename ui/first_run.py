@@ -16,6 +16,7 @@
 import tkinter as tk
 import customtkinter as ctk
 
+import config
 import theme
 import user_manager
 
@@ -51,7 +52,9 @@ class FirstRunForm(ctk.CTkToplevel):
             text_color=p["text_strong"])
         self.title_lbl.pack(anchor="w", padx=18, pady=(16, 2))
         self.sub_lbl = ctk.CTkLabel(
-            head, text="Заполни профиль — Джейн подстроит уроки под тебя.",
+            head,
+            text="Заполни профиль — %s подстроит уроки под тебя."
+                 % str(getattr(config, "TEACHER_NAME", "Verbot") or "Verbot"),
             font=theme.FONT_SMALL, text_color=p["muted"], justify="left")
         self.sub_lbl.pack(anchor="w", padx=18, pady=(0, 16))
 
@@ -65,6 +68,8 @@ class FirstRunForm(ctk.CTkToplevel):
         self.goal_var = ctk.StringVar(value=(user or {}).get("goal", ""))
         self.gender_var = ctk.StringVar(value=(user or {}).get("gender", "other"))
         self.avatar_var = ctk.StringVar(value=(user or {}).get("avatar", user_manager.AVATARS[0]))
+        # как ученик называет преподавателя; пусто → общее имя из config.py
+        self.teacher_var = ctk.StringVar(value=(user or {}).get("teacher_name", ""))
 
         self._latin_fill = False            # защита от рекурсии автозаполнения
         # при редактировании латиницу не перетираем (её правил человек)
@@ -104,6 +109,14 @@ class FirstRunForm(ctk.CTkToplevel):
         self.level_info.pack(anchor="w", pady=(8, 0))
         self._update_level_info(user)
 
+        # Имя преподавателя: по умолчанию Verbot, ученик может вписать своё —
+        # это его личная настройка, она живёт в его профиле.
+        self._section(body, "КАК ЗОВУТ ПРЕПОДАВАТЕЛЯ?  (можно своё имя)")
+        self.teacher_entry = self._entry(
+            body, self.teacher_var,
+            "По умолчанию: %s" % str(getattr(config, "TEACHER_NAME", "Verbot")
+                                     or "Verbot"))
+
         self._section(body, "ЦЕЛЬ ОБУЧЕНИЯ")
         self.goal_entry = self._entry(body, self.goal_var, "Заговорить свободно / сдать экзамен")
 
@@ -131,7 +144,7 @@ class FirstRunForm(ctk.CTkToplevel):
             var.trace_add("write", lambda *_: self._refresh())
 
         # размер окна подгоняем ПОСЛЕ сборки: иначе часть формы уезжала за край
-        self._center(parent, 470, 640)
+        self._center(parent, 470, 730)
         self.after(60, self._grab)
         self._refresh()
 
@@ -268,6 +281,8 @@ class FirstRunForm(ctk.CTkToplevel):
             "age": self.age_var.get().strip() or None,
             "goal": self.goal_var.get().strip(),
             "avatar": self.avatar_var.get().strip(),
+            # пустое поле — значит «зови как обычно» (config.TEACHER_NAME)
+            "teacher_name": self.teacher_var.get().strip(),
         }
         self._close()
 

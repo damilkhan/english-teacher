@@ -6,7 +6,8 @@
 #   python tests\smoke_test.py --gui    — + создание окна и живой диалог
 #
 # Что проверяем:
-#   1) база промпта та же, КРОМЕ строки языка: сверяем с gui.py из git;
+#   1) база промпта та же, КРОМЕ строки языка и имени преподавателя:
+#      сверяем с gui.py из git;
 #   2) чистка тегов Gemma (clean_response);
 #   3) profile_store: создание/чтение/запись во временной папке;
 #   4) окно собирается, тема и режим переключаются (--gui);
@@ -63,10 +64,23 @@ OLD_LANGUAGE_LINES = {
     "en": "Answer in English, keep responses short.",
 }
 
+# Вторая НАМЕРЕННАЯ правка (23.10.2026): преподавателя зовут не «Jane», а как
+# задано в config.TEACHER_NAME («Verbot») — имя подставляется в промпт и в чат.
+# Меняется ТОЛЬКО имя (в старой базе оно стоит трижды: персона урока, персона
+# свободного общения и блок «ты женщина»); всё остальное по-прежнему обязано
+# совпасть с историческим gui.py байт-в-байт.
+OLD_TEACHER_REF = "You are Jane"
+OLD_TEACHER_COUNT = 3
+
 
 def _expected_system(old_prompt, lang):
-    """Старый системный промпт с ЗАМЕНЁННОЙ строкой языка (остальное — как было)."""
-    return old_prompt.replace(OLD_LANGUAGE_LINES[lang], prompt_builder.LANGUAGE_POLICY, 1)
+    """Старый промпт с ДВУМЯ разрешёнными правками: язык и имя преподавателя."""
+    text = old_prompt.replace(OLD_LANGUAGE_LINES[lang], prompt_builder.LANGUAGE_POLICY, 1)
+    count = text.count(OLD_TEACHER_REF)
+    if count != OLD_TEACHER_COUNT:
+        print(f"  ⚠️ в старом промпте {count} вхождений «{OLD_TEACHER_REF}», "
+              f"ожидалось {OLD_TEACHER_COUNT}")
+    return text.replace(OLD_TEACHER_REF, "You are " + prompt_builder.teacher_name())
 
 
 # =========================================================
@@ -430,7 +444,9 @@ def test_gui(e2e=False):
                 app.window.update()
                 time.sleep(0.02)
             text = app.chat_view.get_text()
-            check("ответ Джейн появился", "Джейн" in text.split("Hello, my name is Damil.")[-1],
+            teacher = prompt_builder.teacher_name()
+            check("ответ преподавателя появился",
+                  teacher in text.split("Hello, my name is Damil.")[-1],
                   text[-200:])
             check("нет ошибки в ответе", "[Ошибка]" not in text, text[-200:])
             check("история диалога заполнена", len(app.chat.history) >= 2, app.chat.history)

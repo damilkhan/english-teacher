@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # =========================================================
-# LAUNCHER.PYW — запуск English Teacher как обычной программы
+# LAUNCHER.PYW — запуск Verbot как обычной программы
 # =========================================================
 # Что делает:
 #   1) Включает UTF-8 на весь процесс. Без этого запуск двойным кликом
@@ -97,13 +97,26 @@ def _msgbox(title, text, flags=0x10):
         _log("MessageBox недоступен: %s" % traceback.format_exc())
 
 
+def _app_title():
+    """Название приложения для окон и логов.
+
+    Читаем config.APP_NAME («Verbot»), но НЕ падаем, если config.py битый:
+    часть сообщений показывается ДО его проверки (в т.ч. «уже запущено»).
+    """
+    try:
+        import config as _cfg
+        return str(getattr(_cfg, "APP_NAME", "") or "Verbot").strip() or "Verbot"
+    except Exception:
+        return "Verbot"
+
+
 MUTEX_NAME = "EnglishTeacherApp_SingleInstance_v2"
 ERROR_ALREADY_EXISTS = 183
 SW_RESTORE = 9
 
 
 def _find_app_window():
-    """Ищет верхнее окно, в заголовке которого есть «English Teacher».
+    """Ищет верхнее окно, в заголовке которого есть название приложения.
 
     Возвращает (hwnd, pid) или (None, None). Нужно, чтобы отличать РАБОТАЮЩЕЕ
     приложение от зависшего процесса: у живого приложения окно есть, а у
@@ -124,7 +137,7 @@ def _find_app_window():
                 return True
             buf = ctypes.create_unicode_buffer(length + 1)
             user32.GetWindowTextW(hwnd, buf, length + 1)
-            if "English Teacher" in buf.value:
+            if _app_title() in buf.value:
                 pid = wintypes.DWORD()
                 user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
                 found["hwnd"], found["pid"] = hwnd, pid.value
@@ -152,7 +165,7 @@ def _raise_window(hwnd):
 def _acquire_instance():
     """Можно ли стартовать? Возвращает (can_start: bool, handle).
 
-    * мьютекс занят ДРУГИМ процессом, у которого ЕСТЬ окно «English Teacher» —
+    * мьютекс занят ДРУГИМ процессом, у которого ЕСТЬ окно приложения —
       окно поднимаем наверх и стартовать нельзя;
     * мьютекс занят, но окна нет: процесс завис/остался без окна — считаем
       прошлый запуск мёртвым и стартуем, чтобы не блокировать запуск навсегда
@@ -176,12 +189,13 @@ def _acquire_instance():
 
     hwnd, pid = _find_app_window()
     if hwnd and pid != os.getpid():
-        _log("Уже работает другое окно «English Teacher» (pid %s) — поднимаю наверх" % pid)
+        _log("Уже работает другое окно «%s» (pid %s) — поднимаю наверх"
+             % (_app_title(), pid))
         _raise_window(hwnd)
         return False, handle
 
-    _log("Мьютекс занят, но окна «English Teacher» нет — прошлый запуск завис, "
-         "продолжаю запуск заново")
+    _log("Мьютекс занят, но окна «%s» нет — прошлый запуск завис, "
+         "продолжаю запуск заново" % _app_title())
     return True, handle
 
 
@@ -195,23 +209,23 @@ def _force_exit(code=0):
 
 
 def main():
-    _log("Запуск English Teacher")
+    _log("Запуск %s" % _app_title())
     _log("Python %s | %s" % (sys.version.split()[0], sys.executable))
     _log("Рабочая папка: %s" % APP_DIR)
 
     can_start, mutex = _acquire_instance()
     if not can_start:
-        _msgbox("English Teacher",
+        _msgbox(_app_title(),
                 "Приложение уже запущено.\n\n"
-                "Окно «English Teacher — Jane» выведено\n"
-                "на передний план.", 0x40)      # 0x40 = иконка информации
+                "Окно «%s» выведено\n"
+                "на передний план." % _app_title(), 0x40)   # 0x40 = иконка информации
         return
 
     # ---------- 1. Проверка файлов моделей ----------
     try:
         import config
         if not config.check_paths():
-            _msgbox("English Teacher",
+            _msgbox(_app_title(),
                     "Не найдены нужные файлы.\n\n"
                     "Проверьте MODEL_PATH и SERVER_EXE_PATH в config.py,\n"
                     "а также папку models\.\n"
@@ -220,7 +234,7 @@ def main():
         _log("Проверка путей config.py: OK")
     except Exception:
         _log(traceback.format_exc())
-        _msgbox("English Teacher",
+        _msgbox(_app_title(),
                 "Ошибка при чтении config.py:\n\n%s" % traceback.format_exc(limit=2))
         return
 
@@ -256,7 +270,7 @@ def main():
         app = gui.EnglishTeacherApp()
     except Exception:
         _log(traceback.format_exc())
-        _msgbox("English Teacher",
+        _msgbox(_app_title(),
                 "Не удалось запустить интерфейс:\n\n%s"
                 % traceback.format_exc(limit=3))
         return
@@ -267,20 +281,20 @@ def main():
         counter[0] += 1
         try:
             if state["ready"]:
-                app.window.title("English Teacher — Jane")
+                app.window.title(app.window_title())
                 app.check_server()
                 _log("Интерфейс активен, сервер готов")
                 return
             if state["error"]:
                 app.check_server()
-                app.window.title("English Teacher — Jane ⚠ сервер недоступен")
+                app.window.title(app.window_title() + " ⚠ сервер недоступен")
                 _log("Сервер не поднялся: %s" % state["error"])
-                _msgbox("English Teacher",
+                _msgbox(_app_title(),
                         "LLM-сервер не запустился:\n\n%s\n\n"
                         "Приложение работает, но отвечать не сможет.\n"
                         "Лог сервера: logs\\llama-server.log" % state["error"])
                 return
-            app.window.title("English Teacher — Jane  ⏳ %s" % state["note"])
+            app.window.title("%s  ⏳ %s" % (app.window_title(), state["note"]))
             if counter[0] < 400:
                 app.window.after(1000, _watch)
         except Exception:
@@ -293,7 +307,7 @@ def main():
         app.run()
     except Exception:
         _log(traceback.format_exc())
-        _msgbox("English Teacher",
+        _msgbox(_app_title(),
                 "Приложение аварийно завершилось:\n\n%s" % traceback.format_exc(limit=3))
         return
     finally:
@@ -314,7 +328,7 @@ if __name__ == "__main__":
         main()
     except Exception:
         _log(traceback.format_exc())
-        _msgbox("English Teacher", "Критическая ошибка:\n\n%s" % traceback.format_exc(limit=3))
+        _msgbox(_app_title(), "Критическая ошибка:\n\n%s" % traceback.format_exc(limit=3))
     finally:
         _log("Процесс завершён")
         try:

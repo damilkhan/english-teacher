@@ -205,7 +205,8 @@ class Analyst:
             context_parts.append("- CEFR level: %s" % level)
         reply = str(teacher_reply or "").strip().replace("\n", " ")
         if reply:
-            context_parts.append("- Jane's reply (context only): %s" % reply[:MAX_REPLY_CHARS])
+            context_parts.append("- The teacher's reply (context only): %s"
+                                 % reply[:MAX_REPLY_CHARS])
         context = ("\n" + "\n".join(context_parts) + "\n") if context_parts else ""
         return ANALYST_PROMPT_TEMPLATE % {
             "context": context,

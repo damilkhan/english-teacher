@@ -100,7 +100,31 @@ SUBTITLE_POS = (24, 50)     # подпись под заголовком
 BADGE_MARGIN = 18           # отступ пилюли от правого края шапки
 TITLE_EMOJI = "🎙️"
 TITLE_TEXT = "ИИ-ПРЕПОДАВАТЕЛЬ"
-SUBTITLE_TEXT = "Джейн · локальный преподаватель английского"
+# Заголовок окна и подпись шапки собираются из НАЗВАНИЯ приложения
+# (config.APP_NAME) и имени преподавателя у активного ученика (поле профиля
+# teacher_name, пусто → config.TEACHER_NAME). Раньше здесь были зашиты
+# «English Teacher — Jane» и «Джейн · локальный преподаватель».
+
+
+def window_title(teacher_name=""):
+    """Заголовок окна: «Verbot — ИИ-преподаватель английского» (или с именем).
+
+    Если имя преподавателя совпадает с названием приложения (обычный случай,
+    имя по умолчанию), второй раз его не пишем: «Verbot — Verbot» выглядит
+    как ошибка.
+    """
+    app = str(getattr(config, "APP_NAME", "Verbot") or "Verbot").strip() or "Verbot"
+    teacher = str(teacher_name or "").strip() or app
+    if teacher.lower() == app.lower():
+        return "%s — ИИ-преподаватель английского" % app
+    return "%s — %s" % (app, teacher)
+
+
+def subtitle_text(teacher_name=""):
+    """Подпись шапки, пока имени ученика нет: «Verbot · локальный преподаватель…»."""
+    teacher = str(teacher_name or "").strip() or str(
+        getattr(config, "TEACHER_NAME", "Verbot") or "Verbot").strip() or "Verbot"
+    return "%s · локальный преподаватель английского" % teacher
 INITIAL_STATUS = ("● Проверяю сервер…", "muted")
 CHARACTER_WIDTH = 300        # ширина робота-персонажа в области чата, px
 REDRAW_DELAY_MS = 90
@@ -133,7 +157,8 @@ def profile_summary(user, profile, map_progress=(0, 0)):
     except Exception:
         done, total = 0, 0
     out.append(("Карта «Пустыня»", "пройдено блоков: %d из %d" % (done, total)))
-    out.append(("Занятий с Джейн", str(profile.get("total_lessons", 0))))
+    out.append(("Занятий с %s" % user_manager.teacher_name(user),
+                str(profile.get("total_lessons", 0))))
 
     mistakes = profile.get("mistakes") or {}
     counts = []
@@ -257,7 +282,7 @@ class EnglishTeacherApp:
 
         # ---------- окно ----------
         self.window = ctk.CTk()
-        self.window.title("English Teacher — Jane")
+        self.window.title(window_title())
         self.window.geometry("1160x760")
         # минимальная высота уменьшена: при 620 px всё помещается целиком
         # (шапка + эквалайзер + чат + поле ввода + кнопки)
@@ -288,6 +313,7 @@ class EnglishTeacherApp:
         # пока профиль не заполнен (имя + пол), общение с Джейн недоступно.
         self.current_user = self._resolve_user()
         self.profile_ready = user_manager.is_complete(self.current_user)
+        self.window.title(self.window_title())   # имя преподавателя из профиля
         profile_store.set_active_user(self.current_user["id"])
         print("👤 Активный профиль: #%s %s (полный: %s)"
               % (self.current_user["id"], self.current_user["name"], self.profile_ready))
@@ -394,6 +420,19 @@ class EnglishTeacherApp:
     # =====================================================
     # Пользователи
     # =====================================================
+    @property
+    def teacher_name(self):
+        """Как зовут преподавателя у активного ученика (по умолчанию Verbot).
+
+        Имя живёт В ПРОФИЛЕ (поле teacher_name): ученик называет преподавателя
+        сам, и это его личный выбор. Пусто → config.TEACHER_NAME.
+        """
+        return user_manager.teacher_name(self.current_user)
+
+    def window_title(self):
+        """Заголовок окна для ЭТОГО ученика (лаунчер добавляет свои пометки)."""
+        return window_title(self.teacher_name)
+
     def _resolve_user(self):
         """Активный профиль: последний из profiles/ либо НЕПОЛНАЯ заготовка.
 
@@ -452,7 +491,7 @@ class EnglishTeacherApp:
         user = self.current_user or {}
         data = FirstRunForm.ask(self.window, self.palette)     # режим «первого запуска»
         if not data:
-            self.add_message("Джейн", SETUP_HINT)
+            self.add_message(self.teacher_name, SETUP_HINT)
             return
 
         target = user.get("id")
@@ -462,7 +501,7 @@ class EnglishTeacherApp:
             created = user_manager.create_user(**self._form_profile(data), complete=True)
             target = created["id"] if created else None
         if not target:
-            self.add_message("Джейн", SETUP_HINT)
+            self.add_message(self.teacher_name, SETUP_HINT)
             return
 
         self.current_user = user_manager.get_user(target) or self.current_user
@@ -498,6 +537,8 @@ class EnglishTeacherApp:
             "name": data["name"], "name_latin": data.get("name_latin") or "",
             "gender": data["gender"], "age": data["age"],
             "goal": data.get("goal", ""), "avatar": data.get("avatar"),
+            # как ученик называет преподавателя (пусто → config.TEACHER_NAME)
+            "teacher_name": data.get("teacher_name") or "",
         }
 
     def _greeting(self):
@@ -512,7 +553,7 @@ class EnglishTeacherApp:
         u = self.current_user or {}
         text = (f"{user_manager.display_avatar(u.get('avatar'))} Привет, "
                 f"{u.get('name') or 'друг'}! "
-                f"Я Джейн, твой преподаватель английского.")
+                f"Я {self.teacher_name}, твой преподаватель английского.")
         level = u.get("level")
         if level:
             text += f"\n🎯 Твой уровень: {level} — буду подбирать задания под него."
@@ -526,7 +567,7 @@ class EnglishTeacherApp:
         u = self.current_user or {}
         name = str(u.get("name") or "").strip()
         if not name:
-            return SUBTITLE_TEXT
+            return subtitle_text(self.teacher_name)
         sub = "%s %s" % (user_manager.display_avatar(u.get("avatar")), name)
         sub += " · уровень %s" % user_manager.level_label(u.get("level"))
         return sub
@@ -574,6 +615,9 @@ class EnglishTeacherApp:
         self._auto_lesson_armed = False   # у нового ученика свой автозапуск
         self._auto_lesson_used = False
         self.vocab.user_id = user_id      # слова следующего ученика — его
+        # имя преподавателя живёт в ПРОФИЛЕ: у другого ученика оно может быть
+        # своим, поэтому заголовок окна обновляем вместе со всем остальным
+        self.window.title(self.window_title())
         self.chat_view.clear()
         self.info_bar.clear()
         self._show_greeting()
@@ -592,8 +636,10 @@ class EnglishTeacherApp:
         created = user_manager.create_user(**self._form_profile(data))
         if not created:
             # профиль не сохранился — не молчим, иначе выглядит как «не нажалось»
-            self.add_message("Джейн", "⚠️ Не удалось сохранить профиль. "
-                                      "Проверь папку profiles\\ и попробуй ещё раз.")
+            self.add_message(
+                self.teacher_name,
+                "⚠️ Не удалось сохранить профиль. "
+                "Проверь папку profiles\\ и попробуй ещё раз.")
             return
         self.select_user(created["id"], force=True)
         self.window.after(300, lambda: self.run_level_test(created["id"]))
@@ -609,7 +655,8 @@ class EnglishTeacherApp:
         if user_id == (self.current_user or {}).get("id"):
             self.current_user = user_manager.get_user(user_id)
             self.profile_ready = user_manager.is_complete(self.current_user)
-            self.add_message("Джейн", "✅ Профиль обновлён.")
+            self.add_message(self.teacher_name, "✅ Профиль обновлён.")
+            self.window.title(self.window_title())   # имя преподавателя могло измениться
             self._refresh_hero()
             self._refresh_input_state()
             self._refresh_side_views()
@@ -634,8 +681,10 @@ class EnglishTeacherApp:
                                                    complete=False)
             if created is None:
                 # профиль так и не создался — говорим прямо, а не молчим
-                self.add_message("Джейн", "⚠️ Не удалось сохранить профиль. "
-                                          "Проверь папку profiles\\ и попробуй ещё раз.")
+                self.add_message(
+                    self.teacher_name,
+                    "⚠️ Не удалось сохранить профиль. "
+                    "Проверь папку profiles\\ и попробуй ещё раз.")
                 if self.users_panel is not None:
                     self.users_panel.refresh(None)
                 return
@@ -673,7 +722,7 @@ class EnglishTeacherApp:
             # Отдельная реплика остаётся только если приветствия нет
             # (например, чат очистили или уровень перепроходят позже).
             if not self._update_greeting_level():
-                self.add_message("Джейн", LEVEL_TEST_NOTE % level)
+                self.add_message(self.teacher_name, LEVEL_TEST_NOTE % level)
             self._refresh_hero()          # уровень — в шапку (это картинка)
         if self.users_panel is not None:
             self.users_panel.refresh((self.current_user or {}).get("id"))
@@ -967,22 +1016,22 @@ class EnglishTeacherApp:
         строку в чате). Оба параметра необязательны: с карты всё как раньше.
         """
         if not self.profile_ready:
-            self.add_message("Джейн", SETUP_HINT)
+            self.add_message(self.teacher_name, SETUP_HINT)
             return None
         if self.lesson.is_active:
-            self.add_message("Джейн", "⚠️ Сначала заверши текущий урок — кнопка «Выйти».")
+            self.add_message(self.teacher_name, "⚠️ Сначала заверши текущий урок — кнопка «Выйти».")
             return None
 
         data = self._lesson_data(lesson_id, point_id)
         if data is None:
-            self.add_message("Джейн", "⚠️ Не нашёл этот урок в учебном плане.")
+            self.add_message(self.teacher_name, "⚠️ Не нашёл этот урок в учебном плане.")
             return None
 
         # урок «голосом» невозможен без микрофона и без распознавания
         if lesson_mod.needs_microphone(data["type"]):
             ready, message = self._microphone_ready()
             if not ready:
-                self.add_message("Джейн", message)
+                self.add_message(self.teacher_name, message)
                 if self.stt_state == "loading":
                     # распознавание ещё грузится — запомним урок и начнём,
                     # как только Whisper будет готов (см. _apply_stt_state)
@@ -1093,14 +1142,15 @@ class EnglishTeacherApp:
         if data.get("story"):
             opening += "\n🎧 Слушай историю, а потом перескажи её — по-русски или по-английски."
         if data.get("check"):
-            opening += ("\n📝 Это ПРОВЕРКА по блоку: Джейн не учит новому, а "
-                        "спрашивает по пройденному. В конце скажет, что закрепилось.")
+            opening += ("\n📝 Это ПРОВЕРКА по блоку: %s не учит новому, а "
+                        "спрашивает по пройденному. В конце скажет, что закрепилось."
+                        % self.teacher_name)
         try:
             self.reactions.reset()          # новый урок — новый счёт стараний
         except Exception:
             pass
         self._story_context = bool(data.get("story"))   # урок-аудирование
-        self.add_message("Джейн", opening)
+        self.add_message(self.teacher_name, opening)
         try:
             self.tabs.set("Чат")          # урок идёт в чате — покажем его
         except Exception:
@@ -1183,14 +1233,14 @@ class EnglishTeacherApp:
                 text += " Блок «%s» пройден целиком!" % (session.block_title or session.point_id)
         except Exception:
             pass
-        self.add_message("Джейн", text)
+        self.add_message(self.teacher_name, text)
         self._end_lesson()
         self._refresh_side_views()
         self._lesson_state("happy")
 
     def _on_lesson_aborted(self, session):
         """Ученик вышел раньше: урок не засчитан (прогресс уже записан)."""
-        self.add_message("Джейн", "⏸ Урок прерван — он не засчитан. Ошибки из разбора сохранены.")
+        self.add_message(self.teacher_name, "⏸ Урок прерван — он не засчитан. Ошибки из разбора сохранены.")
         self._end_lesson()
 
     def exit_lesson(self):
@@ -1352,9 +1402,11 @@ class EnglishTeacherApp:
     def add_message(self, sender, text):
         """Показать реплику; возвращает метку (для Джейн — можно обновить)."""
         mark = self.chat_view.add_message(sender, text)
-        # запоминаем метку последней реплики Джейн: к ней привяжем кнопку
-        # «прослушать повторно», когда озвучка этой реплики закончится
-        if sender == "Джейн" and mark:
+        # запоминаем метку последней реплики ПРЕПОДАВАТЕЛЯ: к ней привяжем
+        # кнопку «прослушать повторно», когда озвучка закончится. Метку
+        # возвращает только преподавательская реплика (для «Вы» — None),
+        # поэтому сравнивать имя не нужно: оно теперь настраивается.
+        if mark:
             self._jane_mark = mark
         return mark
 
@@ -1364,7 +1416,7 @@ class EnglishTeacherApp:
         Метка нужна, чтобы после теста уровня ЗАМЕНИТЬ строку «уровень пока не
         определён» прямо в этом сообщении, а не дописывать вторую реплику.
         """
-        self._greeting_mark = self.add_message("Джейн", self._greeting())
+        self._greeting_mark = self.add_message(self.teacher_name, self._greeting())
         return self._greeting_mark
 
     def _update_greeting_level(self):
@@ -1543,7 +1595,7 @@ class EnglishTeacherApp:
                 self._vocab_wanted = True    # начнём, когда Whisper будет готов
             return
         self._vocab_wanted = False
-        self.add_message("Джейн", "📚 Давай повторим %d слов." % len(due))
+        self.add_message(self.teacher_name, "📚 Давай повторим %d слов." % len(due))
         self._open_vocab_panel()
 
     def review_vocabulary(self):
@@ -1556,15 +1608,15 @@ class EnglishTeacherApp:
         ученик пришёл с карты, а не поздоровался в чате.
         """
         if not getattr(config, "VOCAB_ENABLED", True):
-            self.add_message("Джейн", "📚 Повторение слов выключено в настройках.")
+            self.add_message(self.teacher_name, "📚 Повторение слов выключено в настройках.")
             return None
         if not self.profile_ready:
-            self.add_message("Джейн", SETUP_HINT)
+            self.add_message(self.teacher_name, SETUP_HINT)
             return None
         if self.vocab_panel is not None:
             return self.vocab_panel        # окно уже открыто — второе не нужно
         if self.lesson.is_active:
-            self.add_message("Джейн", "⚠️ Сначала заверши урок — повторение открою после.")
+            self.add_message(self.teacher_name, "⚠️ Сначала заверши урок — повторение открою после.")
             return None
         return self._open_vocab_panel(allow_empty=True)
 
@@ -1682,7 +1734,7 @@ class EnglishTeacherApp:
             return False
         if not lesson_id:
             self._auto_lesson_used = True          # начинать нечего
-            self.add_message("Джейн", ALL_LESSONS_NOTE)
+            self.add_message(self.teacher_name, ALL_LESSONS_NOTE)
             return False
         self._auto_lesson_armed = True
         print("🎓 Автозапуск урока взведён: следующий — %s" % lesson_id)
@@ -2182,7 +2234,7 @@ class EnglishTeacherApp:
         if not text:
             return
         if self.input_bar.is_locked:
-            self.add_message("Джейн", "🎤 На этом уроке говори в микрофон — текст отключён.")
+            self.add_message(self.teacher_name, "🎤 На этом уроке говори в микрофон — текст отключён.")
             return
         self.input_bar.clear_text()
         # Первая реплика запускает урок (ДО переводчика: русское «привет»
@@ -2205,7 +2257,7 @@ class EnglishTeacherApp:
         """
         # пока профиль не заполнен — общение невозможно (гейт)
         if not self.profile_ready:
-            self.add_message("Джейн", SETUP_HINT)
+            self.add_message(self.teacher_name, SETUP_HINT)
             return
         # пользователь что-то делает — гасим текущую речь Джейн
         tts.stop()
@@ -2270,14 +2322,14 @@ class EnglishTeacherApp:
             return
         if status == ServerWaiter.TIMEOUT:
             self._server_task = None
-            self.add_message("Джейн", NOT_READY_OFFLINE)
+            self.add_message(self.teacher_name, NOT_READY_OFFLINE)
             self._set_status("● Сервер не отвечает", "err")
             if task.get("on_timeout") is not None:
                 self._safe_call(task["on_timeout"])
             return
         if status == ServerWaiter.ANNOUNCE:
             self._set_status("● Ожидаю сервер…", "warn")
-            self.add_message("Джейн", "⏳ Ожидаю LLM-сервер…")
+            self.add_message(self.teacher_name, "⏳ Ожидаю LLM-сервер…")
         try:
             self.window.after(int(task["waiter"].poll_ms), self._poll_server_task)
         except Exception:
@@ -2390,7 +2442,7 @@ class EnglishTeacherApp:
         label = next((m["label"] for m in model_registry.available_models()
                       if m["id"] == model_id), model_id)
         self._set_status("● Загружаю модель…", "warn")
-        self.add_message("Джейн", "🔄 Перезапускаю модель: %s. Это займёт до минуты." % label)
+        self.add_message(self.teacher_name, "🔄 Перезапускаю модель: %s. Это займёт до минуты." % label)
         threading.Thread(target=self._restart_model_worker, args=(model_id,),
                          daemon=True).start()
 
@@ -2404,9 +2456,9 @@ class EnglishTeacherApp:
     def _model_restart_done(self, ok):
         self.check_server()
         if ok:
-            self.add_message("Джейн", "✅ Модель загружена.")
+            self.add_message(self.teacher_name, "✅ Модель загружена.")
         else:
-            self.add_message("Джейн", "⚠️ Модель не загрузилась. "
+            self.add_message(self.teacher_name, "⚠️ Модель не загрузилась. "
                                       "Подробности: logs\\llama-server.log")
 
     def _switch_mode(self, mode):
@@ -2419,7 +2471,7 @@ class EnglishTeacherApp:
         self.chat.set_mode(mode)
         self.right_panel.set_values(mode=mode)
         self.info_bar.clear()
-        self.add_message("Джейн", f"⚙️ Режим изменён на {commands.MODE_LABELS.get(mode, mode)}")
+        self.add_message(self.teacher_name, f"⚙️ Режим изменён на {commands.MODE_LABELS.get(mode, mode)}")
 
     # =====================================================
     # Тема

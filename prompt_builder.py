@@ -12,12 +12,35 @@
 
 import re
 
+import config
+
 # Отступ 4 пробела у продолжений строк — это ЧАСТЬ текста промпта
 # (так было в gui.py). Не «выравнивать» автоформаттером.
-FEMALE_IDENTITY = """IMPORTANT: You are Jane, a female AI assistant. When speaking in Russian, ALWAYS refer to yourself in the FEMININE GENDER:
+# Имя преподавателя подставляется в промпт: в профиле ученика может быть своё
+# (поле teacher_name), иначе берётся config.TEACHER_NAME («Verbot»).
+# Пол при этом НЕ зависит от имени: робот остаётся женщиной, поэтому женские
+# формы в русском требуются при любом имени (решение ученика 23.10.2026).
+FEMALE_IDENTITY_TEMPLATE = """IMPORTANT: You are {teacher_name}, a female AI assistant. When speaking in Russian, ALWAYS refer to yourself in the FEMININE GENDER:
     - Use "я сказала", "я сделала", "я была", "я преподавательница", "я ответила" instead of masculine forms.
     - Use feminine forms of verbs and adjectives (e.g., "я готова", "я уверена", "я думала", "я хотела").
     - This applies to ALL your responses in Russian, regardless of the mode (lesson or free)."""
+
+
+def teacher_name(name=None):
+    """Имя преподавателя для промпта: своё из профиля или общее из config.
+
+    Пустое/мусорное значение → config.TEACHER_NAME. Одна функция на весь
+    проект: имя попадает и в промпт, и в чат, и в заголовок окна.
+    """
+    name = str(name or "").strip()
+    if name:
+        return name
+    return str(getattr(config, "TEACHER_NAME", "") or "Verbot").strip() or "Verbot"
+
+
+def female_identity(teacher=None):
+    """Блок «ты женщина» с подставленным именем преподавателя."""
+    return FEMALE_IDENTITY_TEMPLATE.format(teacher_name=teacher_name(teacher))
 
 EMOJIS = "😊👍❤️🎉🔥💪🤗✨🌟🎯📚💡💬👏🙌💖"
 
@@ -97,16 +120,17 @@ The student's gender is: {gender}. When you address the student or talk about th
 Address the student by their name when it feels natural.
 The student's name has two spellings: «{name}» (Russian) and «{name_latin}» (Latin). Write the Russian form in Russian text and the Latin form in English text. Copy them EXACTLY — a misspelling will be read aloud incorrectly.
 Write Russian correctly: proper cases (падежи), gender, number and word agreement.
-IMPORTANT: in Russian, NEVER use feminine forms about the student — the feminine forms above describe YOU, Jane, not the student.
+IMPORTANT: in Russian, NEVER use feminine forms about the student — the feminine forms above describe YOU, {teacher_name}, not the student.
 Answer the student's question directly. Do not show your reasoning, plans or inner thoughts — reply with the final answer only.
 """
 
 
-def _student_block(student):
+def _student_block(student, teacher=None):
     """Блок про личность ученика (имя и род). Пусто, если данных нет.
 
     Без этого модель не знает имени ученика и угадывает грамматический род
-    (в русском — обычно женский, потому что Джейн женского пола).
+    (в русском — обычно женский, потому что преподаватель — женщина).
+    teacher — имя преподавателя для строки «эти формы про ТЕБЯ, а не про ученика».
     """
     student = student or {}
     name = str(student.get("name") or "").strip()
@@ -120,6 +144,7 @@ def _student_block(student):
         name_latin=name_latin or "the student",
         gender=gender or "unknown",
         forms=forms or STUDENT_GENDER_FORMS["other"],
+        teacher_name=teacher_name(teacher),
     )
 
 
@@ -367,7 +392,7 @@ def _mistake_line(err):
         text = str(err.get("jane_response") or "")
     return text[:50]
 
-def build_system_prompt(mode, profile, lang="en", level=None, student=None, context=None, plan=None, lesson=None, now=None, variety=False, english_only=False, words=None, american=False):
+def build_system_prompt(mode, profile, lang="en", level=None, student=None, context=None, plan=None, lesson=None, now=None, variety=False, english_only=False, words=None, american=False, teacher=None):
     """Собирает system-промпт (персона + профиль ученика).
 
     mode:    'lesson' | 'free'
@@ -388,8 +413,12 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
              необязательно; None/пусто → блок не добавляется
     american: True → американский английский (слова и написание), False →
              блок не добавляется (промпт прежний байт-в-байт)
+    teacher: как зовут преподавателя у ЭТОГО ученика (поле профиля
+             teacher_name). None → config.TEACHER_NAME («Verbot»).
     """
     language_rule = language_instruction(lang)
+    # имя преподавателя — одно на весь промпт (персона + строка про ученика)
+    name = teacher_name(teacher)
 
     grammar_mistakes = profile.get("mistakes", {}).get("grammar", [])
     vocab_mistakes = profile.get("mistakes", {}).get("vocabulary", [])
@@ -406,9 +435,9 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
     total_lessons = profile.get("total_lessons", 0)
 
     if mode == "lesson":
-        prompt = f"""You are Jane, a helpful AI assistant.
+        prompt = f"""You are {name}, a helpful AI assistant.
     {language_rule}
-    {FEMALE_IDENTITY}
+    {female_identity(teacher)}
     The student is Russian-speaking, but respond in the language they use.
 
     📊 STUDENT PROGRESS PROFILE:
@@ -423,15 +452,15 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
     Do NOT use thought tags (like <|thought|>).
     """
     else:
-        prompt = f"""You are Jane, a friendly AI companion.
+        prompt = f"""You are {name}, a friendly AI companion.
     {language_rule}
-    {FEMALE_IDENTITY}
+    {female_identity(teacher)}
     Respond naturally in the same language as the student.
     The student has completed {total_lessons} lessons.
     Be supportive and helpful. Use emojis freely: {EMOJIS}
     """
     return (prompt + _level_block(profile, level)
-            + _weak_topics_block(profile) + _student_block(student)
+            + _weak_topics_block(profile) + _student_block(student, teacher)
             + _lesson_block(lesson) + _now_block(now)
             + _variety_block(variety) + _english_only_block(english_only)
             + _american_block(american)

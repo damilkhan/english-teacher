@@ -265,7 +265,8 @@ def test_chat_controller_integration():
         while chat.busy and time.time() < deadline:
             time.sleep(0.02)
 
-        check("ответ Учителя показан", any(s == "Джейн" for s, _ in messages), messages)
+        check("ответ Учителя показан",
+              any(s == user_manager.teacher_name() for s, _ in messages), messages)
         check("история диалога заполнена", len(chat.history) >= 2, chat.history)
         check("Аналитик вернул разбор", bool(analyses) and analyses[-1] and analyses[-1].get("ok"), analyses)
         prog = profile_store.load(uid)
@@ -284,7 +285,7 @@ def test_chat_controller_integration():
         while chat2.busy and time.time() < deadline:
             time.sleep(0.02)
         check("Учитель отвечает даже при мёртвом Аналитике",
-              any(s == "Джейн" for s, _ in messages2), messages2)
+              any(s == user_manager.teacher_name() for s, _ in messages2), messages2)
 
 
 def test_russian_guard():

@@ -24,7 +24,7 @@ pyw = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Programs\Python\Python31
 Set link = sh.CreateShortcut(desktop & "\English Teacher.lnk")
 link.TargetPath       = target
 link.WorkingDirectory = baseDir
-link.Description      = "English Teacher - Jane (локальный ИИ-преподаватель английского)"
+link.Description      = "Verbot (локальный ИИ-преподаватель английского)"
 link.WindowStyle      = 1
 If fso.FileExists(pyw) Then link.IconLocation = pyw & ",0"
 link.Save

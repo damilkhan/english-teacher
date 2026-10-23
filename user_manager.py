@@ -47,6 +47,24 @@ def level_label(level):
     """Человекочитаемый уровень: 'B1' или «не определён», если теста ещё не было."""
     return level if level in LEVELS else LEVEL_UNKNOWN_TEXT
 
+
+def teacher_name(user=None):
+    """Как зовут преподавателя для ЭТОГО ученика.
+
+    Имя живёт В ПРОФИЛЕ (поле teacher_name): ученик может назвать
+    преподавателя как угодно, и это его личный выбор, а не общая настройка.
+    Пустое поле / нет профиля → общее имя из config.TEACHER_NAME («Verbot»).
+
+    Храним в профиле ПУСТУЮ строку, когда ученик ничего не ввёл: тогда смена
+    общего имени в config.py подхватывается у всех, кто своё не задавал.
+    """
+    name = ""
+    if isinstance(user, dict):
+        name = str(user.get("teacher_name") or "").strip()
+    if name:
+        return name
+    return str(getattr(config, "TEACHER_NAME", "") or "Verbot").strip() or "Verbot"
+
 # Аватары-эмодзи, предлагаемые в форме (пользователь может вписать свой).
 AVATARS = ["🦊", "🐼", "🐯", "🐨", "🐸", "🦁", "🐧", "🦉",
            "🐙", "🦄", "🐳", "🐝", "🌟", "🚀", "🎧", "📚"]
@@ -163,6 +181,11 @@ def _normalize(profile, user_id):
     profile["goal"] = str(profile.get("goal") or "").strip()
     profile["avatar"] = str(profile.get("avatar") or AVATARS[0]).strip() or AVATARS[0]
 
+    # Имя ПРЕПОДАВАТЕЛЯ у этого ученика (пусто → общее из config.TEACHER_NAME).
+    # Ограничение длины — чтобы случайная простыня текста не уехала в промпт
+    # и в заголовки: это имя, а не поле для заметок.
+    profile["teacher_name"] = str(profile.get("teacher_name") or "").strip()[:32]
+
     # Заполнен ли профиль формой (имя/пол заданы человеком). Старые профили
     # поля не имеют → False, значит потребуют формы при следующем запуске.
     profile["complete"] = bool(profile.get("complete", False))
@@ -257,13 +280,16 @@ def save_user(user_id, data):
 
 
 def create_user(name, gender="other", age=None, level=None, goal="", avatar=AVATARS[0],
-                complete=True, name_latin=None):
+                complete=True, name_latin=None, teacher_name=""):
     """Создаёт новый профиль в первом свободном слоте 1..MAX_USERS.
 
     Возвращает профиль или None, если лимит исчерпан / имя пустое.
     Уровень по умолчанию НЕ задан (None): его выставит вводный тест.
     complete=False — профиль-заготовка (без формы): общение запрещено,
     пока его не заполнят.
+
+    teacher_name — как ученик называет преподавателя (пусто → config.TEACHER_NAME).
+    Параметр необязательный и стоит последним — старые вызовы не ломаются.
 
     name_latin — латинская форма имени из формы (её заполняет пользователь
     или автотранслитерация). Параметр НЕОБЯЗАТЕЛЬНЫЙ и стоит ПОСЛЕДНИМ:
@@ -287,6 +313,7 @@ def create_user(name, gender="other", age=None, level=None, goal="", avatar=AVAT
         {"name": name, "name_latin": name_latin or "",
          "gender": gender, "age": age, "level": level,
          "goal": goal, "avatar": avatar, "complete": complete,
+         "teacher_name": teacher_name,
          "created": datetime.now().isoformat()},
         user_id,
     )

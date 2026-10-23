@@ -257,7 +257,8 @@ def test_normal_path():
               [m["role"] for m in msgs])
         base = prompt_builder.build_system_prompt("lesson", {}, "en")
         check("базовый промпт не тронут (правило §10)",
-              base.startswith("You are Jane") and "CONTEXT" not in base, base[:60])
+              base.startswith("You are " + config.TEACHER_NAME)
+              and "CONTEXT" not in base, base[:60])
 
 
 def main():
