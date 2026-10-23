@@ -17,7 +17,10 @@
 #   4) колесо мыши прокручивает чат;
 #   5) после новой реплики чат внизу;
 #   6) облачко не шире предела и текст не обрезан (xview = 0..1);
-#   7) при сужении окна реплики раскладываются заново и остаются в пределах.
+#   7) при сужении окна реплики раскладываются заново и остаются в пределах;
+#   8) короткое содержимое НЕ уезжает вниз: пустоты над первой репликой нет
+#      (баг со снимка 23.10.2026: колесо вверх давало canvasy(0) = -652 px),
+#      и первая реплика не липнет к самому верху чата.
 # =========================================================
 
 import os
@@ -49,15 +52,15 @@ def check(name, ok, detail=""):
     return ok
 
 
-def make_view(width, height):
-    """Окно и чат с множеством реплик (чтобы было что прокручивать)."""
+def make_view(width, height, messages=14):
+    """Окно и чат с репликами (по умолчанию — много, чтобы было что крутить)."""
     root = ctk.CTk()
     root.geometry("%dx%d" % (width, height))
     frame = ctk.CTkFrame(root, fg_color=theme.DARK["surface"])
     frame.pack(fill="both", expand=True)
     view = ChatView(frame, theme.DARK)
     view.pack(side="top", fill="both", expand=True, padx=6, pady=(0, 8))
-    for i in range(14):
+    for i in range(messages):
         view.add_message(
             "Verbot",
             "Message %d: tell me about your day, what you did in the morning "
@@ -125,7 +128,7 @@ def main():
         view._on_wheel(WheelEvent())
         root.update()
         after = view.canvas.yview()
-        check("колесо сдвинуло чат вниз", after[0] > 0.0,
+        check("колесо сдвинуло чат вниз", after[0] > 0.0 or after[1] >= 0.99,
               (after, view.canvas.yview()))
         # колесо над ЧУЖИМ виджетом чат не крутит
         before_foreign = view.canvas.yview()
@@ -178,8 +181,53 @@ def main():
                 if view._messages[mark].body is not None
                 and view._messages[mark].body.xview()[1] < 0.999]
         check("после сужения текст по-прежнему не обрезан", not over, over[:3])
+
+        print("\n[8] Прокрутка вверх не уходит в минус")
+        view.canvas.yview_moveto(0.0)
+        root.update()
+        check("в самом верху начало содержимого на нуле",
+              view.canvas.canvasy(0) == 0, "canvasy(0) = %d px" % view.canvas.canvasy(0))
+        # крутим вверх СИЛЬНО: раньше это давало отрицательное смещение
+        view.canvas.yview_scroll(-50, "units")
+        root.update()
+        check("сильная прокрутка вверх не даёт отрицательного смещения",
+              view.canvas.canvasy(0) == 0, "canvasy(0) = %d px" % view.canvas.canvasy(0))
+
+        # и через обработчик колеса (он же используется в жизни)
+        class UpWheel:
+            delta = 120
+            widget = view.canvas
+
+        view._on_wheel(UpWheel())
+        root.update()
+        check("обработчик колеса тоже не сдвигает чат",
+              view.canvas.canvasy(0) == 0, view.canvas.canvasy(0))
+
+        first = view._messages[view._order[0]].bubble
+        offset = first.winfo_rooty() - view.canvas.winfo_rooty()
+        check("первая реплика не липнет к верхнему краю (отступ >= 8 px)",
+              offset >= 8, "отступ %d px" % offset)
+        print("     (кэш, чтобы проверка была не на «глаз»: отступ = %d px)" % offset)
     finally:
         root.destroy()
+
+    # ---- отдельный, чистый случай: ОДНО сообщение на большой чат ----
+    root2, view2 = make_view(1160, 760, messages=1)
+    try:
+        print("\n[9] Одно сообщение в большом окне")
+        check("весь текст помещается", view2.canvas.yview() == (0.0, 1.0),
+              view2.canvas.yview())
+        check("пустоты над репликой нет", view2.canvas.canvasy(0) == 0,
+              view2.canvas.canvasy(0))
+        view2.canvas.yview_scroll(-30, "units")
+        root2.update()
+        check("прокрутка вверх не оставляет пустоту",
+              view2.canvas.canvasy(0) == 0, view2.canvas.canvasy(0))
+        bubble = view2._messages[view2._order[0]].bubble
+        gap = bubble.winfo_rooty() - view2.canvas.winfo_rooty()
+        check("у первой реплики есть отступ сверху", gap >= 8, gap)
+    finally:
+        root2.destroy()
 
     print("\n" + "=" * 60)
     if FAILED:

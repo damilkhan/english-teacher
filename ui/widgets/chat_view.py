@@ -76,6 +76,10 @@ BUBBLE_PADX = 12       # внутренние отступы облачка (т�
 BUBBLE_PADY = 8
 ROW_PADY = 3           # воздух между репликами
 SIDE_PAD = 10          # отступ облачка от края области чата
+# Воздух над первой репликой и под последней: облачко не должно липнуть к
+# краю поля чата (замечание ученика 23.10.2026).
+TOP_PAD = 10
+BOTTOM_PAD = 8
 TAIL_W, TAIL_H = 9, 12  # «хвостик» облачка (треугольник)
 # Облачко занимает не больше этой доли ширины чата: так видно, кто говорит,
 # и длинные реплики не растягиваются на весь экран.
@@ -121,6 +125,7 @@ class ChatView(ctk.CTkFrame):
         self._replay_icon = None      # держим ссылку на PhotoImage (иначе пропадёт)
         self._fonts = {}              # (family, size) → tkfont.Font
         self._relayout_job = None
+        self._syncing = False         # защита от рекурсии в <Configure>
 
         # --- прокрутка: холст + внутренний фрейм с репликами ---
         self.canvas = tk.Canvas(self, bg=palette["chat_bg"],
@@ -142,6 +147,18 @@ class ChatView(ctk.CTkFrame):
                                        corner_radius=0)
         self._window = self.canvas.create_window((0, 0), window=self.list_frame,
                                                  anchor="nw")
+        # Воздух сверху и снизу — отдельные пустые полоски. Держим их всегда
+        # (clear() их не трогает), иначе первая реплика липнет к краю, а
+        # последняя — к полосе прокрутки.
+        self._top_spacer = ctk.CTkFrame(self.list_frame, fg_color=palette["chat_bg"],
+                                        corner_radius=0, height=TOP_PAD)
+        self._top_spacer.pack(side="top", fill="x")
+        self._top_spacer.pack_propagate(False)
+        self._bottom_spacer = ctk.CTkFrame(self.list_frame, fg_color=palette["chat_bg"],
+                                           corner_radius=0, height=BOTTOM_PAD)
+        self._bottom_spacer.pack(side="bottom", fill="x")
+        self._bottom_spacer.pack_propagate(False)
+
         self.list_frame.bind("<Configure>", self._on_list_configure, add="+")
         self.canvas.bind("<Configure>", self._on_canvas_configure, add="+")
         # колесо мыши над чатом (проверяем, что курсор действительно над нами).
@@ -261,7 +278,9 @@ class ChatView(ctk.CTkFrame):
 
         msg.row = ctk.CTkFrame(self.list_frame, fg_color=p["chat_bg"],
                                corner_radius=0)
-        msg.row.pack(fill="x", padx=SIDE_PAD, pady=(ROW_PADY, ROW_PADY))
+        # before=_bottom_spacer: воздух снизу всегда остаётся под репликами
+        msg.row.pack(fill="x", padx=SIDE_PAD, pady=(ROW_PADY, ROW_PADY),
+                     before=self._bottom_spacer)
         # реплики преподавателя слева, ученика справа
 
 
@@ -465,11 +484,39 @@ class ChatView(ctk.CTkFrame):
     # Прокрутка и раскладка
     # =====================================================
     def _on_list_configure(self, _event=None):
-        """Содержимое выросло — обновить область прокрутки."""
+        """Содержимое изменилось — обновить область прокрутки.
+
+        ГРАБЛЯ (найдена 23.10.2026 по снимку ученика): если область прокрутки
+        КОРОЧЕ окна, вызов `yview_moveto(1.0)` даёт ОТРИЦАТЕЛЬНОЕ смещение —
+        содержимое уезжает вниз, а сверху появляется пустота. Лечится тем, что
+        окно холста делаем не ниже самого холста: тогда регион всегда >= окна.
+        """
+        self._sync_scrollregion()
+
+    def _sync_scrollregion(self):
+        """Обновить область прокрутки и, если содержимое короче окна, прижать вверх.
+
+        ГРАБЛЯ: внутри вызывается update_idletasks(), а сам метод вызывается из
+        обработчика <Configure> того же фрейма — без флага это бесконечная
+        рекурсия (окно «зависает» на добавлении реплики).
+        """
+        if self._syncing:
+            return
+        self._syncing = True
         try:
+            self.update_idletasks()
+            height = self.list_frame.winfo_reqheight()
+            canvas_h = max(1, self.canvas.winfo_height())
+            # окно холста не ниже самого холста — иначе возможен «минус»
+            self.canvas.itemconfigure(self._window, height=max(height, canvas_h))
             self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+            first, _last = self.canvas.yview()
+            if height <= canvas_h and first != 0.0:
+                self.canvas.yview_moveto(0.0)      # содержимое помещается — сверху
         except Exception:
             pass
+        finally:
+            self._syncing = False
 
     def _on_canvas_configure(self, event=None):
         """Ширина чата изменилась: растянуть реплики и (если надо) разложить.
@@ -512,10 +559,23 @@ class ChatView(ctk.CTkFrame):
         if widget is None or not self._is_inside(widget):
             return None
         try:
+            # Если всё содержимое помещается в окно — прокручивать нечего.
+            # Без этой проверки колесо вверх уводило чат в «минус» (замер:
+            # canvasy(0) = -652 px), и сверху появлялась пустота — ровно то,
+            # что увидел ученик 23.10.2026.
+            box = self.canvas.bbox("all")
+            if box is None or box[3] <= self.canvas.winfo_height():
+                return "break"
             delta = int(-1 * (event.delta / 120)) if event.delta else 0
             if delta == 0:
                 delta = -1 if event.delta > 0 else 1
             self.canvas.yview_scroll(delta, "units")
+            # Ось Y холста: canvasy(0) — координата содержимого у верхнего края.
+            # НОРМА — ноль (начало) или положительное число (прокрутили вниз).
+            # Отрицательное значение означает, что содержимое уехало ВНИЗ и
+            # сверху пустота — только этот случай и лечим.
+            if self.canvas.canvasy(0) < 0:
+                self.canvas.yview_moveto(0.0)
         except Exception:
             pass
         return "break"
@@ -532,11 +592,19 @@ class ChatView(ctk.CTkFrame):
         return False
 
     def _scroll_to_bottom(self):
-        """Прокрутить чат вниз (новая реплика должна быть видна)."""
+        """Прокрутить чат вниз (новая реплика должна быть видна).
+
+        Если содержимое КОРОЧЕ окна — прокручивать нечего, и `yview_moveto(1.0)`
+        только сдвинуло бы реплики вниз (пустота сверху). Поэтому в этом случае
+        прижимаем вид к началу.
+        """
         try:
-            self.update_idletasks()
-            self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-            self.canvas.yview_moveto(1.0)
+            self._sync_scrollregion()
+            content_h = self.list_frame.winfo_reqheight()
+            if content_h > max(1, self.canvas.winfo_height()):
+                self.canvas.yview_moveto(1.0)
+            else:
+                self.canvas.yview_moveto(0.0)
         except Exception:
             pass
 
@@ -611,6 +679,11 @@ class ChatView(ctk.CTkFrame):
         self.configure(fg_color=palette["chat_bg"])
         self.canvas.configure(bg=palette["chat_bg"])
         self.list_frame.configure(fg_color=palette["chat_bg"])
+        for spacer in (self._top_spacer, self._bottom_spacer):
+            try:
+                spacer.configure(fg_color=palette["chat_bg"])
+            except Exception:
+                pass
         self.scrollbar.configure(button_color=palette["muted"],
                                  button_hover_color=palette["btn_hover"])
         self._replay_icon = None

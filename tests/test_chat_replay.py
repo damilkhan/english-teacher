@@ -103,9 +103,12 @@ def main():
     root.update()
     check("после clear кнопок нет", replay_buttons(view) == [], replay_buttons(view))
     check("после clear реплик нет", view._order == [], view._order)
-    check("после clear в списке нет виджетов",
-          len(view.list_frame.winfo_children()) == 0,
-          view.list_frame.winfo_children())
+    # в списке всегда живут два спейсера (воздух сверху и снизу) — реплик
+    # после clear быть не должно
+    left = view.list_frame.winfo_children()
+    check("после clear остались только спейсеры (2 виджета)",
+          len(left) == 2 and all(w in (view._top_spacer, view._bottom_spacer)
+                                 for w in left), left)
 
     print("\n[7] Неизвестная метка и реплика ученика не роняют")
     try:
