@@ -68,6 +68,9 @@
 - По завершении работы — `git push origin master`.
 - CRLF: большинство файлов в рабочем дереве с CRLF (`i/lf w/crlf`). Новые — тоже CRLF.
 - В `.gitignore`: `profiles/`, `logs/`, `models/`, `settings.json`, `__pycache__/`.
+- `NEXT_CHAT_PROMPT.md` — файл-приветствие НОВОГО чата, намеренно **НЕ в git**
+  (его копируют первым сообщением). Обновлять после каждого этапа: короткий
+  список состояния + правило экономии контекста; подробности — здесь.
 - **`assets/fonts/` — только `undertale_battle_font.ttf`** (шрифт чата, в git).
   Комплект DotGothic16 (`dotgothic16-regular.ttf` + `OFL.txt` + `metadata.json`)
   **удалён** как неиспользуемый.
