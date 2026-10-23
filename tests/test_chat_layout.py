@@ -9,7 +9,9 @@
 # Чат стал мессенджером с облачками (ui/widgets/chat_view.py).
 #
 # Проверяем:
-#   1) робот в своей полосе ПОД чатом и НЕ перекрывает его;
+#   1) робот в своей полосе ПОД чатом и НЕ перекрывает его, прижат к НИЗУ
+#      строки (под ним нет пустоты) и обрезан по видимому содержимому;
+#   1b) полоса урока отнимает высоту у ПОЛЯ ВВОДА, а не у чата;
 #   2) чат занимает всю ширину вкладки, робот не отнимает у него место;
 #   3) блок ввода + робот вместе занимают ровно ширину вкладки;
 #   4) кнопки нижнего ряда не вылезают за край (на минимальном окне тоже);
@@ -132,6 +134,32 @@ def main():
                   robot[1] + robot[3] <= box(app.left_frame)[1]
                   + box(app.left_frame)[3] + 1, robot)
 
+            print("\n[1b] Робот прижат к низу, прозрачного края нет")
+            ch = app.character
+            check("рамка видимого содержимого измерена", bool(ch._ink_box), ch._ink_box)
+            ink = ch._ink_box or (0, 0, 1, 1)
+            ratio = (ink[3] - ink[1]) / float(max(1, ink[2] - ink[0]))
+            check("высота робота посчитана по видимому размеру",
+                  abs(ch.height / float(ch.width) - ratio) < 0.02,
+                  (ch.size, round(ratio, 3)))
+            check("отступ под роботом выключен (gap=0)", ch.gap == 0, ch.gap)
+            canvas = box(ch.canvas)
+            check("холст прижат к низу своего блока",
+                  abs((canvas[1] + canvas[3]) - (robot[1] + robot[3])) <= 1,
+                  (canvas[1] + canvas[3], robot[1] + robot[3]))
+            check("низ робота совпадает с низом кнопок ряда",
+                  abs((canvas[1] + canvas[3])
+                      - (box(app.control_bar)[1] + box(app.control_bar)[3])) <= 1,
+                  (canvas[1] + canvas[3],
+                   box(app.control_bar)[1] + box(app.control_bar)[3]))
+            try:
+                bb = ch.canvas.bbox(ch._item)
+            except Exception:
+                bb = None
+            check("рисунок занимает почти весь холст (край обрезан)",
+                  bool(bb) and (bb[3] - bb[1]) >= canvas[3] - 4
+                  and (bb[2] - bb[0]) >= canvas[2] - 4, bb)
+
             print("\n[2] Чат занимает всю ширину вкладки")
             check("ширина чата = ширине нижнего ряда (± 2 px)",
                   abs(chat[2] - box(app.bottom_row)[2]) <= 2,
@@ -157,6 +185,39 @@ def main():
                   (ib[3], left[3], box(app.control_bar)[3]))
             check("поле ввода не выше 130 px (не раздулось)",
                   ib[3] <= 130, ib[3])
+
+            print("\n[3c] Полоса урока отнимает высоту у ПОЛЯ ВВОДА, а не у чата")
+            chat_before = box(app.chat_view)[3]
+            input_before = box(app.input_bar)[3]
+            app.lesson_bar.set_lesson("Урок 1.1 · Hello / Hi", "говорение", "0/12")
+            for _ in range(20):
+                app.window.update()
+                time.sleep(0.01)
+            chat_after = box(app.chat_view)[3]
+            input_after = box(app.input_bar)[3]
+            bar_h = box(app.lesson_bar)[3]
+            print("     чат %d → %d | поле %d → %d | полоса %d" % (
+                chat_before, chat_after, input_before, input_after, bar_h))
+            check("полоса урока видна", app.lesson_bar.winfo_manager() == "pack",
+                  app.lesson_bar.winfo_manager())
+            check("полоса стоит ВНУТРИ колонки ввода",
+                  app.lesson_bar.master is app.input_control,
+                  app.lesson_bar.master)
+            check("чат НЕ изменился от появления полосы",
+                  abs(chat_after - chat_before) <= 2, (chat_before, chat_after))
+            check("поле ввода сжалось на высоту полосы",
+                  input_before - input_after >= bar_h - 2,
+                  (input_before, input_after, bar_h))
+            check("полоса стоит над полем ввода",
+                  box(app.lesson_bar)[1] + bar_h <= box(app.input_bar)[1] + 1,
+                  (box(app.lesson_bar), box(app.input_bar)))
+            check("поле ввода не схлопнулось", input_after >= 40, input_after)
+            app.lesson_bar.clear()
+            for _ in range(10):
+                app.window.update()
+            check("после урока поле вернуло высоту",
+                  abs(box(app.input_bar)[3] - input_before) <= 2,
+                  (box(app.input_bar)[3], input_before))
 
             print("\n[4] Кнопки не вылезают за край")
             for name, btn in (("record", app.control_bar.record_btn),

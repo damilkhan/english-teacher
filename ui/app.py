@@ -773,7 +773,14 @@ class EnglishTeacherApp:
         self.input_control = ctk.CTkFrame(self.bottom_row, fg_color="transparent")
         self.input_control.pack(side="left", fill="both", expand=True)
 
+        # ---------- полоса идущего занятия ----------
+        # «🎓 Урок 1.1 · Hello / Hi · говорение · 4/12  [Выйти]» живёт В
+        # КОЛОНКЕ ВВОДА, над полем: появляясь, она отнимает высоту у поля,
+        # а не у чата (решение ученика 23.10.2026).
         self.input_bar = InputBar(self.input_control, p, on_send=self.send_text)
+        self.lesson_bar = LessonBar(self.input_control, p,
+                                    on_exit=self.exit_lesson,
+                                    before=self.input_bar)
         self.control_bar = ControlBar(self.input_control, p,
                                       on_record=self._start_recording,
                                       on_record_release=self._stop_recording,
@@ -802,12 +809,6 @@ class EnglishTeacherApp:
         # полем ввода (в чат такие служебные строки не пишем). Виджет сам
         # прячется, пока данных нет, поэтому при старте её не видно.
         self.info_bar = InfoBar(self.chat_tab, p, before=self.chat_view)
-
-        # ---------- полоса идущего занятия ----------
-        # «🎓 Урок 1.1 · Hello / Hi · говорение · 4/12  [Выйти]» — над полем
-        # ввода (pack before=chat_view), сама прячется, когда урока нет.
-        self.lesson_bar = LessonBar(self.chat_tab, p, on_exit=self.exit_lesson,
-                                    before=self.chat_view)
 
         # ---------- подсказка перевода (RU → EN) ----------
         # English-вариант фразы ученика. Отправки нет: ученик сам решает.
@@ -882,10 +883,15 @@ class EnglishTeacherApp:
             # Размер блока = reserve робота, поэтому рисунок встаёт ровно.
             self.robot_host = ctk.CTkFrame(self.bottom_row, fg_color=p["surface"],
                                            corner_radius=0, width=1, height=1)
-            self.robot_host.pack(side="right", padx=(ROBOT_GAP, 0))
+            # anchor="s": робот прижат к НИЗУ строки. Без этого pack центрирует
+            # его по вертикали, и под роботом остаётся пустое место (замечание
+            # ученика 23.10.2026: «слишком высоко, под ним пусто»).
+            self.robot_host.pack(side="right", anchor="s", padx=(ROBOT_GAP, 0))
             self.robot_host.pack_propagate(False)
+            # gap=0: без отступа под роботом (картинка уже обрезана по
+            # видимому содержимому, см. character.Character._measure_ink)
             self.character = character.Character(self.robot_host, width=width,
-                                                 dispatch=self._dispatch)
+                                                 dispatch=self._dispatch, gap=0)
             if self.character.available:
                 reserve_w, reserve_h = self.character.reserve
                 self.robot_host.configure(width=reserve_w, height=reserve_h)

@@ -27,8 +27,15 @@ import threading
 import time
 
 FRAME_INTERVAL = 1.0 / 18.0      # ~18 кадров в секунду (плавно и не грузит CPU)
-DEFAULT_WIDTH = 300              # ширина робота в области чата, px
+DEFAULT_WIDTH = 300              # ВИДИМАЯ ширина робота, px (см. _measure_ink)
 GAP = 10                         # отступ от правого нижнего угла, px
+
+# Вокруг робота на слоях есть БОЛЬШОЙ прозрачный край: тело занимает
+# 381x327 из холста 661x377 (замер 23.10.2026, x 149..530, y 23..351).
+# Если рисовать холст целиком, робот выглядит мелким и «висит» с пустотой
+# снизу. Поэтому картинку кадра обрезаем по этой рамке: тогда width — это
+# ширина САМОГО робота, а не холста с полями.
+INK_ALPHA_MIN = 16               # пиксели слабее считаем прозрачным краем
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CHARACTER_DIR = os.path.join(BASE_DIR, "assets", "character")
@@ -46,13 +53,19 @@ class Character:
     """Робот-персонаж в области чата: лицо из слоёв + анимация."""
 
     def __init__(self, parent, image_path=None, width=DEFAULT_WIDTH, bg=None,
-                 dispatch=None, layers_dir=None, inset_right=0):
+                 dispatch=None, layers_dir=None, inset_right=0, gap=None,
+                 crop_ink=True):
         self.parent = parent
         self.width = int(width)
         # Сколько места справа отступить от края (полоса прокрутки чата).
         # Робот лежит ПОВЕРХ чата, и раньше его холст накрывал полосу —
         # при прокрутке вниз её просто не было видно.
         self._inset_right = max(0, int(inset_right))
+        # Отступ от края Canvas. 0 — робот прижат к нижнему краю своего блока
+        # (решение ученика 23.10.2026: он стоял слишком высоко).
+        self.gap = max(0, int(GAP if gap is None else gap))
+        self._crop_ink = bool(crop_ink)
+        self._ink_box = None
         self.height = 0
         self.canvas = None
         self.available = False
@@ -98,8 +111,55 @@ class Character:
                 return
             self.available = True
             self.height = self._base.height
+        elif self._crop_ink:
+            # рамка видимого робота ОДНА на все кадры (иначе фигура дрожала бы
+            # по вертикали: у разных ртов разная высота)
+            self._ink_box = self._measure_ink()
+            if self._ink_box:
+                ink_w = self._ink_box[2] - self._ink_box[0]
+                ink_h = self._ink_box[3] - self._ink_box[1]
+                if ink_w > 0:
+                    self.height = max(1, int(round(ink_h * self.width / float(ink_w))))
 
         self._build_canvas(bg)
+
+    # -----------------------------------------------------
+    # Рамка видимого робота
+    # -----------------------------------------------------
+    def _measure_ink(self):
+        """Границы ВИДИМОГО робота на холсте слоёв: (x0, y0, x1, y1).
+
+        Берём тело и ВСЕ слои глаз/рта (рамка нужна одна на любой кадр).
+        Считаем через PIL (point + getbbox) — это на порядки быстрее, чем
+        перебирать строки в Python: 26 слоёв читаются за десятки миллисекунд.
+        """
+        try:
+            import character_face as face_mod
+            images = []
+            body = self._renderer.face if self._renderer is not None else None
+            if body is not None:
+                images.append(body)
+            if self._renderer is not None:
+                names = face_mod.layer_names(self._renderer.layers_dir)
+                for group in ("eyes", "mouth"):
+                    for name in names.get(group, []):
+                        layer = self._renderer.layer(os.path.splitext(name)[0])
+                        if layer is not None:
+                            images.append(layer)
+            box = None
+            for image in images:
+                alpha = image.convert("RGBA").split()[-1]
+                mask = alpha.point(lambda v: 255 if v >= INK_ALPHA_MIN else 0)
+                bounds = mask.getbbox()
+                if not bounds:
+                    continue
+                box = bounds if box is None else (
+                    min(box[0], bounds[0]), min(box[1], bounds[1]),
+                    max(box[2], bounds[2]), max(box[3], bounds[3]))
+            return box
+        except Exception as exc:                     # noqa: BLE001
+            print("⚠️ Робот: рамка содержимого не измерена (%s)" % exc)
+            return None
 
     # -----------------------------------------------------
     # Загрузка (запасной путь)
@@ -145,7 +205,7 @@ class Character:
             self.available = False
             return
         self.canvas.place(relx=1.0, rely=1.0, anchor="se",
-                          x=-(GAP + self._inset_right), y=-GAP)
+                          x=-(self.gap + self._inset_right), y=-self.gap)
 
     def _parent_bg(self):
         """Фон Canvas — как у области чата (Tk настоящей прозрачности не умеет)."""
@@ -173,7 +233,7 @@ class Character:
     @property
     def reserve(self):
         cw, ch = self._canvas_size
-        return (cw + GAP, ch + GAP)
+        return (cw + self.gap, ch + self.gap)
 
     @property
     def state(self):
@@ -342,6 +402,8 @@ class Character:
         image = self._renderer.compose_cached(frame)
         if image is None:
             return self._fallback_frame(), None
+        if self._ink_box:
+            image = image.crop(self._ink_box)      # срезаем прозрачный край
         resized = image.resize((self.width, self.height), Image.NEAREST)
         # кэш ограничиваем: состояний немного, но фазы переходов добавляют ключи
         if len(self._image_cache) > 160:
