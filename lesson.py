@@ -203,6 +203,12 @@ class LessonSession:
         self.reply_target = max(1, target)
 
         self.replies = 0
+        # Счётчики ДЛЯ ИТОГА занятия (решение ученика 23.10.2026: накопленное
+        # не показываем по ходу, только в конце).
+        #   hints    — подсказки переводчика, которые ученик ПРОИЗНЁС вслух;
+        #   mistakes — сумма ошибок от Аналитика за занятие.
+        self.hints = 0
+        self.mistakes = 0
         self.finished = False
         self.aborted = False
 
@@ -237,6 +243,28 @@ class LessonSession:
 
     def locked_hint(self) -> str:
         return locked_hint(self.lesson_type)
+
+    # ---------- счётчики для итога ----------
+    def use_hint(self) -> int:
+        """Ученик подглядел перевод И произнёс его вслух.
+
+        Считаем ТОЛЬКО удачную подсказку (решение ученика): набранное слово,
+        которое так и не прозвучало, подсказкой не считается. Возвращает
+        новое число подсказок за занятие.
+        """
+        if self.is_active:
+            self.hints += 1
+        return self.hints
+
+    def add_mistakes(self, count: int = 1) -> int:
+        """Учесть ошибки разбора Аналитика (сумма за занятие)."""
+        try:
+            n = max(0, int(count))
+        except (TypeError, ValueError):
+            n = 0
+        if self.is_active:
+            self.mistakes += n
+        return self.mistakes
 
     # ---------- ход занятия ----------
     def register_reply(self) -> Dict[str, Any]:
@@ -277,6 +305,8 @@ class LessonSession:
             "title": self.title,
             "replies": self.replies,
             "target": self.reply_target,
+            "hints": self.hints,
+            "mistakes": self.mistakes,
             "finished": self.finished,
             "aborted": self.aborted,
             "active": self.is_active,

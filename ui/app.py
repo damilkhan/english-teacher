@@ -1237,6 +1237,24 @@ class EnglishTeacherApp:
             self.input_bar.set_locked(True, lesson_mod.locked_hint(session.lesson_type))
         self.control_bar.set_record_enabled(session.allows_voice())
 
+    def _note_hint(self):
+        """Подсказка перевода пошла в дело (ученик произнёс её).
+
+        Нужна ИТОГУ занятия: сколько раз ученик выкручивался подсказкой.
+        Вне занятия ничего не считаем.
+        """
+        session = self.lesson.current()
+        if session is None or not session.is_active:
+            return
+        session.use_hint()
+
+    def _note_mistakes(self, count):
+        """Записать ошибки разбора в сессию занятия (для итога)."""
+        session = self.lesson.current()
+        if session is None or not session.is_active:
+            return
+        session.add_mistakes(count)
+
     def _lesson_state(self, state):
         """Состояние робота во время занятия (пока заглушка — только лог)."""
         if getattr(self, "character", None) is None:
@@ -1863,6 +1881,7 @@ class EnglishTeacherApp:
             return False
         if report.verdict == "good":
             self._vocabulary_success()      # +1 к уровню слова (до _pron_forget!)
+            self._note_hint()               # подсказка + произнёс вслух = в счёт
             self._pron_forget()
             self.hint_bar.show_note("✅ Похоже! «%s»" % report.reference,
                                     report.reference)
@@ -2103,6 +2122,11 @@ class EnglishTeacherApp:
         """Разбор Аналитика → тонкая строка (не в чат) + реакция робота."""
         self.info_bar.set_analysis(self._analysis_text(result))
         self._react_to_analysis(result)
+        # ошибки копятся для ИТОГА занятия (по ходу ученику не показываем)
+        if result and result.get("ok"):
+            errors = result.get("errors") or []
+            if errors:
+                self._note_mistakes(len(errors))
 
     @staticmethod
     def _analysis_text(result):
