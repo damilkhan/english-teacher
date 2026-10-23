@@ -780,9 +780,14 @@ class EnglishTeacherApp:
                                       on_settings=self.open_panel,
                                       on_clear=self.clear_chat,
                                       on_users=self.open_users_panel)
-        # кнопки — в самый низ, поле ввода — над ними
+        # Кнопки — в самый низ, поле ввода — над ними.
+        # ВАЖНО: поле ввода растягивается (expand=True). Колонка ввода по
+        # высоте равна роботу (161 px), а поле (52) и кнопки (42) занимали
+        # только 102 px — над полем оставалась пустая полоса 59 px, ученик
+        # видел её как «провал» между полосой урока и полем ввода.
+        # Теперь пустоту забирает само поле: высота = колонка − кнопки.
         self.control_bar.pack(side="bottom", fill="x", pady=(8, 0))
-        self.input_bar.pack(side="bottom", fill="x")
+        self.input_bar.pack(side="bottom", fill="both", expand=True)
 
         # ---------- робот-персонаж (idle-анимация) ----------
         # Робот — украшение: его сбой не должен ломать окно, поэтому весь

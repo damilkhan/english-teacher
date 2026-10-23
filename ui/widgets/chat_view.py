@@ -256,6 +256,8 @@ class ChatView(ctk.CTkFrame):
         """Создать ряд, облачко, шапку и текст реплики."""
         p = self.palette
         bg = self._bubble_bg(msg.is_user)
+        # справа — преподаватель, слева — ученик
+        on_right = not msg.is_user
 
         msg.row = ctk.CTkFrame(self.list_frame, fg_color=p["chat_bg"],
                                corner_radius=0)
@@ -267,20 +269,21 @@ class ChatView(ctk.CTkFrame):
         # по стороне, чтобы он примыкал к нижнему углу облачка.
         msg.tail = tk.Canvas(msg.row, width=TAIL_W, height=TAIL_H, bd=0,
                              highlightthickness=0, bg=p["chat_bg"])
-        self._draw_tail(msg.tail, msg.is_user, bg)
+        self._draw_tail(msg.tail, on_right, bg)
 
         msg.bubble = ctk.CTkFrame(msg.row, fg_color=bg, corner_radius=BUBBLE_RADIUS,
                                   border_width=0)
-        # ВАЖНО: pack(side="right") отдаёт место ПЕРВОМУ упакованному, поэтому
-        # у реплик ученика хвостик пакуется РАНЬШЕ облачка (он правее), а у
-        # реплик преподавателя — позже (он левее). Иначе хвостик оказывался
-        # с «чужой» стороны.
-        if msg.is_user:
-            msg.tail.pack(side="right", anchor="s", padx=(6, 0))
-            msg.bubble.pack(side="right", anchor="s")
-        else:
-            msg.bubble.pack(side="left", anchor="s")
-            msg.tail.pack(side="left", anchor="s", padx=(6, 0))
+        # СТОРОНЫ (решение ученика 23.10.2026): реплика УЧЕНИКА — слева,
+        # преподавателя — справа.
+        # ВАЖНО: pack отдаёт место ПЕРВОМУ упакованному, поэтому «хвостик»
+        # пакуется РАНЬШЕ облачка с той же стороны — тогда он оказывается с
+        # НАРУЖНОЙ стороны (у левого облачка слева, у правого справа).
+        side = "right" if on_right else "left"
+        # padx в Tk — (слева, справа): у правого облачка воздух слева от
+        # хвостика, у левого — справа от него
+        gap = (6, 0) if on_right else (0, 6)
+        msg.tail.pack(side=side, anchor="s", padx=gap)
+        msg.bubble.pack(side=side, anchor="s")
 
         inner = ctk.CTkFrame(msg.bubble, fg_color=bg, corner_radius=0)
         inner.pack(fill="both", expand=True, padx=BUBBLE_PADX, pady=BUBBLE_PADY)
@@ -557,11 +560,15 @@ class ChatView(ctk.CTkFrame):
         key = "bubble_user" if is_user else "bubble_teacher"
         return self.palette.get(key, self.palette["surface"])
 
-    def _draw_tail(self, canvas, is_user, colour):
-        """Нарисовать «хвостик» облачка (треугольник в его цвете)."""
+    def _draw_tail(self, canvas, on_right, colour):
+        """Нарисовать «хвостик» облачка (треугольник в его цвете).
+
+        on_right — облачко стоит справа (реплика преподавателя): вертикальная
+        сторона треугольника прижата к облачку, остриё смотрит вправо.
+        """
         try:
             canvas.delete("all")
-            if is_user:
+            if on_right:
                 points = (0, 0, TAIL_W, TAIL_H, 0, TAIL_H)
             else:
                 points = (TAIL_W, 0, 0, TAIL_H, TAIL_W, TAIL_H)
@@ -622,7 +629,7 @@ class ChatView(ctk.CTkFrame):
                 if msg.stamp_lbl is not None:
                     msg.stamp_lbl.configure(bg=bg, fg=palette["muted"])
                 msg.tail.configure(bg=palette["chat_bg"])
-                self._draw_tail(msg.tail, msg.is_user, bg)
+                self._draw_tail(msg.tail, not msg.is_user, bg)
                 msg.body.configure(
                     bg=bg,
                     fg=palette["text_strong"] if msg.is_user else palette["text"],

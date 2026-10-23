@@ -148,6 +148,16 @@ def main():
                   abs((left[2] + gap + robot[2]) - box(app.bottom_row)[2]) <= 2,
                   (left[2], gap, robot[2], box(app.bottom_row)[2]))
 
+            print("\n[3b] В колонке ввода нет пустой полосы")
+            ib = box(app.input_bar)
+            check("поле ввода начинается сверху колонки (0 px пустоты)",
+                  ib[1] - left[1] == 0, "пустота %d px" % (ib[1] - left[1]))
+            check("поле ввода занимает всю высоту, кроме кнопок",
+                  ib[3] >= left[3] - box(app.control_bar)[3] - 10,
+                  (ib[3], left[3], box(app.control_bar)[3]))
+            check("поле ввода не выше 130 px (не раздулось)",
+                  ib[3] <= 130, ib[3])
+
             print("\n[4] Кнопки не вылезают за край")
             for name, btn in (("record", app.control_bar.record_btn),
                               ("clear", app.control_bar.clear_btn),
@@ -158,23 +168,51 @@ def main():
                       b[0] + b[2] <= left[0] + left[2] + 1,
                       "%d > %d" % (b[0] + b[2], left[0] + left[2]))
 
-            print("\n[5] Облачка: кто слева, кто справа")
+            print("\n[5] Облачка: ученик СЛЕВА, преподаватель СПРАВА")
             view = app.chat_view
             teacher_mark = view.add_message(app.teacher_name,
                                             "Привет! Как дела? 😊")
-            user_mark = view.add_message("Вы", "Всё хорошо, спасибо!")
+            view.add_message("Вы", "Всё хорошо, спасибо!")
             for _ in range(12):
                 app.window.update()
                 time.sleep(0.01)
             t_msg = view._messages[teacher_mark]
+            # у реплик ученика метки нет (add_message вернул None) — берём
+            # последнюю по порядку
             u_msg = view._messages[view._order[-1]]
-            check("реплика ученика справа от реплики преподавателя",
-                  u_msg.bubble.winfo_rootx() > t_msg.bubble.winfo_rootx(),
+            left_edge = view.canvas.winfo_rootx() + chat_mod.SIDE_PAD
+            # холст уже не включает полосу прокрутки (она рядом, sibling),
+            # поэтому отступаем только SIDE_PAD — как и слева
+            right_edge = (view.canvas.winfo_rootx() + view.canvas.winfo_width()
+                          - chat_mod.SIDE_PAD)
+            check("реплика ученика левее реплики преподавателя",
+                  u_msg.bubble.winfo_rootx() < t_msg.bubble.winfo_rootx(),
                   (u_msg.bubble.winfo_rootx(), t_msg.bubble.winfo_rootx()))
-            check("облачко преподавателя прижато влево",
-                  t_msg.bubble.winfo_rootx() - view.canvas.winfo_rootx()
-                  <= chat_mod.SIDE_PAD + 4,
-                  t_msg.bubble.winfo_rootx() - view.canvas.winfo_rootx())
+            # облачко стоит сразу за своим «хвостиком» (6 px воздуха)
+            check("облачко ученика начинается сразу за хвостиком",
+                  abs((u_msg.bubble.winfo_rootx()
+                       - (u_msg.tail.winfo_rootx() + u_msg.tail.winfo_width())) - 6) <= 1,
+                  (u_msg.bubble.winfo_rootx(), u_msg.tail.winfo_rootx(),
+                   u_msg.tail.winfo_width()))
+            check("облачко преподавателя кончается сразу за хвостиком",
+                  abs((t_msg.tail.winfo_rootx()
+                       - (t_msg.bubble.winfo_rootx() + t_msg.bubble.winfo_width())) - 6) <= 1,
+                  (t_msg.tail.winfo_rootx(),
+                   t_msg.bubble.winfo_rootx() + t_msg.bubble.winfo_width()))
+            check("облачко ученика у левого края чата (с учётом хвостика)",
+                  abs(u_msg.tail.winfo_rootx() - left_edge) <= 6,
+                  (u_msg.tail.winfo_rootx(), left_edge))
+            check("облачко преподавателя у правого края чата (с учётом хвостика)",
+                  abs((t_msg.tail.winfo_rootx() + t_msg.tail.winfo_width())
+                      - right_edge) <= 8,
+                  (t_msg.tail.winfo_rootx() + t_msg.tail.winfo_width(),
+                   right_edge))
+            check("«хвостик» ученика слева от его облачка",
+                  u_msg.tail.winfo_rootx() < u_msg.bubble.winfo_rootx(),
+                  (u_msg.tail.winfo_rootx(), u_msg.bubble.winfo_rootx()))
+            check("«хвостик» преподавателя справа от его облачка",
+                  t_msg.tail.winfo_rootx() > t_msg.bubble.winfo_rootx(),
+                  (t_msg.tail.winfo_rootx(), t_msg.bubble.winfo_rootx()))
             p = app.palette
             check("фон облачка преподавателя из theme.py",
                   t_msg.bubble.cget("fg_color") == p["bubble_teacher"],
@@ -209,6 +247,9 @@ def main():
                   max(0, (chat[1] + chat[3]) - robot[1]) == 0,
                   "наложение %d" % max(0, (chat[1] + chat[3]) - robot[1]))
             check("на минимальном окне чат не ниже 150 px", chat[3] >= 150, chat[3])
+            check("на минимальном окне в колонке ввода нет пустоты",
+                  box(app.input_bar)[1] - left[1] == 0,
+                  box(app.input_bar)[1] - left[1])
             check("на минимальном окне кнопке «Настройки» хватает места",
                   box(app.control_bar.settings_btn)[0]
                   + box(app.control_bar.settings_btn)[2]
