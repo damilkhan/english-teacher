@@ -26,6 +26,7 @@ from datetime import datetime
 import config
 import llm_client
 import profile_store
+import exam as exam_mod
 import prompt_builder
 import vocabulary
 import rag
@@ -200,6 +201,9 @@ class ChatController:
         # план читаем БЕЗ ожидания: если он ещё строится — отвечаем без него
         plan_text = self._plan_text if self.mode == "lesson" else ""
         lesson_block = self._lesson if self.mode == "lesson" else None
+        # ЭКЗАМЕН (проверка блока): отдельный блок промпта «ровно 10 вопросов,
+        # не учить, не подсказывать». Без флага промпт прежний байт-в-байт.
+        exam_mode = bool((lesson_block or {}).get("exam"))
         # слова ученика (этап C): 1-2 из них Джейн может вплести в разговор
         words = self._prompt_words()
         # «сейчас» и «не повторяйся» — так Джейн знает дату/время и не задаёт
@@ -210,7 +214,8 @@ class ChatController:
             lesson=lesson_block, now=datetime.now(), variety=True,
             english_only=bool(getattr(config, "ENGLISH_ONLY", False)),
             american=bool(getattr(config, "AMERICAN_ENGLISH", True)),
-            words=words, teacher=self.teacher)
+            words=words, teacher=self.teacher,
+            exam=exam_mode, exam_questions=(exam_mod.QUESTIONS if exam_mode else None))
 
         print(f"📤 Язык ответа: {'РУССКИЙ' if lang == 'ru' else 'ENGLISH'}")
 
@@ -228,7 +233,8 @@ class ChatController:
                 lesson=lesson_block, now=datetime.now(), variety=True,
                 english_only=bool(getattr(config, "ENGLISH_ONLY", False)),
                 american=bool(getattr(config, "AMERICAN_ENGLISH", True)),
-                words=words, teacher=self.teacher)
+                words=words, teacher=self.teacher,
+            exam=exam_mode, exam_questions=(exam_mod.QUESTIONS if exam_mode else None))
             ok, raw = self._ask_model(system_prompt, user_text, short_history=True)
         if not ok:
             return False, self._explain(raw)

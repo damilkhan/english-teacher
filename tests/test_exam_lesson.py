@@ -270,6 +270,41 @@ def main():
     finally:
         app_mod.profile_store = real_store
 
+    # ---------- 6. Промпт действительно получает блок экзамена ----------
+    print("\n[6] Экзамен доходит до промпта (иначе модель не узнает правила)")
+    import controllers.chat_controller as cc
+    import prompt_builder as pb
+
+    class FakeLLM:
+        def __init__(self):
+            self.prompts = []
+
+        def complete(self, messages, **kwargs):
+            # в historically-формате промпт лежит первым system-сообщением
+            for m in messages:
+                if m.get("role") == "system":
+                    self.prompts.append(m.get("content") or "")
+                    break
+            return True, "Tell me about your morning."
+
+    ctrl = cc.ChatController(FakeLLM(), dispatch=lambda fn: fn(),
+                             mode="lesson", lang="en", user_id=999999)
+    ctrl.set_lesson({"title": "Проверка: Daily Routine", "type": "check",
+                     "topic": "Daily Routine", "exam": True})
+    ctrl._request("my morning")
+    sent = ctrl.llm.prompts[-1]
+    check("в промпт попал блок EXAM MODE", "EXAM MODE" in sent,
+          sent[-120:])
+    check("именно 10 вопросов", "EXACTLY 10 questions" in sent)
+
+    ctrl2 = cc.ChatController(FakeLLM(), dispatch=lambda fn: fn(),
+                              mode="lesson", lang="en", user_id=999999)
+    ctrl2.set_lesson({"title": "My morning", "type": "speaking",
+                      "topic": "My morning", "exam": False})
+    ctrl2._request("my morning")
+    plain = ctrl2.llm.prompts[-1]
+    check("обычный урок без блока экзамена", "EXAM MODE" not in plain)
+
     print("\n" + "=" * 60)
     if FAILED:
         print(f"ПРОВАЛЕНО: {len(FAILED)} → {FAILED}")

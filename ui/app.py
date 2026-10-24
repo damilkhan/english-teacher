@@ -1118,6 +1118,8 @@ class EnglishTeacherApp:
             "story": lesson_mod.is_story_lesson(lesson_type),
             # проверочное занятие: Джейн не учит новому, а спрашивает по блоку
             "check": lesson_mod.is_check_lesson(lesson_type),
+            # экзамен: в промпт уходит блок «ровно 10 вопросов, без подсказок»
+            "exam": lesson_mod.is_check_lesson(lesson_type),
             # сколько реплик ученика до автозавершения (у проверки больше)
             "reply_target": lesson.get("replies"),
             "code": lesson.get("code"),
@@ -1172,7 +1174,8 @@ class EnglishTeacherApp:
             pass
 
         lesson_payload = {"title": data.get("title"), "type": data.get("type"),
-                          "topic": data.get("topic"), "task": data.get("task")}
+                          "topic": data.get("topic"), "task": data.get("task"),
+                          "exam": bool(data.get("check"))}
         try:
             self.chat.set_lesson(lesson_payload)
         except Exception:
