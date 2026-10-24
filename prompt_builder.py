@@ -341,6 +341,33 @@ def _american_block(american=False):
     """Блок про американский английский. Пусто, если не запрошен."""
     return AMERICAN_ENGLISH_BLOCK if american else ""
 
+# ---------- экзамен: ровно 10 вопросов (необязательно) ----------
+# Проверочное занятие блока (lesson.CHECK) = экзамен. Решения ученика
+# 24.10.2026 (PROJECT_STATE.md §20): ровно 10 вопросов, ответ 0/1/2,
+# проходной 6 из 10. ВАЖНО: блок добавляется только при exam=True —
+# без него промпт остаётся прежним байт-в-байт (правило §10, smoke_test).
+EXAM_BLOCK_TEMPLATE = """
+\n\U0001F3AF EXAM MODE - CHECK OF THIS BLOCK:
+This is an exam, not a lesson. Ask EXACTLY {questions} questions in total,
+one short question at a time, and wait for the answer before the next one.
+Ask only about what this block covered. Do not teach, do not explain, and
+do not give hints or translations - even if the student asks for them.
+Never say the answer or finish the student's sentence for them.
+Do not correct mistakes out loud during the exam: remember them silently.
+If the student is silent or answers in Russian, move on to the next question.
+"""
+
+
+def _exam_block(exam=False, questions=None):
+    """Блок «идёт экзамен». Пусто, если экзамена нет (обратная совместимость)."""
+    if not exam:
+        return ""
+    try:
+        qty = max(1, int(questions))
+    except (TypeError, ValueError):
+        qty = 10
+    return EXAM_BLOCK_TEMPLATE.format(questions=qty)
+
 
 def detect_language(text):
     """Есть кириллица → 'ru', иначе 'en'."""
@@ -392,7 +419,7 @@ def _mistake_line(err):
         text = str(err.get("jane_response") or "")
     return text[:50]
 
-def build_system_prompt(mode, profile, lang="en", level=None, student=None, context=None, plan=None, lesson=None, now=None, variety=False, english_only=False, words=None, american=False, teacher=None):
+def build_system_prompt(mode, profile, lang="en", level=None, student=None, context=None, plan=None, lesson=None, now=None, variety=False, english_only=False, words=None, american=False, teacher=None, exam=False, exam_questions=None):
     """Собирает system-промпт (персона + профиль ученика).
 
     mode:    'lesson' | 'free'
@@ -415,6 +442,10 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
              блок не добавляется (промпт прежний байт-в-байт)
     teacher: как зовут преподавателя у ЭТОГО ученика (поле профиля
              teacher_name). None → config.TEACHER_NAME («Verbot»).
+    exam:    True → занятие идёт как ЭКЗАМЕН (ровно exam_questions вопросов,
+             без подсказок и разбора по ходу); False → блок НЕ добавляется
+             (промпт прежний байт-в-байт, потому что аргумент в конце).
+    exam_questions: сколько вопросов на экзамене (по умолчанию 10).
     """
     language_rule = language_instruction(lang)
     # имя преподавателя — одно на весь промпт (персона + строка про ученика)
@@ -465,7 +496,8 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
             + _variety_block(variety) + _english_only_block(english_only)
             + _american_block(american)
             + _plan_block(plan) + _knowledge_block(context)
-            + _words_block(words))
+            + _words_block(words)
+            + _exam_block(exam, exam_questions))
 
 
 def build_messages(system_prompt, history, user_text):
