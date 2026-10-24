@@ -205,6 +205,7 @@ class VocabPanel(ctk.CTkToplevel):
             return
         result = self.controller.answer(text)
         status = result.get("status")
+        print("🧩 Повторение: услышал «%s» → %s" % (text, status))
         if status == "no_card":
             return
         if status == "russian":
@@ -216,8 +217,11 @@ class VocabPanel(ctk.CTkToplevel):
                                     text_color=self.palette["muted"])
             return
         if status == "unrelated":
+            heard = result.get("heard") or text
+            expected = result.get("en") or ""
             self.hint_lbl.configure(
-                text="Не расслышал слово. Попробуй ещё раз — или нажми 💡 Подсказка.",
+                text="Услышал «%s», а слово — «%s». Скажи ещё раз — или нажми 💡 Подсказка."
+                     % (heard, expected),
                 text_color=self.palette["muted"])
             return
         if status == "empty":

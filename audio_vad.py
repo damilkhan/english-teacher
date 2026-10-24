@@ -56,15 +56,42 @@ class AudioVAD:
         return False
 
     def _find_input_device(self):
-        """Находит первый доступный входной микрофон"""
+        """Микрофон: СИСТЕМНЫЙ по умолчанию, иначе первый входной.
+
+        Раньше брался просто первый вход в списке — это устройство №0
+        («Переназначение звуковых устр.»), а не тот микрофон, что выбран в
+        Windows (замерено 24.10: sd.default.device = [1, 3]). Теперь уважаем
+        системный выбор; если он битый — падаем на первый входной.
+        """
+        devices = []
         try:
             devices = sd.query_devices()
+        except Exception as exc:
+            print(f"⚠️ Микрофон: список устройств недоступен ({exc})")
+        default_in = sd.default.device
+        if isinstance(default_in, (list, tuple)):
+            default_in = default_in[0] if default_in else None
+        try:
+            device = int(default_in)
+        except (TypeError, ValueError):
+            device = -1
+        try:
+            if 0 <= device < len(devices) and devices[device]['max_input_channels'] > 0:
+                return device
             for i, d in enumerate(devices):
                 if d['max_input_channels'] > 0:
                     return i
         except Exception:
             pass
         return None  # None = устройство по умолчанию
+
+    @staticmethod
+    def _device_name(device):
+        """Имя устройства для лога (или пусто, если не узнать)."""
+        try:
+            return str(sd.query_devices(device)['name'])
+        except Exception:
+            return ""
 
     def start_recording(self):
         if self.is_recording:
@@ -84,7 +111,7 @@ class AudioVAD:
             callback=self._audio_callback
         )
         self.stream.start()
-        print(f"🎤 Запись начата (микрофон: {device})")
+        print(f"🎤 Запись начата (микрофон: {device} — {self._device_name(device)})")
         threading.Thread(target=self._monitor, daemon=True).start()
 
     def stop_recording(self):

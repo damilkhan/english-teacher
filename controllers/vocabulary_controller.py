@@ -140,7 +140,8 @@ class VocabularyController:
             return {"status": "russian", "heard": heard, "en": card["en"]}
         report = self._best_report(card, heard)
         if report.verdict == pronunciation.UNRELATED:
-            return {"status": "unrelated", "report": report, "heard": heard}
+            return {"status": "unrelated", "report": report, "heard": heard,
+                    "en": card["en"], "example": card["example"]}
         success = (report.verdict == pronunciation.GOOD)
         first = not self._graded
         before, after, changed = self._grade(success)
