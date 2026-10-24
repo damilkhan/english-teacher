@@ -31,6 +31,7 @@ import audio_vad
 import character
 import commands
 import config
+import exam as exam_mod
 import lesson as lesson_mod
 import model_registry
 import profile_store
@@ -93,6 +94,8 @@ NOT_READY_OFFLINE = "❌ LLM-сервер не отвечает. Подробн�
 LOCKED_TEXT_NOTE = ("🎤 На этом уроке говори в микрофон: английское сообщение не "
                     "отправляется. Не помнишь слово — напиши его по-русски и нажми "
                     "«💡 Перевести».")
+EXAM_NO_HINT_NOTE = ("🎯 Идёт экзамен: подсказок нет. Скажи ответ вслух — "
+                     "слово по-русски здесь не подскажу.")
 ALL_LESSONS_NOTE = ("🎉 Вся карта «Пустыня» пройдена! Дальше — свободное общение: "
                    "говорим на любые темы.")
 
@@ -1182,14 +1185,22 @@ class EnglishTeacherApp:
         if data.get("story"):
             opening += "\n🎧 Слушай историю, а потом перескажи её — по-русски или по-английски."
         if data.get("check"):
-            opening += ("\n📝 Это ПРОВЕРКА по блоку: %s не учит новому, а "
-                        "спрашивает по пройденному. В конце скажет, что закрепилось."
-                        % self.teacher_name)
+            opening += ("\n🎯 Это ЭКЗАМЕН по блоку: %d вопросов, подсказок нет "
+                        "(даже перевода). Отвечай вслух по-английски. "
+                        "Балл скажу в конце — %d из 10 нужно, чтобы сдать."
+                        % (exam_mod.QUESTIONS, exam_mod.PASS_SCORE))
         try:
             self.reactions.reset()          # новый урок — новый счёт стараний
         except Exception:
             pass
         self._story_context = bool(data.get("story"))   # урок-аудирование
+        # ЭКЗАМЕН: своя сессия со баллом (10 вопросов, 0/1/2 за ответ).
+        # Балл по ходу ученику не показываем — только в конце.
+        self._exam = (exam_mod.ExamSession(session.lesson_id, session.point_id)
+                      if data.get("check") else None)
+        self._exam_pending = []          # тексты ответов, ждущие разбора
+        self._exam_done = False
+        self._exam_last = None           # итог последнего экзамена (для чата)
         self.add_message(self.teacher_name, opening)
         try:
             self.tabs.set("Чат")          # урок идёт в чате — покажем его
@@ -1234,7 +1245,11 @@ class EnglishTeacherApp:
         if session.allows_text():
             self.input_bar.set_locked(False)
         else:
-            self.input_bar.set_locked(True, lesson_mod.locked_hint(session.lesson_type))
+            # На экзамене словарь выключен совсем (подсказок нет) — поле
+            # остаётся замком даже с русскими буквами.
+            self.input_bar.set_locked(
+                True, lesson_mod.locked_hint(session.lesson_type),
+                allow_dictionary=session.allows_dictionary())
         self.control_bar.set_record_enabled(session.allows_voice())
 
     def _note_hint(self):
@@ -1274,13 +1289,71 @@ class EnglishTeacherApp:
         if state:
             self.lesson_bar.set_progress("%d/%d" % (state["replies"], state["target"]))
 
+    def _finish_exam(self):
+        """Экзамен отвечен полностью: итог, запись в профиль, закрытие."""
+        exam = getattr(self, "_exam", None)
+        if exam is None or getattr(self, "_exam_done", False):
+            return None
+        self._exam_done = True
+        result = exam.result()
+        self._exam_last = result
+        user_id = (self.current_user or {}).get("id")
+        try:
+            profile_store.record_exam(exam.lesson_id, result["score"],
+                                     result["passed"], user_id)
+        except Exception as exc:
+            print("⚠️ Не удалось записать балл экзамена: %s" % exc)
+        try:
+            self.lesson.finish()        # дальше — _on_lesson_finished
+        except Exception as exc:
+            print("⚠️ Экзамен не закрылся: %s" % exc)
+        return result
+
+    @staticmethod
+    def exam_summary_text(result):
+        """Итог экзамена для чата (по решению ученика — в КОНЦЕ занятия)."""
+        if not result:
+            return "🎯 Экзамен закончен."
+        lines = ["🎯 ЭКЗАМЕН: %s" % exam_mod.score_text(result.get("score"))]
+        marks = "".join(str(int(x)) for x in (result.get("answers") or []))
+        if marks:
+            lines.append("📋 Баллы за ответы: %s" % " ".join(marks))
+        if result.get("passed"):
+            lines.append("✅ Сдал! Порог %d из 10 пройден — блок засчитан."
+                         % exam_mod.PASS_SCORE)
+        else:
+            lines.append("❌ Пока не сдал: нужно %d из 10. Пересдача — в любой "
+                         "момент, ограничений нет." % exam_mod.PASS_SCORE)
+        full = int(result.get("correct_full") or 0)
+        lines.append("💪 Полных ответов (2 балла): %d из %d."
+                     % (full, int(result.get("questions") or 0)))
+        mistakes = int(result.get("mistakes") or 0)
+        lines.append("📝 Ошибок в разборе: %d." % mistakes)
+        return "\n".join(lines)
+
     def _on_lesson_finished(self, session):
         """Урок доигран до конца: засчитываем и обновляем карту."""
         user_id = (self.current_user or {}).get("id")
+        exam_result = getattr(self, "_exam_last", None)
+        # на экзамене урок засчитывается ТОЛЬКО при сданном балле (решение:
+        # балл нужен для перехода вперёд, пересдач без ограничений)
+        if exam_result is not None and not exam_result.get("passed"):
+            self.add_message(self.teacher_name, self.exam_summary_text(exam_result))
+            self._end_lesson()
+            self._refresh_side_views()
+            self._lesson_state("thinking")
+            return
         try:
             profile_store.record_lesson_completed(session.lesson_id, user_id)
         except Exception as exc:
             print("⚠️ Не удалось засчитать урок: %s" % exc)
+
+        if exam_result is not None:
+            self.add_message(self.teacher_name, self.exam_summary_text(exam_result))
+            self._end_lesson()
+            self._refresh_side_views()
+            self._lesson_state("happy")
+            return
 
         text = "🎉 Урок %s пройден!" % session.lesson_id
         try:
@@ -1313,6 +1386,8 @@ class EnglishTeacherApp:
         """Свернуть интерфейс занятия (полоса, блокировка, тема промпта)."""
         self._server_task = None        # занятие закрыто — ожидание сервера не нужно
         self._story_context = False     # рассказ был частью урока
+        self._exam = None               # экзамен закрыт вместе с занятием
+        self._exam_pending = []
         self.lesson_bar.clear()
         self.input_bar.set_locked(False)
         self.control_bar.set_record_enabled(True)
@@ -1321,13 +1396,53 @@ class EnglishTeacherApp:
         except Exception:
             pass
 
-    def _register_lesson_reply(self):
-        """Учесть реплику ученика в занятии (голос и текст — одинаково)."""
+    def _register_lesson_reply(self, text=""):
+        """Учесть реплику ученика в занятии (голос и текст — одинаково).
+
+        На ЭКЗАМЕНЕ текст ответа откладываем: балл считается сразу после
+        разбора Аналитика (он приходит чуть позже и знает ошибки), иначе
+        правило «2 ошибки и больше → 1 балл» никогда бы не срабатывало.
+        """
+        exam = self._exam_session()
+        if exam is not None and exam.is_active and str(text or "").strip():
+            try:
+                self._exam_pending.append(str(text))
+            except Exception:
+                self._exam_pending = [str(text)]
         if self.lesson.is_active:
             try:
                 self.lesson.register_reply()
             except Exception as exc:
                 print("⚠️ Счёт занятия сбился: %s" % exc)
+
+    # ---------- экзамен ----------
+    def _exam_session(self):
+        """Текущая сессия экзамена (None — занятие не экзамен)."""
+        exam = getattr(self, "_exam", None)
+        if exam is None:
+            return None
+        if not self.lesson.is_active and not exam.aborted:
+            return None
+        return exam
+
+    def _exam_score_answer(self, result=None):
+        """Оценить отложенный ответ экзамена (после разбора Аналитика)."""
+        exam = self._exam_session()
+        if exam is None or not exam.is_active:
+            return None
+        pending = getattr(self, "_exam_pending", None) or []
+        if not pending:
+            return None
+        text = pending.pop(0)
+        errors = 0
+        if result and result.get("ok"):
+            errors = len(result.get("errors") or [])
+        step = exam.answer(text, errors=errors, used_hint=False)
+        try:
+            self.lesson_bar.set_progress(exam.progress_text)
+        except Exception:
+            pass
+        return step
 
     # =====================================================
     # Фон-градиент и раскладка
@@ -2036,7 +2151,11 @@ class EnglishTeacherApp:
         делаем это ПОСЛЕ ответа Джейн, чтобы последняя реплика успела прозвучать.
         """
         session = self.lesson.current()
-        if session is not None and session.is_active and session.should_finish:
+        # ЭКЗАМЕН закрываем в _on_analysis: там уже посчитан балл последнего
+        # ответа (разбор Аналитика приходит после ответа преподавателя).
+        exam = self._exam_session()
+        if (session is not None and session.is_active and session.should_finish
+                and exam is None):
             self.lesson.finish()
 
         # «актёрская игра»: настроение её собственного текста
@@ -2127,6 +2246,10 @@ class EnglishTeacherApp:
             errors = result.get("errors") or []
             if errors:
                 self._note_mistakes(len(errors))
+        # ЭКЗАМЕН: разбор пришёл — теперь можно поставить балл за ответ
+        step = self._exam_score_answer(result)
+        if step is not None and step.get("finished"):
+            self._finish_exam()          # 10-й ответ: итог и запись в профиль
 
     @staticmethod
     def _analysis_text(result):
@@ -2303,11 +2426,17 @@ class EnglishTeacherApp:
         # Решаем ДО автозапуска урока: в занятии он всё равно не нужен, а
         # русское слово не должно приниматься за первую реплику.
         if self.input_bar.is_locked:
-            if self._wants_translation(text):
+            ctrl = getattr(self, "lesson", None)
+            session = ctrl.current() if ctrl is not None else None
+            # На ЭКЗАМЕНЕ словаря нет: русское слово тоже не переводим.
+            dict_ok = session is None or session.allows_dictionary()
+            if dict_ok and self._wants_translation(text):
                 self.input_bar.clear_text()
                 self._show_translation_hint(text)
-            else:
+            elif dict_ok:
                 self.add_message(self.teacher_name, LOCKED_TEXT_NOTE)
+            else:
+                self.add_message(self.teacher_name, EXAM_NO_HINT_NOTE)
             return
         self.input_bar.clear_text()
         # Первая реплика запускает урок (ДО переводчика: русское «привет»
@@ -2351,7 +2480,7 @@ class EnglishTeacherApp:
 
     def _send_to_teacher(self, text):
         """Отправить реплику учителю (в занятии — учесть её в счёте)."""
-        self._register_lesson_reply()
+        self._register_lesson_reply(text)    # на экзамене текст нужен для балла
         self.chat.send(text)
 
     def _run_when_server_ready(self, action, on_timeout=None):

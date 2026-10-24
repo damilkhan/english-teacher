@@ -55,11 +55,16 @@ _TEXT = {"text"}
 try:
     import config as _config
     DEFAULT_REPLY_TARGET = max(1, int(getattr(_config, "LESSON_REPLY_TARGET", 12) or 12))
-    # Проверка идёт дольше обычного урока: спрашиваем по всему блоку.
-    CHECK_REPLY_TARGET = max(1, int(getattr(_config, "LESSON_CHECK_REPLY_TARGET", 16) or 16))
 except Exception:                                     # pragma: no cover
     DEFAULT_REPLY_TARGET = 12
-    CHECK_REPLY_TARGET = 16
+# Проверка блока = ЭКЗАМЕН: ровно 10 вопросов (решение ученика 24.10.2026).
+# Число живёт в exam.py (там же балл и проходной), здесь только читаем —
+# чтобы не было двух разных «10» в проекте.
+try:
+    import exam as _exam
+    CHECK_REPLY_TARGET = max(1, int(_exam.QUESTIONS))
+except Exception:                                     # pragma: no cover
+    CHECK_REPLY_TARGET = 10
 
 
 # =========================================================
@@ -138,6 +143,19 @@ def is_check_lesson(lesson_type: Any) -> bool:
     return normalize_type(lesson_type) == CHECK
 
 
+def allows_dictionary(lesson_type: Any, exam_lesson: Any = None) -> bool:
+    """Работает ли словарь-подсказка на этом занятии.
+
+    Обычный урок — работает: подсказка это учёба, за неё не наказывают.
+    Экзамен (проверка блока) — НЕ работает: подсказок нет вообще
+    (решение ученика 24.10.2026), иначе балл становится фиктивным.
+    exam_lesson: True/False/None — уточнение от окна, если известно.
+    """
+    if exam_lesson is False:
+        return True
+    return not is_check_lesson(lesson_type)
+
+
 def locked_hint(lesson_type: Any) -> str:
     """Подсказка в поле ввода во время урока «только голосом» (single source).
 
@@ -149,7 +167,9 @@ def locked_hint(lesson_type: Any) -> str:
     if name == LISTENING:
         return "🎧 Слушай и отвечай голосом · слово по-русски → перевод"
     if name == CHECK:
-        return "📝 Проверка: отвечай голосом · слово по-русски → перевод"
+        # ЭКЗАМЕН: подсказок нет вообще (решение ученика) — ни перевода,
+        # ни вставки ↺. Слово по-русски здесь не просим.
+        return "🎯 Экзамен: отвечай вслух по-английски · подсказок нет"
     return "🎤 Говори в микрофон · слово по-русски → перевод"
 
 
@@ -244,6 +264,10 @@ class LessonSession:
     def locked_hint(self) -> str:
         return locked_hint(self.lesson_type)
 
+    def allows_dictionary(self) -> bool:
+        """Можно ли подсказку-перевод (на экзамене — нельзя)."""
+        return allows_dictionary(self.lesson_type)
+
     # ---------- счётчики для итога ----------
     def use_hint(self) -> int:
         """Ученик подглядел перевод И произнёс его вслух.
@@ -307,6 +331,8 @@ class LessonSession:
             "target": self.reply_target,
             "hints": self.hints,
             "mistakes": self.mistakes,
+            "exam": self.lesson_type == CHECK,
+            "dictionary": allows_dictionary(self.lesson_type),
             "finished": self.finished,
             "aborted": self.aborted,
             "active": self.is_active,

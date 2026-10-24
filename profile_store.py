@@ -109,6 +109,7 @@ def default_profile():
         "completed_lessons": [],  # id пройденных уроков карты (progress_map)
         "vocabulary": [],        # карточки слов для повторения (vocabulary.py)
         "vocab_last_session": None,   # дата последнего захода повторения слов
+        "exams": {},             # итоги экзаменов: {id урока: {score,passed}}
     }
 
 
@@ -306,6 +307,53 @@ def record_lesson_completed(lesson_id, user_id=None):
     done.append(lesson_id)
     _write(profile, progress_path(user_id))
     return True
+
+
+def record_exam(lesson_id, score, passed, user_id=None):
+    """Записать итог ЭКЗАМЕНА (проверки блока) в профиль.
+
+    В профиль идёт ЛУЧШИЙ результат (решение ученика): пересдач без
+    ограничений, а балл не может ухудшиться от новой попытки.
+    Возвращает словарь записи этого экзамена: {"score","passed","attempts"}.
+    """
+    lesson_id = str(lesson_id or "").strip()
+    if not lesson_id:
+        return {}
+    profile = load(user_id)
+    exams = profile.get("exams")
+    if not isinstance(exams, dict):
+        exams = {}
+    profile["exams"] = exams
+    entry = exams.get(lesson_id)
+    if not isinstance(entry, dict):
+        entry = {"score": 0.0, "passed": False, "attempts": 0}
+    try:
+        new_score = float(score)
+    except (TypeError, ValueError):
+        new_score = 0.0
+    try:
+        best = max(float(entry.get("score") or 0.0), new_score)
+    except (TypeError, ValueError):
+        best = new_score
+    entry["score"] = best
+    entry["passed"] = bool(entry.get("passed")) or bool(passed)
+    try:
+        entry["attempts"] = int(entry.get("attempts") or 0) + 1
+    except (TypeError, ValueError):
+        entry["attempts"] = 1
+    exams[lesson_id] = entry
+    _write(profile, progress_path(user_id))
+    return dict(entry)
+
+
+def exam_result(lesson_id, user_id=None):
+    """Сохранённый итог экзамена ({} — не сдавал)."""
+    profile = load(user_id)
+    exams = profile.get("exams")
+    if not isinstance(exams, dict):
+        return {}
+    entry = exams.get(str(lesson_id or "").strip())
+    return dict(entry) if isinstance(entry, dict) else {}
 
 
 def vocabulary_cards(user_id=None):

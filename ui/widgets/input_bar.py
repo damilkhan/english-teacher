@@ -69,6 +69,7 @@ class InputBar(ctk.CTkFrame):
         self._busy = False        # идёт ответ Джейн
         self._locked = False      # занятие запрещает текстовый ввод (урок «голосом»)
         self._lock_hint = LOCK_HINT
+        self._dict_ok = True      # словарь-подсказка (на экзамене False)
         self._hint = ""           # почему отправка недоступна
 
         self.textbox = ctk.CTkTextbox(
@@ -191,7 +192,7 @@ class InputBar(ctk.CTkFrame):
         self._hint = hint or ""
         self._apply_state()
 
-    def set_locked(self, locked, hint=""):
+    def set_locked(self, locked, hint="", allow_dictionary=True):
         """Мягко заблокировать ТЕКСТОВЫЙ ввод (урок «только голосом»).
 
         Не выключаем виджет насовсем: поле показывает подсказку-замок и не
@@ -201,6 +202,9 @@ class InputBar(ctk.CTkFrame):
         """
         self._locked = bool(locked)
         self._lock_hint = hint or LOCK_HINT
+        # ЭКЗАМЕН: словарь выключен совсем — кириллица не делает кнопку
+        # «💡 Перевести», поле остаётся замком (решение ученика 24.10.2026).
+        self._dict_ok = bool(allow_dictionary)
         self._apply_state()
 
     @property
@@ -224,7 +228,7 @@ class InputBar(ctk.CTkFrame):
         elif self._busy:
             self.send_btn.configure(state="disabled", text="Думаю…")
         elif self._locked:
-            if has_cyrillic(self._real_text()):
+            if self._dict_ok and has_cyrillic(self._real_text()):
                 # «ключ» — это не ответ, а просьба о переводе: кнопка живая
                 self.send_btn.configure(state="normal", text=TRANSLATE_TEXT)
             else:

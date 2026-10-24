@@ -198,18 +198,23 @@ def test_check_lesson():
     check("спрашивает по одному вопросу",
           "ONE question at a time" in instruction)
 
-    target = int(getattr(config, "LESSON_CHECK_REPLY_TARGET", 16))
     session = lesson.LessonSession("forest/1.4", lesson_type="check",
                                    title="Проверка: Daily Routine", code="1.4")
-    check("проверка длиннее обычного урока",
-          session.reply_target == target
-          and target > int(config.LESSON_REPLY_TARGET),
-          (session.reply_target, config.LESSON_REPLY_TARGET))
+    # Решение ученика 24.10.2026: проверка блока = ЭКЗАМЕН, ровно 10 вопросов
+    # (число живёт в exam.py, чтобы «10» не разъехалось по двум файлам).
+    import exam as exam_mod
+    check("проверка = экзамен: ровно 10 вопросов",
+          session.reply_target == exam_mod.QUESTIONS,
+          (session.reply_target, exam_mod.QUESTIONS))
+    check("на проверке словарь выключен (подсказок нет)",
+          session.allows_dictionary() is False)
     check("на экране короткий код, а не forest/1.4",
           session.label() == "Урок 1.4 · Проверка: Daily Routine",
           session.label())
-    check("подсказка в поле ввода — про проверку",
-          "Проверка" in lesson.locked_hint("check"), lesson.locked_hint("check"))
+    check("подсказка в поле ввода — про экзамен",
+          "Экзамен" in lesson.locked_hint("check")
+          and "подсказок нет" in lesson.locked_hint("check"),
+          lesson.locked_hint("check"))
 
     plain = lesson.LessonSession("forest/1.1", lesson_type="speaking",
                                  title="My morning", code="1.1")
