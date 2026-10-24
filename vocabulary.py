@@ -413,6 +413,109 @@ def reference_texts(card) -> List[str]:
     return out
 
 
+
+
+# ---------------------------------------------------------
+# Синонимы: любые равнозначные английские ответы — верные
+# ---------------------------------------------------------
+# Решение ученика 24.10.2026: на карточку «привет» правильны и «Hey», и
+# «Hi», и «Hello». Раньше сверка была буквальная, и живой ответ «hello»
+# считался «сказал своё» (замерено: Hey ← hello = unrelated, 0.045).
+#
+# Таблица ЗАКРЫТАЯ и ручная — принципиально: синонимы даёт человек, а не
+# модель (иначе программа начнёт принимать что попало и «выучит» неверное).
+# Слева — русское слово карточки, справа — равнозначные английские ответы.
+# Американский вариант первым; британские формы намеренно не добавляем.
+SYNONYM_GROUPS = (
+    ("привет", ("hi", "hello", "hey")),
+    ("здравствуй", ("hello", "hi")),
+    ("здравствуйте", ("hello", "hi")),
+    ("пока", ("bye", "goodbye", "see you", "later")),
+    ("до свидания", ("goodbye", "bye", "see you")),
+    ("спасибо", ("thanks", "thank you")),
+    ("извините", ("sorry", "excuse me")),
+    ("прости", ("sorry", "excuse me")),
+    ("да", ("yes", "yeah", "yep", "sure")),
+    ("нет", ("no", "nope")),
+    ("хорошо", ("okay", "ok", "all right", "fine")),
+    ("конечно", ("of course", "sure", "certainly")),
+    ("как дела", ("how are you", "how's it going", "how are you doing")),
+    ("как ты", ("how are you", "how's it going")),
+    ("я не понимаю", ("i don't understand", "i don't get it")),
+    ("я не знаю", ("i don't know", "i have no idea")),
+    ("я устал", ("i'm tired", "i am tired")),
+    ("я голоден", ("i'm hungry", "i am hungry")),
+    ("доброе утро", ("good morning", "morning")),
+    ("добрый день", ("good afternoon", "good day")),
+    ("добрый вечер", ("good evening",)),
+    ("спокойной ночи", ("good night", "night")),
+    ("мама", ("mom", "mommy", "mother")),
+    ("папа", ("dad", "daddy", "father")),
+    ("ребёнок", ("kid", "child")),
+    ("дети", ("kids", "children")),
+    ("дом", ("house", "home")),
+    ("квартира", ("apartment",)),
+    ("машина", ("car", "automobile")),
+    ("магазин", ("store", "shop")),
+    ("фильм", ("movie", "film")),
+    ("отпуск", ("vacation", "holiday")),
+    ("работа", ("work", "job")),
+    ("деньги", ("money", "cash")),
+    ("туалет", ("bathroom", "restroom")),
+    ("лифт", ("elevator",)),
+    ("большой", ("big", "large")),
+    ("маленький", ("small", "little")),
+    ("быстрый", ("fast", "quick")),
+    ("красивый", ("beautiful", "pretty", "nice")),
+    ("начинать", ("start", "begin")),
+    ("заканчивать", ("finish", "end")),
+    ("разговаривать", ("talk", "speak")),
+    ("смотреть", ("watch", "look")),
+    ("слушать", ("listen",)),
+    ("есть", ("eat", "have")),
+)
+
+
+def _plain(text) -> str:
+    """Текст для сравнения: нижний регистр, только буквы, цифры, пробелы."""
+    low = str(text or "").lower()
+    for bad in ("\u2019", "\u0060", "\u00b4"):
+        low = low.replace(bad, "'")
+    out = []
+    for ch in low:
+        out.append(ch if (ch.isalnum() or ch == "'" or ch == " ") else " ")
+    return " ".join("".join(out).split())
+
+
+def same_text(left, right) -> bool:
+    """Одинаковый ли текст (без регистра, знаков препинания, лишних пробелов)."""
+    return _plain(left) == _plain(right)
+
+
+def alternatives(card) -> List[str]:
+    """Другие равнозначные английские ответы на карточку (синонимы).
+
+    Группу ищем по русскому слову карточки ИЛИ по её английскому значению —
+    поэтому старое слово «привет → Hey» тоже принимает «hi» и «hello», хотя
+    таблицу завели позже. Своё собственное значение в список не попадает.
+    """
+    card = card or {}
+    ru = _plain(card.get("word"))
+    en = _plain(card.get("en"))
+    if not en:
+        return []
+    out: List[str] = []
+    for russian, english in SYNONYM_GROUPS:
+        plain_ru = _plain(russian)
+        plain_en = [_plain(item) for item in english]
+        if ru != plain_ru and en not in plain_en:
+            continue
+        for item, plain in zip(english, plain_en):
+            if plain == en or plain in out:
+                continue
+            out.append(item)
+    return out
+
 def session_today(value, today=None) -> bool:
     """Был ли заход повторения уже сегодня (дата из поля профиля).
 

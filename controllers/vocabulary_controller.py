@@ -207,9 +207,15 @@ class VocabularyController:
     # -----------------------------------------------------
     @staticmethod
     def _best_report(card, heard):
-        """Лучший вердикт из эталонов карточки (пример и само слово)."""
+        """Лучший вердикт из эталонов карточки.
+
+        Эталоны: пример, само слово и СИНОНИМЫ («привет» → hey/hi/hello).
+        Синоним, который ученик произнёс, — такой же верный ответ.
+        """
         best = None
-        for reference in vocabulary.reference_texts(card):
+        references = list(vocabulary.reference_texts(card))
+        references += vocabulary.alternatives(card)
+        for reference in references:
             try:
                 report = pronunciation.compare(reference, heard)
             except Exception as exc:

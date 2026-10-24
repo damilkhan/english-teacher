@@ -79,10 +79,13 @@ def make_controller():
 def test_unrelated_gives_both_words():
     """[1] «hello» вместо «Hey» → сказано ЧТО услышали и ЧТО ждали."""
     print("\n[1] ответ «сказал своё» отдаёт heard + en + example")
+    # «hello»/«hi» на карточку «привет → Hey» с 24.10 считаются верными
+    # (решение ученика, синонимы — см. test_vocab_synonyms.py), поэтому
+    # «сказал своё» проверяем на постороннем слове.
     ctrl = make_controller()
-    res = ctrl.answer("hello")
+    res = ctrl.answer("banana")
     check("статус unrelated", res.get("status") == "unrelated", res)
-    check("услышанное слово отдано", res.get("heard") == "hello", res)
+    check("услышанное слово отдано", res.get("heard") == "banana", res)
     check("ожидаемое слово отдано", res.get("en") == "Hey", res)
     check("пример отдан", res.get("example") == "Hey, what's up?", res)
 

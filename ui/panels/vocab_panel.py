@@ -28,6 +28,7 @@ from typing import Callable, Optional
 import customtkinter as ctk
 
 import theme
+import vocabulary
 
 WIDTH = 560
 HEIGHT = 486
@@ -238,7 +239,10 @@ class VocabPanel(ctk.CTkToplevel):
         """Удачный ответ: «✅ Похоже!» и уровень +1."""
         card = self.controller.current() or {}
         english = card.get("en") or ""
-        lines = ["✅ Похоже! «%s»" % english]
+        heard = str(result.get("heard") or "").strip()
+        lines = ["✅ Похоже! «%s»" % (heard or english)]
+        if heard and english and not vocabulary.same_text(heard, english):
+            lines.append("Это синоним — засчитываю. Слово в словаре: «%s»." % english)
         if result.get("learned"):
             lines.append("🌟 Слово выучено — больше не спрошу.")
         elif self._level_changed(result):
