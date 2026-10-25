@@ -41,6 +41,7 @@
 """
 
 import math
+import os
 import re
 import tkinter as tk
 import tkinter.font as tkfont
@@ -87,11 +88,16 @@ BUBBLE_MAX_FRAC = 0.66
 BUBBLE_MIN_PX = 170    # уже этого текст не переносим (иначе по букве в строке)
 
 
+# Максимальная ширина фото в облачке (px). Фото меньше — не растягиваем.
+PICTURE_MAX_PX = 340
+
+
 class _Message:
     """Одна реплика: всё, что нужно, чтобы её обновить или перекрасить."""
 
     __slots__ = ("mark", "sender", "text", "is_user", "row", "bubble",
-                 "header", "name_lbl", "stamp_lbl", "body", "tail", "replay")
+                 "header", "name_lbl", "stamp_lbl", "body", "tail", "replay",
+                 "picture", "photo", "picture_lbl")
 
     def __init__(self, mark, sender, text, is_user):
         self.mark = mark
@@ -106,6 +112,9 @@ class _Message:
         self.body = None
         self.tail = None
         self.replay = None
+        self.picture = None    # путь к фото (задание «опиши фото»)
+        self.photo = None      # PhotoImage: держим ссылку, иначе Tk её съест
+        self.picture_lbl = None  # tk.Label с фото внутри облачка
 
 
 class ChatView(ctk.CTkFrame):
@@ -192,7 +201,7 @@ class ChatView(ctk.CTkFrame):
     # =====================================================
     # Публичный API (его зовут ui/app.py и тесты)
     # =====================================================
-    def add_message(self, sender, text, stamp=None):
+    def add_message(self, sender, text, stamp=None, picture=None):
         """Добавить реплику. Возвращает метку (только для реплик преподавателя).
 
         Метка нужна, чтобы потом включить кнопку «прослушать повторно»
@@ -206,6 +215,7 @@ class ChatView(ctk.CTkFrame):
         self._seq += 1
         mark = "msg_%d" % self._seq
         msg = _Message(mark, sender, text, is_user)
+        msg.picture = picture
         self._messages[mark] = msg
         self._order.append(mark)
 
@@ -354,6 +364,43 @@ class ChatView(ctk.CTkFrame):
         if self.on_hover_word is not None:
             self._bind_hover(msg.body)
         self._fill_body(msg)
+        if msg.picture:
+            self._add_picture(msg)
+
+    def _add_picture(self, msg):
+        """Показать ФОТО в облачке преподавателя (задание «опиши фото»).
+
+        Фото режется по ширине облачка и превращается в PhotoImage.
+        Ссылку держим в `msg.photo`: без неё Tk-картинку забирает
+        сборщик мусора, и на её месте остаётся пустое место.
+        Нет Pillow / файла — тихо возвращаем False (текст задания остаётся).
+        """
+        path = msg.picture
+        if not path or not os.path.exists(path):
+            return False
+        try:
+            from PIL import Image, ImageTk
+            image = Image.open(path)
+            image.load()
+        except Exception as exc:                       # noqa: BLE001
+            print("ℹ️ Фото не открылось: %s" % exc)
+            return False
+        limit = max(120, min(PICTURE_MAX_PX, self._bubble_max_px()))
+        if image.width > limit:
+            height = max(1, int(round(image.height * limit / float(image.width))))
+            image = image.resize((limit, height), Image.LANCZOS)
+        try:
+            msg.photo = ImageTk.PhotoImage(image, master=self.canvas)
+            label = tk.Label(msg.body.master, image=msg.photo, bd=0,
+                             highlightthickness=0,
+                             bg=self._bubble_bg(msg.is_user))
+            label.pack(fill="x", pady=(6, 0))
+            msg.picture_lbl = label
+        except Exception as exc:                       # noqa: BLE001
+            print("ℹ️ Фото не показать: %s" % exc)
+            return False
+        self._scroll_to_bottom()
+        return True
 
     def _fill_body(self, msg):
         """Разложить текст реплики по строкам и вставить в её облачко.
