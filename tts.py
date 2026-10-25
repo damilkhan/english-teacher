@@ -537,7 +537,7 @@ def speak(text: str, name=None, name_latin=None, parts=None, on_part=None,
 
 def _speak_chunk(text: str, voice: str, my_gen: int, rate=None) -> bool:
     """Озвучить ОДИН кусок. True — что-то прозвучало."""
-    print(f"🔊 Озвучка: {voice} — {text[:48]!r}")
+    _say(f"🔊 Озвучка: {voice} — {text[:48]!r}")
     # Основной путь: ПОТОК (звучим по первым байтам; повторы — внутри).
     if _streaming_enabled():
         try:
@@ -551,7 +551,7 @@ def _speak_chunk(text: str, voice: str, my_gen: int, rate=None) -> bool:
     try:
         data = _synthesize(text, voice, rate)
     except Exception as exc:                   # noqa: BLE001 — синтез не должен ронять поток
-        print(f"⚠️ TTS ошибка синтеза: {exc}")
+        _say(f"⚠️ TTS ошибка синтеза: {exc}")
         data = None
     if not data:
         # Сети нет — последний рубеж: локальный голос (только английский).
@@ -560,7 +560,7 @@ def _speak_chunk(text: str, voice: str, my_gen: int, rate=None) -> bool:
         wav = piper_synth(text) if voice != VOICE_RU else None
         if not wav:
             return False
-        print("🔉 TTS: кусок прочитан локально (piper)")
+        _say("🔉 TTS: кусок прочитан локально (piper)")
         _play(wav, my_gen, suffix=".wav")
         return True
     if my_gen != _current_generation():
@@ -668,11 +668,11 @@ def _download_once(text: str, voice: str, rate=None) -> Optional[bytes]:
     try:
         asyncio.run(asyncio.wait_for(_run(), timeout=DOWNLOAD_TIMEOUT))
     except asyncio.TimeoutError:
-        print("⚠️ TTS: таймаут скачивания")
+        _say("⚠️ TTS: таймаут скачивания")
         _safe_remove(path)
         return None
     except Exception as exc:                   # noqa: BLE001 — сеть/сервис любые
-        print(f"⚠️ TTS ошибка: {exc}")
+        _say(f"⚠️ TTS ошибка: {exc}")
         _safe_remove(path)
         return None
 
@@ -680,7 +680,7 @@ def _download_once(text: str, voice: str, rate=None) -> Optional[bytes]:
         with open(path, "rb") as fh:
             return fh.read()
     except OSError as exc:
-        print(f"⚠️ TTS: файл не прочитан ({exc})")
+        _say(f"⚠️ TTS: файл не прочитан ({exc})")
         return None
     finally:
         _safe_remove(path)
@@ -711,7 +711,7 @@ def _play(data: bytes, my_gen: int, suffix: str = ".mp3") -> None:
                 break
             time.sleep(PLAYBACK_TICK)
     except Exception as exc:                   # noqa: BLE001 — воспроизведение некритично
-        print(f"⚠️ TTS воспроизведение ошибка: {exc}")
+        _say(f"⚠️ TTS воспроизведение ошибка: {exc}")
     finally:
         _safe_remove(path)
 
@@ -1053,7 +1053,7 @@ def piper_synth(text: str) -> Optional[bytes]:
                 from piper import PiperVoice
                 started = time.monotonic()
                 _piper_voice = PiperVoice.load(piper_path())
-                print("🔉 TTS: локальный голос готов за %.2f с"
+                _say("🔉 TTS: локальный голос готов за %.2f с"
                       % (time.monotonic() - started))
             except Exception as exc:           # noqa: BLE001 — нет piper/файла
                 _piper_failed = True
@@ -1097,7 +1097,7 @@ def _piper_play(out, text, lang, samplerate, channels, my_gen) -> bool:
         return False
     played = _decode_bytes_into(out, data, samplerate, channels, my_gen, "wav")
     if played:
-        print("🔉 TTS: кусок прочитан локально (piper)")
+        _say("🔉 TTS: кусок прочитан локально (piper)")
     return played
 
 
@@ -1229,7 +1229,7 @@ def _stream_play_segments(segments, my_gen, tracker=None, rate=None) -> bool:
         _log.warning("TTS: сегментный поток (%s)", exc)
     finally:
         if waits and max(waits) > 0.3:         # видно в logs\app.log
-            print("⏱ TTS: ожидание кусков, с: %s" % waits)
+            _say("⏱ TTS: ожидание кусков, с: %s" % waits)
     return played
 
 
