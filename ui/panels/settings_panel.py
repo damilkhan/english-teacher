@@ -34,7 +34,7 @@ class SettingsPanel(ctk.CTkFrame):
         self.theme_frame = self._section("ОФОРМЛЕНИЕ")
         self.theme_var = ctk.StringVar(value=theme_name)
         self.theme_dark = self._radio(self.theme_frame, "🌙  Тёмная", self.theme_var, "dark")
-        self.theme_light = self._radio(self.theme_frame, "☀️  Светлая", self.theme_var, "light")
+        self.theme_light = self._radio(self.theme_frame, "🌞  Светлая", self.theme_var, "light")
 
         # ---------- модель ----------
         # Выбор хранится в settings.json, а применяется перезапуском сервера.
