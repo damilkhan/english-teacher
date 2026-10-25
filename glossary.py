@@ -42,6 +42,37 @@ MAX_PHRASE_WORDS = 4
 _POSSESSIVE = {"my", "your", "his", "her", "its", "our", "their",
               "mine", "yours", "ours", "theirs"}
 
+# ── ФОРМУЛА ИСКЛЮЧЕНИЯ: когда фразу НЕЛЬЗЯ переводить «по смыслу» ──────────
+# Контекст решает, поэтому решает не модель, а простая таблица (решение
+# ученика 25.10.2026). Ключ — фраза (нормализованные слова), значение —
+# список правил. Правило срабатывает, когда рядом стоит слово-переключатель:
+#   "before" — слово ПЕРЕД фразой (любое из набора),
+#   "after"  — слово ПОСЛЕ фразы,
+#   "ru"     — что показать вместо смысла фразы (None — переводим слово).
+# Пример: "It's great to SEE YOU today" — это не прощание: перед фразой
+# стоит "to", значит переводим «видеть тебя», а не «Увидимся».
+# Новую беду лечим ОДНОЙ строкой здесь, кода больше не трогаем.
+PHRASE_OVERRIDES = {
+    ("see", "you"): [
+        {"before": {"to", "good", "great", "nice", "glad", "happy", "lovely",
+                    "pleased", "want", "wanna", "let", "let's"},
+         "ru": "видеть тебя"},
+        # "I'll see you at six" — это уже прощание/договорённость, смысл верный
+    ],
+}
+
+# Склейка «местоимение + глагол» (you tell, you can't do, you learn) — это НЕ
+# устойчивое выражение, а обычный кусок предложения (поймано 25.10.2026:
+# в словаре лежало «you tell» → «ты сказать»). Такие фразы не берём.
+_PRONOUN_START = {"i", "you", "he", "she", "it", "we", "they",
+                  "me", "him", "her", "us", "them"}
+# ...кроме настоящих разговорных оборотов — они начинаются с местоимения.
+_GLUE_KEEP = {
+    ("i", "mean"), ("i", "think"), ("i", "guess"), ("i", "see"),
+    ("you", "know"), ("you", "know", "what"), ("it", "depends"),
+    ("never", "mind"),
+}
+
 # Токен: буквы + внутренний апостроф (don't, I'm, let's, o'clock).
 # Русские буквы сюда НЕ попадают: кириллицу в чате не переводим.
 WORD_RE = re.compile(r"[A-Za-z]+(?:['\u2019][A-Za-z]+)*")
@@ -64,7 +95,10 @@ _SYSTEM = (
     "3a. A phrase is at most 4 words. Never glue the rest of the sentence to "
     "it (NOT \"look forward to seeing you there\").\n"+
     "3b. A possessive or article with a noun is NOT a phrase (your umbrella = "
-    "two separate words).\n"
+    "two separate words).\n"+
+    "3c. A subject with its verb is NOT a phrase: \"you tell\", \"you can't do\", "
+    "\"you learn\", \"you usually do\" are separate words of a normal sentence. "
+    "Phrases are only idioms, phrasal verbs, greetings and fixed expressions.\n"
     "4. Do NOT add separate items for words already inside a phrase item.\n"
     "5. Contractions (I'm, don't, let's) are ONE word.\n"
     "6. No markdown, no comments, no extra keys."
@@ -112,6 +146,31 @@ def word_at(sentence: str, index: int):
     return None if pos is None else tokens[pos]
 
 
+def phrase_override(tokens, pos, size):
+    """Правило из формулы исключения для фразы tokens[pos:pos+size] или None."""
+    keys = tuple(t["key"] for t in tokens[pos:pos + size])
+    rules = PHRASE_OVERRIDES.get(keys)
+    if not rules:
+        return None
+    before = tokens[pos - 1]["key"] if pos > 0 else ""
+    after = tokens[pos + size]["key"] if pos + size < len(tokens) else ""
+    for rule in rules:
+        if "before" in rule and before not in rule["before"]:
+            continue
+        if "after" in rule and after not in rule["after"]:
+            continue
+        return rule
+    return None
+
+
+def is_glued_phrase(keys):
+    """Склеена ли «фраза» из обычных слов предложения (you tell, you learn)."""
+    keys = tuple(keys)
+    if len(keys) < 2 or keys[0] not in _PRONOUN_START:
+        return False
+    return keys not in _GLUE_KEEP
+
+
 # ---------------------------------------------------------
 # Словарь
 # ---------------------------------------------------------
@@ -125,7 +184,7 @@ class Glossary:
         self.words = {}          # key -> ru
         self.phrases = {}        # (key, key, …) -> ru
         self.stats = {"requests": 0, "failed": 0, "retries": 0,
-                      "hits": 0, "misses": 0, "rejected": 0}
+                      "hits": 0, "misses": 0, "rejected": 0, "overrides": 0}
         self._lock = threading.Lock()
         self.load()
 
@@ -185,12 +244,20 @@ class Glossary:
         for size in range(longest, 1, -1):
             keys = tuple(t["key"] for t in tokens[pos:pos + size])
             ru = self.phrases.get(keys)
-            if ru:
-                self.stats["hits"] += 1
-                return {"en": " ".join(t["word"] for t in tokens[pos:pos + size]),
-                        "ru": ru, "phrase": True,
-                        "start": tokens[pos]["start"],
-                        "end": tokens[pos + size - 1]["end"]}
+            if not ru:
+                continue
+            rule = phrase_override(tokens, pos, size)
+            if rule is not None:
+                # контекст важнее смысла: «great to see you» — не прощание
+                self.stats["overrides"] += 1
+                ru = rule.get("ru")
+                if not ru:
+                    continue          # правило велит переводить слово по слову
+            self.stats["hits"] += 1
+            return {"en": " ".join(t["word"] for t in tokens[pos:pos + size]),
+                    "ru": ru, "phrase": True,
+                    "start": tokens[pos]["start"],
+                    "end": tokens[pos + size - 1]["end"]}
 
         # 2) отдельное слово
         ru = self.words.get(token["key"])
@@ -205,8 +272,14 @@ class Glossary:
                 if pos - offset >= 0 and tuple(
                         t["key"] for t in tokens[pos - offset:pos - offset + len(keys)]
                 ) == keys:
-                    self.stats["hits"] += 1
                     first, last = pos - offset, pos - offset + len(keys) - 1
+                    rule = phrase_override(tokens, first, len(keys))
+                    if rule is not None:
+                        self.stats["overrides"] += 1
+                        value = rule.get("ru")
+                        if not value:
+                            continue      # правило велит переводить слово по слову
+                    self.stats["hits"] += 1
                     return {"en": " ".join(t["word"] for t in tokens[first:last + 1]),
                             "ru": value, "phrase": True,
                             "start": tokens[first]["start"],
@@ -291,8 +364,9 @@ class Glossary:
                     self.words[keys[0]] = ru
                     added += 1
                 else:
-                    if len(keys) > MAX_PHRASE_WORDS or any(
-                            k in _POSSESSIVE for k in keys):
+                    if (len(keys) > MAX_PHRASE_WORDS
+                            or any(k in _POSSESSIVE for k in keys)
+                            or is_glued_phrase(keys)):
                         # мы уже под self._lock: вложенный захват = самоблокировка
                         self.stats["rejected"] += 1
                         continue
