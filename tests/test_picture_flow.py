@@ -85,6 +85,10 @@ def make_app(level="A2"):
     app._picture_reply = types.MethodType(App._picture_reply, app)
     app._picture_hint = types.MethodType(App._picture_hint, app)
     app._say = lambda *a, **k: app.said.append(a[0] if a else "")
+    # 25.10.2026: просьба про фото говорится ПОСЛЕ текущей речи, поэтому
+    # заглушке нужен настоящий метод (окна нет — скажет сразу).
+    app._speech_busy = False
+    app._say_after_current = types.MethodType(App._say_after_current, app)
     app.glossary_controller = types.SimpleNamespace(request=lambda text: None)
     return app
 

@@ -408,6 +408,11 @@ class EnglishTeacherApp:
         # или None. Пока не None, реплика ученика проверяется по порогу и
         # в модель НЕ уходит (порог жёсткий, решение ученика 25.10.2026).
         self._picture = None
+        # Ответ учителя ещё В ПУТИ: ученик отправил реплику, модель думает.
+        # Если эта реплика закрывает урок, итог и задание с фото ждут её ответа
+        # (баг 25.10.2026: итог влезал РАНЬШЕ реплики и обрывал озвучку).
+        self._reply_in_flight = False
+        self._deferred_finish = None    # сессия урока, ждущая конца ответа
 
         # ---------- карта прогресса ----------
         # curriculum.json читаем ОДИН раз: карта и вкладка «Профиль»
@@ -1430,6 +1435,19 @@ class EnglishTeacherApp:
     def _on_lesson_finished(self, session):
         """Урок доигран до конца: засчитываем и обновляем карту."""
         user_id = (self.current_user or {}).get("id")
+        # Ответ учителя на последнюю реплику ещё В ПУТИ: не показываем итог
+        # сейчас, иначе он встанет РАНЬШЕ реплики и оборвёт её озвучку
+        # (живой баг 25.10.2026: фото пришло раньше ответа, Вербот запнулся).
+        # Дождёмся конца ответа — см. _run_deferred_finish.
+        if getattr(self, "_reply_in_flight", False):
+            self._deferred_finish = session
+            try:
+                self.window.after(
+                    int(getattr(config, "LESSON_TAIL_FALLBACK_MS", 20000)),
+                    self._run_deferred_finish)
+            except Exception:
+                pass
+            return
         exam_result = getattr(self, "_exam_last", None)
         # на экзамене урок засчитывается ТОЛЬКО при сданном балле (решение:
         # балл нужен для перехода вперёд, пересдач без ограничений)
@@ -1501,7 +1519,8 @@ class EnglishTeacherApp:
             self.input_bar.set_counter(task["threshold"])
         except Exception:
             pass
-        self._say("Look at the photo and describe it, please.")
+        # Просьбу говорим ПОСЛЕ похвалы: иначе обрываем её на полуслове.
+        self._say_after_current("Look at the photo and describe it, please.")
         return True
 
     def _picture_reply(self, text):
@@ -2404,6 +2423,9 @@ class EnglishTeacherApp:
         Здесь же закрываем занятие, если ученик набрал нужное число реплик —
         делаем это ПОСЛЕ ответа Джейн, чтобы последняя реплика успела прозвучать.
         """
+        # Ответ пришёл — отложенный итог урока больше не «ждёт модель»
+        # (покажем его, когда речь доиграет: см. _finish_speech).
+        self._reply_in_flight = False
         session = self.lesson.current()
         # ЭКЗАМЕН закрываем в _on_analysis: там уже посчитан балл последнего
         # ответа (разбор Аналитика приходит после ответа преподавателя).
@@ -2428,6 +2450,9 @@ class EnglishTeacherApp:
 
     def _finish_speech(self, mark, story):
         """Речь Джейн закончилась: кнопка повтора и «конец рассказа»."""
+        # Последняя реплика урока досказана — теперь можно показать итог
+        # и задание с фото (живой баг 25.10.2026: они влезали раньше).
+        self._run_deferred_finish()
         if mark:
             try:
                 self.chat_view.enable_replay(mark)
@@ -2581,6 +2606,9 @@ class EnglishTeacherApp:
                     except Exception:
                         pass
 
+        # Флаг ставим ДО запуска потока: иначе гонка — следующий _say успеет
+        # включиться раньше и оборвёт эту реплику (tts.speak глушит старое).
+        self._speech_busy = True
         threading.Thread(target=_worker, daemon=True).start()
 
     # Примечание: _say объявлен выше (в блоке обратной связи), здесь пусто.
@@ -2745,8 +2773,48 @@ class EnglishTeacherApp:
 
     def _send_to_teacher(self, text):
         """Отправить реплику учителю (в занятии — учесть её в счёте)."""
+        # Порядок важен: считаем реплику ДО отправки (на экзамене текст нужен
+        # для балла), но помечаем, что ответ учителя ещё в пути — иначе итог
+        # урока встанет раньше ответа (живой баг 25.10.2026).
+        self._reply_in_flight = True
         self._register_lesson_reply(text)    # на экзамене текст нужен для балла
         self.chat.send(text)
+
+    def _run_deferred_finish(self):
+        """Показать отложенный итог урока (ответ учителя уже прозвучал).
+
+        Вызывается из _finish_speech (речь доиграла) и как страховка — по
+        таймеру из _on_lesson_finished (модель могла не ответить вовсе).
+        """
+        session = getattr(self, "_deferred_finish", None)
+        if session is None:
+            return
+        self._deferred_finish = None
+        self._reply_in_flight = False        # защита от второго откладывания
+        self._on_lesson_finished(session)
+
+    def _say_after_current(self, text):
+        """Озвучить, когда ТЕКУЩАЯ речь доиграет.
+
+        tts.speak() в начале глушит предыдущую реплику (tts.stop()), поэтому
+        просьба про фото, сказанная сразу после похвалы, обрывала её на
+        полуслове — «Вербот запнулся» (баг 25.10.2026).
+        """
+        def _say_now():
+            self._say(text)
+
+        def _check(left):
+            # _speech_busy снимается по окончании звука; ждём не дольше 30 с
+            # (зависшая озвучка не должна съесть просьбу совсем).
+            if not getattr(self, "_speech_busy", False) or left <= 0:
+                _say_now()
+                return
+            try:
+                self.window.after(150, lambda: _check(left - 1))
+            except Exception:
+                _say_now()          # окна нет (проверки) — говорим сразу
+
+        _check(200)
 
     def _run_when_server_ready(self, action, on_timeout=None):
         """Выполнить действие, когда LLM-сервер ответит.
