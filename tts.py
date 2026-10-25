@@ -111,11 +111,19 @@ VOICE_RATE = {
 }
 
 
-def rate_for(voice):
-    """Скорость речи (SSML rate) для голоса. По умолчанию RATE."""
+def rate_for(voice, rate=None):
+    """Скорость речи (SSML rate): своя для голоса или заданная явно.
+
+    rate — необязательная скорость НА ОДИН запрос (например, "-50%" для
+    медленного повтора слова из подсказки, 25.10.2026). None — прежнее
+    поведение: скорость голоса из VOICE_RATE.
+    """
+    if rate:
+        return rate
     return VOICE_RATE.get(voice, RATE)
 
 RATE = "+10%"                 # скорость речи по умолчанию (если нет в VOICE_RATE)
+WORD_SLOW_RATE = "-50%"       # медленный повтор слова в подсказке (полтемпа)
 DOWNLOAD_TIMEOUT = 5.0        # ТОЛЬКО скачивание (проигрывание — отдельно)
 DOWNLOAD_BUDGET = 7.0         # общий предел на ВСЕ повторы одного куска
 PLAYBACK_TICK = 0.05          # шаг опроса get_busy (для прерывания речи)
@@ -446,7 +454,8 @@ def _schedule_rewarm() -> None:
 # ---------------------------------------------------------
 # Публичный вход
 # ---------------------------------------------------------
-def speak(text: str, name=None, name_latin=None, parts=None, on_part=None) -> bool:
+def speak(text: str, name=None, name_latin=None, parts=None, on_part=None,
+          rate=None) -> bool:
     """Озвучить текст. Блокирующая: вызывать из фонового потока.
 
     Возвращает True, если что-то прозвучало (False — не удалось озвучить,
@@ -463,6 +472,9 @@ def speak(text: str, name=None, name_latin=None, parts=None, on_part=None) -> bo
 
     Смешанный текст разбивается ПО ЯЗЫКУ: русские куски читает русский
     голос, английские — английский. Новая реплика важнее текущей.
+
+    rate — НЕОБЯЗАТЕЛЬНО: скорость на эту реплику ("-50%" — вдвое медленнее).
+    Нужно для медленного повтора слова по клику (25.10.2026).
     """
     if not text or not str(text).strip():
         return False
@@ -488,7 +500,7 @@ def speak(text: str, name=None, name_latin=None, parts=None, on_part=None) -> bo
         played = False
         if _streaming_enabled():
             try:
-                if _stream_play_segments(segments, my_gen, tracker):
+                if _stream_play_segments(segments, my_gen, tracker, rate=rate):
                     _reset_level()
                     last_failure = ""
                     return True
@@ -499,19 +511,19 @@ def speak(text: str, name=None, name_latin=None, parts=None, on_part=None) -> bo
             if _stop.is_set() or my_gen != _current_generation():
                 return played                  # прервали / пришла более новая
             tracker.start(index)
-            if _speak_chunk(chunk, voice_for(lang), my_gen):
+            if _speak_chunk(chunk, voice_for(lang), my_gen, rate):
                 played = True
         last_failure = "" if played else "edge-tts не ответил (проверь интернет)"
         return played
 
 
-def _speak_chunk(text: str, voice: str, my_gen: int) -> bool:
+def _speak_chunk(text: str, voice: str, my_gen: int, rate=None) -> bool:
     """Озвучить ОДИН кусок. True — что-то прозвучало."""
     print(f"🔊 Озвучка: {voice} — {text[:48]!r}")
     # Основной путь: ПОТОК (звучим по первым байтам; повторы — внутри).
     if _streaming_enabled():
         try:
-            if _stream_play(text, voice, my_gen):
+            if _stream_play(text, voice, my_gen, rate):
                 return True
         except Exception as exc:               # noqa: BLE001 — вернёмся к запасному
             _log.warning("TTS: потоковый путь не сработал (%s)", exc)
@@ -519,7 +531,7 @@ def _speak_chunk(text: str, voice: str, my_gen: int) -> bool:
         return False
     # Запасной путь: скачать mp3 целиком и проиграть (pygame; повторы внутри).
     try:
-        data = _synthesize(text, voice)
+        data = _synthesize(text, voice, rate)
     except Exception as exc:                   # noqa: BLE001 — синтез не должен ронять поток
         print(f"⚠️ TTS ошибка синтеза: {exc}")
         data = None
@@ -542,15 +554,15 @@ def _speak_chunk(text: str, voice: str, my_gen: int) -> bool:
 # ---------------------------------------------------------
 # Синтез и кэш
 # ---------------------------------------------------------
-def _synthesize(text: str, voice: str) -> Optional[bytes]:
-    """mp3-байты для (text, voice): из кэша или скачиванием. None при ошибке."""
-    key = (voice, rate_for(voice), text)
+def _synthesize(text: str, voice: str, rate=None) -> Optional[bytes]:
+    """mp3-байты для (text, voice, rate): из кэша или скачиванием. None при ошибке."""
+    key = (voice, rate_for(voice, rate), text)
     cached = _cache.get(key)
     if cached is not None:
         _cache.move_to_end(key)
         return cached
 
-    data = _download(text, voice)
+    data = _download(text, voice, rate)
     if data:
         _cache[key] = data
         _cache.move_to_end(key)
@@ -559,7 +571,7 @@ def _synthesize(text: str, voice: str) -> Optional[bytes]:
     return data
 
 
-def _download_race(text: str, voice: str, jobs: int) -> Optional[bytes]:
+def _download_race(text: str, voice: str, jobs: int, rate=None) -> Optional[bytes]:
     """Несколько ОДНОВРЕМЕННЫХ запросов одного куска — берём первый удачный.
 
     edge-tts эпизодически «болеет»: замер 20.10.2026 — 18 запросов подряд дали
@@ -571,7 +583,7 @@ def _download_race(text: str, voice: str, jobs: int) -> Optional[bytes]:
     jobs = max(1, int(jobs))
     results: "queue.Queue" = queue.Queue()
     for _ in range(jobs):
-        threading.Thread(target=lambda: results.put(_download_once(text, voice)),
+        threading.Thread(target=lambda: results.put(_download_once(text, voice, rate)),
                          daemon=True).start()
     deadline = time.monotonic() + DOWNLOAD_TIMEOUT + 0.5
     for _ in range(jobs):
@@ -587,7 +599,7 @@ def _download_race(text: str, voice: str, jobs: int) -> Optional[bytes]:
     return None
 
 
-def _download(text: str, voice: str) -> Optional[bytes]:
+def _download(text: str, voice: str, rate=None) -> Optional[bytes]:
     """Скачивает mp3 во временный файл: сначала ПАРАЛЛЕЛЬНО, потом по очереди.
 
     Вся загрузка ограничена ОБЩИМ временем DOWNLOAD_BUDGET: раньше три попытки
@@ -607,12 +619,12 @@ def _download(text: str, voice: str) -> Optional[bytes]:
     jobs = max(1, min(jobs, RETRY_ATTEMPTS))
     attempts = 0
     if jobs > 1:
-        data = _download_race(text, voice, jobs)
+        data = _download_race(text, voice, jobs, rate)
         attempts = jobs
         if data:
             return data
     while attempts < RETRY_ATTEMPTS:
-        data = _download_once(text, voice)
+        data = _download_once(text, voice, rate)
         attempts += 1
         if data:
             return data
@@ -625,13 +637,13 @@ def _download(text: str, voice: str) -> Optional[bytes]:
     return None
 
 
-def _download_once(text: str, voice: str) -> Optional[bytes]:
+def _download_once(text: str, voice: str, rate=None) -> Optional[bytes]:
     """Одно скачивание mp3 во временный файл. Файл всегда убираем."""
     handle, path = tempfile.mkstemp(prefix="jane_tts_", suffix=".mp3")
     os.close(handle)
 
     async def _run():
-        communicate = edge_tts.Communicate(text, voice, rate=rate_for(voice),
+        communicate = edge_tts.Communicate(text, voice, rate=rate_for(voice, rate),
                                            pitch=pitch_for(voice))
         await communicate.save(path)
 
@@ -736,10 +748,10 @@ def _output_params():
     return sr, ch
 
 
-def _edge_stream(text: str, voice: str, chunks) -> None:
+def _edge_stream(text: str, voice: str, chunks, rate=None) -> None:
     """Качает mp3-чанки edge-tts в очередь и кладёт None в конце."""
     async def _go():
-        async for chunk in edge_tts.Communicate(text, voice, rate=rate_for(voice),
+        async for chunk in edge_tts.Communicate(text, voice, rate=rate_for(voice, rate),
                                                      pitch=pitch_for(voice)).stream():
             if chunk.get("type") == "audio":
                 chunks.put(chunk["data"])
@@ -754,7 +766,7 @@ def _edge_stream(text: str, voice: str, chunks) -> None:
         chunks.put(None)
 
 
-def _stream_play(text: str, voice: str, my_gen: int) -> bool:
+def _stream_play(text: str, voice: str, my_gen: int, rate=None) -> bool:
     """Потоковая озвучка С ПОВТОРАМИ (edge-tts иногда отвечает 403).
 
     True — что-то прозвучало; False — не вышло (переходим к запасному пути).
@@ -764,19 +776,19 @@ def _stream_play(text: str, voice: str, my_gen: int) -> bool:
     for _attempt in range(RETRY_ATTEMPTS):
         if _stop.is_set() or my_gen != _current_generation():
             return False
-        if _stream_once(text, voice, my_gen):
+        if _stream_once(text, voice, my_gen, rate):
             return True
         time.sleep(RETRY_DELAY)
     return False
 
 
-def _stream_once(text: str, voice: str, my_gen: int) -> bool:
+def _stream_once(text: str, voice: str, my_gen: int, rate=None) -> bool:
     """Одна попытка потоковой озвучки. True — что-то проиграли."""
     if not _STREAM_OK:
         return False
     chunks = queue.Queue()
     reader = _ByteStream(chunks)
-    threading.Thread(target=_edge_stream, args=(text, voice, chunks),
+    threading.Thread(target=_edge_stream, args=(text, voice, chunks, rate),
                      daemon=True).start()
     try:
         container = av.open(reader, format=STREAM_FORMAT)
@@ -841,9 +853,10 @@ _PREFETCH_SLOTS = threading.BoundedSemaphore(6)
 class _Prefetch:
     """Фоновая загрузка mp3 одного куска (играем текущий — качаем следующий)."""
 
-    def __init__(self, text: str, voice: str) -> None:
+    def __init__(self, text: str, voice: str, rate=None) -> None:
         self.text = text
         self.voice = voice
+        self.rate = rate
         self._data = None
         self._event = threading.Event()
         threading.Thread(target=self._run, daemon=True).start()
@@ -851,7 +864,7 @@ class _Prefetch:
     def _run(self) -> None:
         try:
             with _PREFETCH_SLOTS:            # не больше 6 скачиваний разом
-                self._data = _download(self.text, self.voice)
+                self._data = _download(self.text, self.voice, self.rate)
         except Exception:                      # noqa: BLE001 — сбой загрузки не критичен
             self._data = None
         finally:
@@ -917,10 +930,11 @@ def _decode_into(out, data, samplerate, channels, my_gen) -> bool:
                               STREAM_FORMAT)
 
 
-def _decode_stream_into(out, text, voice, samplerate, channels, my_gen) -> bool:
+def _decode_stream_into(out, text, voice, samplerate, channels, my_gen,
+                        rate=None) -> bool:
     """Декодирует mp3-ПОТОК edge-tts прямо в общий выход (старт по первым байтам)."""
     chunks = queue.Queue()
-    threading.Thread(target=_edge_stream, args=(text, voice, chunks),
+    threading.Thread(target=_edge_stream, args=(text, voice, chunks, rate),
                      daemon=True).start()
     try:
         container = av.open(_ByteStream(chunks), format=STREAM_FORMAT)
@@ -1070,7 +1084,7 @@ def _piper_play(out, text, lang, samplerate, channels, my_gen) -> bool:
 
 
 def _play_segment(out, text, voice, samplerate, channels, my_gen,
-                  data=None, lang=None) -> bool:
+                  data=None, lang=None, rate=None) -> bool:
     """Проиграть ОДИН кусок так, чтобы НИ ОДНО слово не пропало.
 
     Порядок попыток: готовые mp3-байты (предзагрузка) → поток → загрузка
@@ -1088,18 +1102,18 @@ def _play_segment(out, text, voice, samplerate, channels, my_gen,
         return True
     if _stop.is_set() or my_gen != _current_generation():
         return False
-    if _decode_stream_into(out, text, voice, samplerate, channels, my_gen):
+    if _decode_stream_into(out, text, voice, samplerate, channels, my_gen, rate):
         return True
     if _stop.is_set() or my_gen != _current_generation():
         return False
-    data = _download(text, voice)                # последняя попытка целиком
+    data = _download(text, voice, rate)          # последняя попытка целиком
     if data and _decode_into(out, data, samplerate, channels, my_gen):
         return True
     # Последний рубеж: интернета нет — читаем локальным голосом.
     return _piper_play(out, text, lang, samplerate, channels, my_gen)
 
 
-def _stream_play_segments(segments, my_gen, tracker=None) -> bool:
+def _stream_play_segments(segments, my_gen, tracker=None, rate=None) -> bool:
     """Проиграть все куски ЧЕРЕЗ ОДИН звуковой выход.
 
     Первый кусок читаем ПОТОКОМ (звук — как только пришли первые байты, не
@@ -1126,7 +1140,7 @@ def _stream_play_segments(segments, my_gen, tracker=None) -> bool:
     def _start(i):
         if 0 <= i < len(segments) and prefs[i] is None:
             _index, lang, chunk = segments[i]
-            prefs[i] = _Prefetch(chunk, voice_for(lang))
+            prefs[i] = _Prefetch(chunk, voice_for(lang), rate)
 
     prefetch_all = bool(getattr(config, "TTS_PREFETCH_ALL", True))
     if prefetch_all:
@@ -1145,7 +1159,7 @@ def _stream_play_segments(segments, my_gen, tracker=None) -> bool:
             if tracker is not None:
                 tracker.start(index0)
             if _play_segment(out, chunk0, voice_for(lang0),
-                             samplerate, channels, my_gen, lang=lang0):
+                             samplerate, channels, my_gen, lang=lang0, rate=rate):
                 played = True
             # остальные куски — из предзагрузки (без пауз между языками)
             for i in range(1, len(segments)):
@@ -1162,7 +1176,8 @@ def _stream_play_segments(segments, my_gen, tracker=None) -> bool:
                         if prefs[i] is not None else None)
                 waits.append(round(time.monotonic() - t_wait, 2))
                 if _play_segment(out, chunk, voice_for(lang),
-                                 samplerate, channels, my_gen, data, lang=lang):
+                                 samplerate, channels, my_gen, data, lang=lang,
+                                 rate=rate):
                     played = True
                 if not prefetch_all:
                     _start(i + 2)
