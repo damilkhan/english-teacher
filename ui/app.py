@@ -431,6 +431,9 @@ class EnglishTeacherApp:
         # Соединение с edge-tts тоже «холодное» в первые секунды после запуска
         # (замер: 1-й запрос до 7 с, потом 1.0–1.3 с) — греем его ЗАРАНЕЕ,
         # иначе первая реплика Джейн обрывается долгой паузой посреди фразы.
+        # Голос берём из settings.json ДО прогрева: иначе прогрев скачает
+        # mp3 голосом по умолчанию, а ученик выбрал другой (26.10.2026).
+        tts.set_voice(settings_store.get_voice_en())
         tts.warmup_async()
         self.window.after(60, self._redraw)     # первая отрисовка после раскладки
         self.window.after(120, self._visual_tick)   # эквалайзер: кто говорит
@@ -871,7 +874,8 @@ class EnglishTeacherApp:
                                          mode=self.mode, theme_name=self.current_theme,
                                          on_save=self.save_settings, on_close=self.close_panel,
                                          models=model_registry.available_models(),
-                                         model=self.current_model_id)
+                                         model=self.current_model_id,
+                                         voices=tts.voices(), voice=tts.VOICE_EN)
 
         # ---------- правая панель «пользователи» ----------
         self.users_panel = UsersPanel(self.base, p,
@@ -2767,7 +2771,25 @@ class EnglishTeacherApp:
         if new_model and new_model != self.current_model_id:
             self._apply_model(new_model)
 
+        new_voice = self.right_panel.get_voice()
+        if new_voice and new_voice != tts.VOICE_EN:
+            self._apply_voice(new_voice)
+
         self.close_panel()
+
+    def _apply_voice(self, voice_id):
+        """Смена английского голоса: сразу, без перезапуска сервера.
+
+        Меняется только английская речь — русские куски по-прежнему читает
+        Светлана. Сразу проговариваем короткий образец, чтобы ученик услышал
+        новый голос (и «h» в «Hi») не дожидаясь реплики учителя.
+        """
+        voice_id = tts.set_voice(voice_id)
+        settings_store.set_voice_en(voice_id)
+        label = next((lb for vid, lb in tts.voices() if vid == voice_id), voice_id)
+        self.add_message(self.teacher_name, "🎧 Голос: %s." % label)
+        threading.Thread(target=tts.speak, args=("Hi! How are you today?",),
+                         daemon=True).start()
 
     def _apply_model(self, model_id):
         """Смена модели: сохранить выбор и перезапустить сервер в фоне.

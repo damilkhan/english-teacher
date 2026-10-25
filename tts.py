@@ -99,7 +99,16 @@ sys.unraisablehook = _quiet_unraisable
 # «Дамиль» → «Доми»). Поэтому русские куски читает русский голос — так
 # каждая часть звучит НАТИВНО. Хочешь один голос — VOICE_RU = VOICE_EN
 # (тогда русский будет с акцентом).
-VOICE_EN = "en-US-EmmaNeural"
+# ВЫБОР английского голоса в настройках (26.10.2026). Три голоса прошли живой
+# A/B 25.10.2026: «h» в «Hi, Damil» слышна у Emma и Ana, у Ava — нет.
+# Список — (id голоса edge-tts, подпись в меню). Голос русского не меняется.
+VOICES_EN = (
+    ("en-US-EmmaNeural", "Emma · женский"),
+    ("en-US-AvaMultilingualNeural", "Ava · мультиязычный"),
+    ("en-US-AnaNeural", "Ana · детский"),
+)
+VOICE_EN_DEFAULT = "en-US-EmmaNeural"
+VOICE_EN = VOICE_EN_DEFAULT
 VOICE_RU = "ru-RU-SvetlanaNeural"
 VOICE = VOICE_EN                    # голос по умолчанию (совместимость)
 
@@ -108,6 +117,8 @@ VOICE = VOICE_EN                    # голос по умолчанию (сов
 # подобранный вручную сдвиг, чтобы русская речь звучала естественно.
 VOICE_PITCH = {
     "en-US-EmmaNeural": "+0Hz",
+    "en-US-AvaMultilingualNeural": "+0Hz",
+    "en-US-AnaNeural": "+0Hz",
     "ru-RU-SvetlanaNeural": "+10Hz",
 }
 
@@ -121,6 +132,8 @@ def pitch_for(voice):
 # чуть медленнее — ученику легче различать слова; русский — быстрее (родной).
 VOICE_RATE = {
     "en-US-EmmaNeural": getattr(config, "TTS_RATE_EN", "+0%"),
+    "en-US-AvaMultilingualNeural": getattr(config, "TTS_RATE_EN", "+0%"),
+    "en-US-AnaNeural": getattr(config, "TTS_RATE_EN", "+0%"),
     "ru-RU-SvetlanaNeural": getattr(config, "TTS_RATE_RU", "+10%"),
 }
 
@@ -135,6 +148,28 @@ def rate_for(voice, rate=None):
     if rate:
         return rate
     return VOICE_RATE.get(voice, RATE)
+
+
+def voices():
+    """Английские голоса для меню настроек: [(id, подпись), ...]."""
+    return list(VOICES_EN)
+
+
+def set_voice(voice: str) -> str:
+    """Выбрать английский голос. Пустое/неизвестное → голос по умолчанию.
+
+    Применяется СРАЗУ, перезапуск не нужен: голос берётся при каждом
+    запросе синтеза. Возвращает фактически выбранный id.
+    """
+    global VOICE_EN, VOICE
+    known = {vid for vid, _label in VOICES_EN}
+    voice = voice if voice in known else VOICE_EN_DEFAULT
+    VOICE_EN = voice
+    VOICE = voice
+    # Ключ кэша включает голос, но чужую озвучку в памяти держать незачем:
+    # после смены чистим, чтобы следующий запрос шёл уже новым голосом.
+    clear_cache()
+    return voice
 
 RATE = "+10%"                 # скорость речи по умолчанию (если нет в VOICE_RATE)
 WORD_SLOW_RATE = "-50%"       # медленный повтор слова в подсказке (полтемпа)

@@ -12,7 +12,8 @@ import theme
 
 class SettingsPanel(ctk.CTkFrame):
     def __init__(self, parent, palette, mode="lesson", theme_name="dark",
-                 on_save=None, on_close=None, models=None, model=None):
+                 on_save=None, on_close=None, models=None, model=None,
+                 voices=None, voice=None):
         super().__init__(parent, fg_color=palette["surface"],
                          corner_radius=theme.R["card"],
                          border_width=1, border_color=palette["border"])
@@ -50,6 +51,23 @@ class SettingsPanel(ctk.CTkFrame):
             button_hover_color=palette["accent_hover"], text_color=palette["text"],
             dropdown_fg_color=palette["surface_alt"], dropdown_text_color=palette["text"])
         self.model_menu.pack(fill="x", padx=16, pady=(6, 14))
+
+        # ---------- голос ----------
+        # Голос применяется СРАЗУ по «Сохранить» — перезапуск не нужен,
+        # поэтому в подписи секции нет оговорки про перезапуск (26.10.2026).
+        self.voice_frame = self._section("ГОЛОС (английский)")
+        self._voice_labels = {lb: vid for vid, lb in (voices or [])}
+        v_values = list(self._voice_labels) or ["—"]
+        v_current = next((lb for lb, vid in self._voice_labels.items()
+                          if vid == voice), v_values[0])
+        self.voice_var = ctk.StringVar(value=v_current)
+        self.voice_menu = ctk.CTkOptionMenu(
+            self.voice_frame, values=v_values, variable=self.voice_var,
+            font=theme.FONT_UI, height=36, corner_radius=theme.R["button"],
+            fg_color=palette["btn"], button_color=palette["accent"],
+            button_hover_color=palette["accent_hover"], text_color=palette["text"],
+            dropdown_fg_color=palette["surface_alt"], dropdown_text_color=palette["text"])
+        self.voice_menu.pack(fill="x", padx=16, pady=(6, 14))
 
         # ---------- подсказка про голосовые команды ----------
         self.hint = ctk.CTkLabel(
@@ -112,6 +130,10 @@ class SettingsPanel(ctk.CTkFrame):
         """id выбранной модели (или None, если список пуст)."""
         return self._model_labels.get(self.model_var.get())
 
+    def get_voice(self):
+        """id выбранного английского голоса (или None, если список пуст)."""
+        return self._voice_labels.get(self.voice_var.get())
+
     def set_values(self, mode=None, theme_name=None):
         if mode is not None:
             self.mode_var.set(mode)
@@ -125,7 +147,8 @@ class SettingsPanel(ctk.CTkFrame):
         self.title_label.configure(text_color=palette["text_strong"])
         self.hint.configure(text_color=palette["muted"])
 
-        for block in (self.mode_frame, self.theme_frame, self.model_frame):
+        for block in (self.mode_frame, self.theme_frame, self.model_frame,
+                      self.voice_frame):
             block.configure(fg_color=palette["surface_alt"])
             block.caption.configure(text_color=palette["muted"])
         for radio in (self.mode_lesson, self.mode_free, self.theme_dark, self.theme_light):
@@ -133,6 +156,12 @@ class SettingsPanel(ctk.CTkFrame):
                             hover_color=palette["accent_hover"],
                             border_color=palette["muted"])
         self.model_menu.configure(fg_color=palette["btn"], button_color=palette["accent"],
+                                  button_hover_color=palette["accent_hover"],
+                                  text_color=palette["text"],
+                                  dropdown_fg_color=palette["surface_alt"],
+                                  dropdown_text_color=palette["text"])
+        self.voice_menu.configure(fg_color=palette["btn"],
+                                  button_color=palette["accent"],
                                   button_hover_color=palette["accent_hover"],
                                   text_color=palette["text"],
                                   dropdown_fg_color=palette["surface_alt"],

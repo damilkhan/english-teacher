@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # =========================================================
-# SETTINGS_STORE.PY — настройки приложения (сейчас: выбранная модель)
+# SETTINGS_STORE.PY — настройки приложения (модель, английский голос)
 # =========================================================
 # Маленькое надёжное хранилище настроек в settings.json (рядом с config.py).
 # Файл НЕ обязателен: нет/битый → берём значения по умолчанию, не падаем.
@@ -17,6 +17,7 @@ SETTINGS_PATH = os.path.join(config.BASE_DIR, "settings.json")
 
 DEFAULTS = {
     "model_id": config.DEFAULT_MODEL_ID,
+    "voice_en": "",          # "" → английский голос по умолчанию (см. tts.py)
 }
 
 
@@ -102,3 +103,14 @@ def get_selected_model_id():
 
 def set_selected_model(model_id):
     return set_value("model_id", model_id)
+
+
+def get_voice_en():
+    """id выбранного английского голоса; "" — значит «по умолчанию в tts.py»."""
+    value = load().get("voice_en")
+    return value if isinstance(value, str) else ""
+
+
+def set_voice_en(voice_id):
+    """Запомнить английский голос (id edge-tts). Пустое → по умолчанию."""
+    return set_value("voice_en", voice_id or "")
