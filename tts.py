@@ -67,6 +67,18 @@ _log = logging.getLogger(__name__)
 _default_unraisablehook = sys.unraisablehook
 
 
+def _say(message: str) -> None:
+    """Печать, которая НЕ роняет озвучку: в консоли cp1251 эмодзи падают.
+
+    Замер 25.10.2026: `print("⏱ …")` внутри сегментного пути давал
+    UnicodeEncodeError, и звук молча уходил в запасной путь.
+    """
+    try:
+        print(message)
+    except Exception:                  # noqa: BLE001 — печать не важнее звука
+        pass
+
+
 def _quiet_unraisable(unraisable):
     if "Event loop is closed" in str(getattr(unraisable, "exc_value", "")):
         return
@@ -1189,8 +1201,8 @@ def _stream_play_segments(segments, my_gen, tracker=None, rate=None) -> bool:
             if _play_segment(out, chunk0, voice_for(lang0),
                              samplerate, channels, my_gen, lang=lang0, rate=rate):
                 played = True
-                print("⏱ TTS: первый звук через %.2f с (включая %.0f мс тишины)"
-                      % (time.monotonic() - t_open, LEAD_SILENCE_MS))
+                _say("TTS: первый звук через %.2f с (включая %.0f мс тишины)"
+                     % (time.monotonic() - t_open, LEAD_SILENCE_MS))
             # остальные куски — из предзагрузки (без пауз между языками)
             for i in range(1, len(segments)):
                 if _stop.is_set() or my_gen != _current_generation():

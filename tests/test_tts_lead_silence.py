@@ -128,9 +128,32 @@ def test_order_in_segments():
           log)
 
 
+def test_safe_print():
+    print("\n[3] _say: печать не роняет звук (в консоли cp1251 эмодзи падают)")
+    import io
+
+    class BadOut(io.TextIOBase):
+        def write(self, s):
+            raise UnicodeEncodeError("cp1251", s, 0, 1, "нет такого символа")
+
+    saved = sys.stdout
+    try:
+        sys.stdout = BadOut()
+        tts._say("TTS: проверка печати")
+        ok = True
+    except Exception as exc:              # noqa: BLE001
+        ok = False
+        detail = exc
+    finally:
+        sys.stdout = saved
+    check("_say не падает на кривой консоли", ok,
+          "" if ok else detail)
+
+
 def main():
     test_write_silence()
     test_order_in_segments()
+    test_safe_print()
     print("\n" + ("ИТОГ: все проверки пройдены" if not FAILED
                   else "ИТОГ: провалов %d — %s" % (len(FAILED), ", ".join(FAILED))))
     return 0 if not FAILED else 1
