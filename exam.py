@@ -71,9 +71,17 @@ def score_answer(answer: Any, errors: int = 0, used_hint: bool = False) -> int:
     2 — по-английски, >= 4 слов, без подсказки, <= 1 ошибки;
     1 — по-английски, но короче / с подсказкой / 2+ ошибок;
     0 — пусто, молчание, по-русски (нет латиницы или есть кириллица).
+
+    errors=None — разбор Аналитика НЕ УДАЛСЯ, ошибки неизвестны. Тогда балл
+    не выше 1: нельзя давать 2 за ответ, который мы не проверили (решение
+    ученика 25.10.2026). Раньше None превращался в 0 ошибок — то есть сбой
+    разбора дарил полный балл.
     """
     if not is_english(answer):
         return 0
+    if errors is None:
+        # разбор не удался — потолок 1 балл (2 балла требуют проверки)
+        return 1
     try:
         n_err = max(0, int(errors))
     except (TypeError, ValueError):
@@ -133,6 +141,7 @@ class ExamSession:
         self.scores: List[int] = []
         self.hints = 0          # на экзамене подсказок нет (см. докстроку)
         self.mistakes = 0       # сумма ошибок Аналитика за экзамен
+        self.unverified = 0     # ответов, где разбор НЕ удался (балл <= 1)
         self.aborted = False
 
     # ---------- свойства ----------
@@ -169,7 +178,11 @@ class ExamSession:
     # ---------- ход экзамена ----------
     def answer(self, text: Any, errors: int = 0,
                used_hint: bool = False) -> Dict[str, Any]:
-        """Учесть ОДИН ответ. Возвращает снимок последнего ответа."""
+        """Учесть ОДИН ответ. Возвращает снимок последнего ответа.
+
+        errors=None — разбор Аналитика не удался: ошибки неизвестны, балл не
+        выше 1, и такой ответ считается в unverified (для честного итога).
+        """
         result = {
             "index": self.answered + 1,
             "score": 0,
@@ -182,10 +195,13 @@ class ExamSession:
             return result
         pts = score_answer(text, errors=errors, used_hint=used_hint)
         self.scores.append(pts)
-        try:
-            self.mistakes += max(0, int(errors))
-        except (TypeError, ValueError):
-            pass
+        if errors is None:
+            self.unverified += 1
+        else:
+            try:
+                self.mistakes += max(0, int(errors))
+            except (TypeError, ValueError):
+                pass
         result.update({
             "score": pts,
             "total": self.total,
@@ -214,6 +230,7 @@ class ExamSession:
             "pass_score": PASS_SCORE,
             "passed": self.passed,
             "mistakes": self.mistakes,
+            "unverified": self.unverified,
             "hints": self.hints,
             "aborted": self.aborted,
             "finished": self.answered >= self.questions and not self.aborted,

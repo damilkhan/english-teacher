@@ -1415,6 +1415,11 @@ class EnglishTeacherApp:
                      % (full, int(result.get("questions") or 0)))
         mistakes = int(result.get("mistakes") or 0)
         lines.append("📝 Ошибок в разборе: %d." % mistakes)
+        failed = int(result.get("unverified") or 0)
+        if failed:
+            # честно: за такие ответы больше 1 балла не давали
+            lines.append("🔍 Не разобрано ответов: %d (за них не выше 1 балла)."
+                         % failed)
         return "\n".join(lines)
 
     def _on_lesson_finished(self, session):
@@ -1559,7 +1564,11 @@ class EnglishTeacherApp:
         if not pending:
             return None
         text = pending.pop(0)
-        errors = 0
+        # Ошибки знает только Аналитик. Если разбор не удался (дважды — он
+        # повторяется в контроллере), ошибки НЕИЗВЕСТНЫ: передаём None, и
+        # exam даёт не больше 1 балла. Раньше сбой разбора дарил 2 балла
+        # (решение ученика 25.10.2026).
+        errors = None
         if result and result.get("ok"):
             errors = len(result.get("errors") or [])
         step = exam.answer(text, errors=errors, used_hint=False)
