@@ -963,9 +963,17 @@ class EnglishTeacherApp:
     def _active_profile(self):
         """Прогресс активного ученика. Ошибки наружу не пробрасываем."""
         try:
-            return profile_store.load((self.current_user or {}).get("id"))
+            profile = profile_store.load((self.current_user or {}).get("id")) or {}
         except Exception:
             return {}
+        # Уровень живёт в профиле УЧЕНИКА (user_manager), а карте он нужен
+        # рядом с прогрессом: локации ниже уровня считаются пройденными
+        # (progress_map.skipped_lessons, решение 25.10.2026). Это КОПИЯ для
+        # чтения — файл прогресса не меняется.
+        if isinstance(profile, dict):
+            profile = dict(profile)
+            profile["level"] = (self.current_user or {}).get("level")
+        return profile
 
     def _refresh_profile_tab(self, profile=None):
         """Пересобрать сводку профиля (уровень, ошибки, слабые темы…)."""

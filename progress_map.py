@@ -32,6 +32,10 @@ LOCKED = "locked"
 UNLOCKED = "unlocked"
 COMPLETED = "completed"
 
+# Шкала уровней (lower → higher). По ней «пропускаем» локации, которые
+# ученик уже закрыл вступительным тестом (см. skipped_lessons).
+_CEFR_ORDER = ("A0", "A1", "A2", "B1", "B2", "C1")
+
 
 class ProgressMap:
     """Логика карты прогресса: локации, точки (блоки) и уроки.
@@ -220,6 +224,42 @@ class ProgressMap:
     # =====================================================
     # Состояния (пройдено / открыто / закрыто)
     # =====================================================
+    # ---------- уровень ученика: что считаем пройденным ----------
+    # РЕШЕНИЕ УЧЕНИКА 25.10.2026 (вариант В). Вступительный тест уже показал,
+    # что темы ниже его уровня он закрыл, поэтому такие локации считаем
+    # ПРОЙДЕННЫМИ: карта зелёная, автозапуск урока их не выбирает. Пройти их
+    # вручную всё равно можно в любой момент — в окне блока кнопка «Начать»
+    # не спрашивает состояние (ui/panels/block_panel.py).
+    @staticmethod
+    def level_rank(level: Any) -> int:
+        """Место уровня в шкале A0..C1. Неизвестный/пустой → -1."""
+        name = str(level or "").strip().upper()
+        return _CEFR_ORDER.index(name) if name in _CEFR_ORDER else -1
+
+    def skipped_lessons(self, profile: Optional[Dict[str, Any]]) -> Set[str]:
+        """Уроки локаций, чей уровень НИЖЕ уровня ученика.
+
+        Пустой ответ, если уровня нет (обратная совместимость: карта как
+        раньше начинается с первых уроков) или он самый низкий (A0).
+        """
+        if not isinstance(profile, dict):
+            return set()
+        rank = self.level_rank(profile.get("level"))
+        if rank <= 0:
+            return set()
+        out: Set[str] = set()
+        for loc_id in self._location_order:
+            loc = self._locations.get(loc_id) or {}
+            if 0 <= self.level_rank(loc.get("level")) < rank:
+                out.update(self._location_lessons.get(loc_id, []))
+        return out
+
+    def done_lessons(self, profile: Optional[Dict[str, Any]]) -> Set[str]:
+        """Пройденное по факту = записанное в профиле + пропущенное по уровню."""
+        done = set(self.completed_lessons(profile))
+        done.update(self.skipped_lessons(profile))
+        return done
+
     @staticmethod
     def completed_lessons(profile: Optional[Dict[str, Any]]) -> Set[str]:
         """Множество пройденных уроков из профиля. Аккуратно к битым данным."""
@@ -237,7 +277,7 @@ class ProgressMap:
         только после предыдущего. Неизвестный урок → "locked".
         """
         lesson_id = str(lesson_id or "")
-        if lesson_id in self.completed_lessons(profile):
+        if lesson_id in self.done_lessons(profile):
             return COMPLETED
         if lesson_id not in self._lesson_point:
             return LOCKED
@@ -249,7 +289,7 @@ class ProgressMap:
         if idx == 0:
             return UNLOCKED
         previous = self._lesson_order[idx - 1]
-        if previous in self.completed_lessons(profile):
+        if previous in self.done_lessons(profile):
             return UNLOCKED
         return LOCKED
 
@@ -263,7 +303,7 @@ class ProgressMap:
         point_id = str(point_id or "")
         if point_id not in self._points:
             return LOCKED
-        done = self.completed_lessons(profile)
+        done = self.done_lessons(profile)
         lessons = self._point_lessons.get(point_id, [])
         if lessons and all(lid in done for lid in lessons):
             return COMPLETED
@@ -293,7 +333,7 @@ class ProgressMap:
         lessons = self._location_lessons.get(str(location_id or ""), [])
         if not lessons:
             return False
-        done = self.completed_lessons(profile)
+        done = self.done_lessons(profile)
         return all(lid in done for lid in lessons)
 
     def get_location_state(self, location_id: str,
@@ -348,7 +388,7 @@ class ProgressMap:
         точки, точки по полю `number`. Все уроки пройдены → None; пустая карта →
         None. Битый профиль не мешает: берём то, что удалось прочитать.
         """
-        done = self.completed_lessons(profile)
+        done = self.done_lessons(profile)
         for lesson_id in self._lesson_order:
             if lesson_id not in done:
                 return lesson_id
@@ -360,7 +400,7 @@ class ProgressMap:
         lessons = self._point_lessons.get(str(point_id or ""), [])
         if not lessons:
             return (0, 0)
-        done = self.completed_lessons(profile)
+        done = self.done_lessons(profile)
         return (sum(1 for lid in lessons if lid in done), len(lessons))
 
     def get_location_progress(self, location_id: str,

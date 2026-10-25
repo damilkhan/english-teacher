@@ -128,8 +128,15 @@ class ChatController:
         said = str(student_text or "").strip()
         intro = ""
         if said:
+            # ЖАЛОБА УЧЕНИКА 25.10.2026: он сказал «hello», а преподаватель
+            # попросил поздороваться ещё раз — потому что первое задание урока
+            # «Hello / Hi» и есть приветствие. Теперь приветствие ученика
+            # считается сделанным: реагируем и идём ДАЛЬШЕ по уроку.
             intro = (" The student has just said: \"%s\" — answer that briefly "
-                     "first, then move on to the lesson." % said.replace('"', "'")[:200])
+                     "first, then move on to the lesson. The greeting is already "
+                     "done: do NOT ask the student to greet you again and do NOT "
+                     "ask them to repeat a greeting word."
+                     % said.replace('"', "'")[:200])
         self._opening = True
         return self.send(
             "[START OF LESSON] Topic: %s. Greet the student warmly in English "
