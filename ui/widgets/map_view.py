@@ -34,6 +34,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import customtkinter as ctk
 
+import profile_store
 import theme
 from progress_map import ProgressMap, LOCKED, UNLOCKED, COMPLETED
 
@@ -109,13 +110,34 @@ def hit_test(x: float, y: float, tokens: Sequence[Dict[str, Any]],
 from ru_text import plural_ru  # noqa: E402  (после блока констант — так читается лучше)
 
 
-def tooltip_text(number: Any, title: str, lessons: int) -> str:
-    """Текст подсказки жетона: «Блок 1: Greetings — 3 урока»."""
+def tooltip_text(number: Any, title: str, lessons: int, exam: str = "") -> str:
+    """Текст подсказки жетона: «Блок 1: Greetings — 3 урока».
+
+    exam — НЕОБЯЗАТЕЛЬНО: плашка балла экзамена («8/10 ✓»). Тогда вторая
+    строка: «Экзамен: 8/10 ✓». Не сдавал — строки нет.
+    """
     head = "Блок %s" % number
     title = str(title or "").strip()
     if title:
         head += ": %s" % title
-    return "%s — %d %s" % (head, int(lessons), plural_ru(lessons))
+    text = "%s — %d %s" % (head, int(lessons), plural_ru(lessons))
+    exam = str(exam or "").strip()
+    if exam:
+        text += "\nЭкзамен: %s" % exam
+    return text
+
+
+def point_exam_badge(lessons: Sequence[str], badges: Dict[str, str]) -> str:
+    """Балл экзамена блока: первый урок блока, у которого есть запись.
+
+    Экзамен — отдельный урок блока (тип check), поэтому имя урока в
+    плашке не нужно: у блока он один.
+    """
+    for lesson_id in lessons or []:
+        badge = (badges or {}).get(str(lesson_id))
+        if badge:
+            return str(badge)
+    return ""
 
 
 def state_colors(state: str, palette: Dict[str, Any]) -> Tuple[str, str]:
@@ -284,6 +306,7 @@ class MapView(ctk.CTkFrame):
         self._token_cache: Dict[Tuple[str, int, Any], Any] = {}
         self._tokens: List[Dict[str, Any]] = []
         self._states: Dict[str, str] = {}
+        self._exam_badges: Dict[str, str] = {}   # {id блока: «8/10 ✓»}
         self._item_map = None
         self._tip_job = None
         self._pulse_job = None
@@ -341,6 +364,26 @@ class MapView(ctk.CTkFrame):
     # =====================================================
     # Данные / состояния
     # =====================================================
+    def _point_badges(self, points: Sequence[Dict[str, Any]],
+                      profile: Optional[Dict[str, Any]]) -> Dict[str, str]:
+        """{id блока: плашка экзамена} — для подсказки жетона.
+
+        Балл ищем по урокам блока: экзамен — это урок типа check, он в
+        профиле записан под СВОИМ id (lesson_id), а не под id блока.
+        """
+        badges = profile_store.exam_badges(profile)
+        out: Dict[str, str] = {}
+        for point in points or []:
+            pid = str(point.get("id"))
+            try:
+                lessons = [str(l.get("id")) for l in self.map.lessons_of(pid)]
+            except Exception:                  # noqa: BLE001 — карта битая
+                lessons = []
+            badge = point_exam_badge(lessons, badges)
+            if badge:
+                out[pid] = badge
+        return out
+
     def refresh(self, profile: Optional[Dict[str, Any]]) -> None:
         """Пересчитать состояния точек по профилю и перерисовать карту."""
         self._profile = profile
@@ -348,6 +391,8 @@ class MapView(ctk.CTkFrame):
         points = self.map.points_of(self.location_id)
         self._states = {str(p.get("id")): self.map.get_point_state(p.get("id"), profile)
                         for p in points}
+        # балл экзамена для подсказки жетона: {id блока: «8/10 ✓»}
+        self._exam_badges = self._point_badges(points, profile)
         done, total = self.map.get_location_progress(self.location_id, profile)
         title = loc.get("title") or "—"
         level = loc.get("level") or ""
@@ -704,7 +749,9 @@ class MapView(ctk.CTkFrame):
         token = next((t for t in self._tokens if t["id"] == pid), None)
         if token is None:
             return
-        text = tooltip_text(token.get("number"), token.get("title"), token.get("lessons", 0))
+        text = tooltip_text(token.get("number"), token.get("title"),
+                            token.get("lessons", 0),
+                            self._exam_badges.get(pid, ""))
         f = _font(13, bold=False)
         p = self.palette
         self.canvas.delete("tooltip")

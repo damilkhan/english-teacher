@@ -98,6 +98,10 @@ NOT_READY_OFFLINE = "❌ LLM-сервер не отвечает. Подробн�
 LOCKED_TEXT_NOTE = ("🎤 На этом уроке говори в микрофон: английское сообщение не "
                     "отправляется. Не помнишь слово — напиши его по-русски и нажми "
                     "«💡 Перевести».")
+BLOCK_LOCKED_NOTE = "🔒 Этот блок ещё закрыт — сначала пройди предыдущий."
+
+LESSON_LOCKED_NOTE = "🔒 Этот урок ещё закрыт — начни с открытого."
+
 EXAM_NO_HINT_NOTE = ("🎯 Идёт экзамен: подсказок нет. Скажи ответ вслух — "
                      "слово по-русски здесь не подскажу.")
 ALL_LESSONS_NOTE = ("🎉 Вся карта «Пустыня» пройдена! Дальше — свободное общение: "
@@ -1045,8 +1049,50 @@ class EnglishTeacherApp:
         if name == "Профиль":
             self._refresh_profile_tab()
 
+    def _block_is_locked(self, point_id, profile=None):
+        """Блок закрыт? (красный жетон: предыдущий блок не пройден)"""
+        profile = self._active_profile() if profile is None else profile
+        try:
+            return self.progress_map.get_point_state(point_id, profile) \
+                == progress_map.LOCKED
+        except Exception:                      # noqa: BLE001 — карта битая
+            return False
+
+    def _lesson_is_locked(self, lesson_id):
+        """Урок закрыт? (предыдущий в плане ещё не пройден)"""
+        try:
+            return self.progress_map.get_lesson_state(
+                str(lesson_id or ""), self._active_profile()) == progress_map.LOCKED
+        except Exception:                      # noqa: BLE001 — карта битая
+            return False
+
+    def _block_lesson_states(self, point, profile=None):
+        """{id урока: completed/unlocked/locked} для окна блока."""
+        profile = self._active_profile() if profile is None else profile
+        out = {}
+        try:
+            lessons = self.progress_map.lessons_of(str((point or {}).get("id")))
+        except Exception:                      # noqa: BLE001
+            return out
+        for item in lessons:
+            lid = str(item.get("id") or "")
+            if not lid:
+                continue
+            try:
+                out[lid] = self.progress_map.get_lesson_state(lid, profile)
+            except Exception:                  # noqa: BLE001
+                continue
+        return out
+
     def on_point_click(self, point_id):
-        """Клик по кружку карты: окно блока уроков → старт выбранного урока."""
+        """Клик по кружку карты: окно блока уроков → старт выбранного урока.
+
+        Закрытый блок (красный жетон) не открывается: сначала предыдущий.
+        """
+        profile = self._active_profile()
+        if self._block_is_locked(point_id, profile):
+            self.add_message(self.teacher_name, BLOCK_LOCKED_NOTE)
+            return
         try:
             point = self.progress_map.get_point(point_id) or {}
         except Exception:
@@ -1058,7 +1104,11 @@ class EnglishTeacherApp:
             pass
         chosen = None
         try:
-            chosen = BlockPanel.ask(self.window, self.palette, point, location_title)
+            chosen = BlockPanel.ask(self.window, self.palette, point,
+                                    location_title,
+                                    exams=profile_store.exam_badges(profile),
+                                    states=self._block_lesson_states(point,
+                                                                   profile))
         except Exception as exc:
             print("⚠️ Окно блока не открылось: %s" % exc)
         if chosen == VOCAB_RESULT:
@@ -1088,6 +1138,12 @@ class EnglishTeacherApp:
         data = self._lesson_data(lesson_id, point_id)
         if data is None:
             self.add_message(self.teacher_name, "⚠️ Не нашёл этот урок в учебном плане.")
+            return None
+
+        # закрытый урок (предыдущий не пройден) не начинаем — даже если
+        # id пришёл не из окна блока (защита в глубине)
+        if self._lesson_is_locked(data["id"]):
+            self.add_message(self.teacher_name, LESSON_LOCKED_NOTE)
             return None
 
         # урок «голосом» невозможен без микрофона и без распознавания

@@ -37,6 +37,12 @@ START_ICON = "▶"
 VOCAB_TEXT = "📚  Повторить слова"
 VOCAB_RESULT = "__vocab__"
 
+# Урок недоступен (предыдущий не пройден): кнопка серая и не нажимается.
+LOCKED_TEXT = "закрыто"
+
+# Состояние урока, при котором начинать нельзя (см. progress_map).
+STATE_LOCKED = "locked"
+
 WIDTH = 480
 HEIGHT = 440
 
@@ -84,10 +90,15 @@ def lesson_rows(point: Optional[Dict[str, Any]]) -> List[tuple]:
 class BlockPanel(ctk.CTkToplevel):
     """Модальное окно блока: заголовок + список уроков с кнопками запуска."""
 
-    def __init__(self, parent, palette, point=None, location_title=""):
+    def __init__(self, parent, palette, point=None, location_title="",
+                 exams=None, states=None):
         super().__init__(parent)
         self.palette = palette
         self.point = point or {}
+        # баллы экзаменов {id урока: плашка} — из profile_store.exam_badges
+        self.exams = dict(exams or {})
+        # состояния уроков {id урока: completed/unlocked/locked} — из карты
+        self.states = dict(states or {})
         self.result = None            # id выбранного урока (или None)
         self._closed = False
 
@@ -158,17 +169,35 @@ class BlockPanel(ctk.CTkToplevel):
 
     # -----------------------------------------------------
     def _lesson_row(self, parent, item: Dict[str, Any], p) -> None:
-        """Строка одного урока: номер · название · тип · кнопка «Начать»."""
+        """Строка одного урока: номер · название · тип · балл · кнопка «Начать».
+
+        Закрытый урок (предыдущий не пройден) начать НЕЛЬЗЯ: кнопка серая,
+        без нажатия. Балл экзамена пишется рядом с кнопкой.
+        """
         row = ctk.CTkFrame(parent, fg_color="transparent")
         row.pack(fill="x", padx=10, pady=3)
 
+        locked = self.states.get(item["id"]) == STATE_LOCKED
         start_btn = ctk.CTkButton(
-            row, text="%s  Начать" % START_ICON, width=104, height=28,
-            fg_color=p["accent"], hover_color=p["accent_hover"],
-            text_color="#FFFFFF", cursor="hand2",
+            row, text=LOCKED_TEXT if locked else ("%s  Начать" % START_ICON),
+            width=104, height=28,
+            fg_color=p["btn"] if locked else p["accent"],
+            hover_color=p["btn_hover"] if locked else p["accent_hover"],
+            text_color=p["muted"] if locked else "#FFFFFF",
+            cursor="arrow" if locked else "hand2",
+            border_width=1 if locked else 0, border_color=p["border"],
             corner_radius=theme.R["button"], font=theme.FONT_SMALL,
+            state="disabled" if locked else "normal",
             command=lambda lid=item["id"]: self._pick(lid))
         start_btn.pack(side="right", padx=(8, 0))
+
+        badge = self.exams.get(item["id"]) or ""
+        if badge:
+            ctk.CTkLabel(row, text=badge, anchor="e", width=64,
+                         font=theme.FONT_SMALL,
+                         text_color=(p.get("map_done") or p["cyan"])
+                         if "\u2713" in badge else p["warn"]
+                         ).pack(side="right", padx=(8, 0))
 
         if item.get("kind"):
             ctk.CTkLabel(row, text=item["kind"], anchor="e",
@@ -222,13 +251,15 @@ class BlockPanel(ctk.CTkToplevel):
 
     # -----------------------------------------------------
     @classmethod
-    def ask(cls, parent, palette, point=None, location_title=""):
+    def ask(cls, parent, palette, point=None, location_title="",
+            exams=None, states=None):
         """Показать окно и дождаться закрытия.
 
         Возвращает id выбранного урока, VOCAB_RESULT (нажали «Повторить
         слова») или None (окно закрыли).
         """
-        panel = cls(parent, palette, point=point, location_title=location_title)
+        panel = cls(parent, palette, point=point, location_title=location_title,
+                    exams=exams, states=states)
         try:
             parent.wait_window(panel)
         except Exception:

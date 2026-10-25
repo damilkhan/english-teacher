@@ -356,6 +356,54 @@ def exam_result(lesson_id, user_id=None):
     return dict(entry) if isinstance(entry, dict) else {}
 
 
+# Балл экзамена показываем из 10 (столько же, сколько в exam.score_text).
+EXAM_MAX_SHOWN = 10
+
+
+def exam_score_text(score):
+    """«8/10» или «8.5/10» — балл без хвоста .0. Пусто — если это не число."""
+    try:
+        val = float(score)
+    except (TypeError, ValueError):
+        return ""
+    if val != val or val < 0:          # NaN и отрицательные — «не сдавал»
+        return ""
+    val = min(val, float(EXAM_MAX_SHOWN))
+    if abs(val - round(val)) < 1e-9:
+        num = "%d" % int(round(val))
+    else:
+        num = "%.1f" % val
+    return "%s/%d" % (num, EXAM_MAX_SHOWN)
+
+
+def exam_badge(entry):
+    """Плашка балла для карты и окна блока: «8/10 ✓», «5/10» или "" (не сдавал).
+
+    Экзамен сдан — добавляем галочку. Балл в профиле ВСЕГДА лучший
+    (см. record_exam), поэтому одна цифра = лучшая попытка.
+    """
+    if not isinstance(entry, dict):
+        return ""
+    text = exam_score_text(entry.get("score"))
+    if not text:
+        return ""
+    return text + " ✓" if entry.get("passed") else text
+
+
+def exam_badges(profile=None):
+    """{lesson_id: плашка балла} по всему профилю ({} — экзаменов не было)."""
+    if not isinstance(profile, dict):
+        profile = load()
+    exams = profile.get("exams")
+    if not isinstance(exams, dict):
+        return {}
+    out = {}
+    for lesson_id, entry in exams.items():
+        badge = exam_badge(entry)
+        if badge:
+            out[str(lesson_id)] = badge
+    return out
+
 def vocabulary_cards(user_id=None):
     """Карточки слов для повторения активного ученика (список словарей)."""
     profile = load(user_id)
