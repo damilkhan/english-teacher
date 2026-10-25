@@ -350,6 +350,10 @@ EXAM_BLOCK_TEMPLATE = """
 \n\U0001F3AF EXAM MODE - CHECK OF THIS BLOCK:
 This is an exam, not a lesson. Ask EXACTLY {questions} questions in total,
 one short question at a time, and wait for the answer before the next one.
+ONE QUESTION PER REPLY: put exactly one question mark in each reply.
+If you want to give options, keep them inside that single question
+(for example: "Do you meet them on Saturday or on Sunday?"). Never ask
+two questions in one reply and never add a follow-up question.
 Ask only about what this block covered. Do not teach, do not explain, and
 do not give hints or translations - even if the student asks for them.
 Never say the answer or finish the student's sentence for them.
