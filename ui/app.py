@@ -1284,6 +1284,9 @@ class EnglishTeacherApp:
         self._exam_pending = []          # тексты ответов, ждущие разбора
         self._exam_done = False
         self._exam_last = None           # итог последнего экзамена (для чата)
+        # Счёт вопросов для промпта: затравка УЖЕ содержит первый вопрос,
+        # поэтому перед первым ответом ученика задан 1 вопрос.
+        self._sync_exam_asked()
         self.add_message(self.teacher_name, opening)
         try:
             self.tabs.set("Чат")          # урок идёт в чате — покажем его
@@ -1480,6 +1483,10 @@ class EnglishTeacherApp:
         self._story_context = False     # рассказ был частью урока
         self._exam = None               # экзамен закрыт вместе с занятием
         self._exam_pending = []
+        try:
+            self.chat.set_exam_asked(None)   # счёт вопросов экзамена сброшен
+        except Exception:
+            pass
         self.lesson_bar.clear()
         self.input_bar.set_locked(False)
         self.control_bar.set_record_enabled(True)
@@ -1506,6 +1513,32 @@ class EnglishTeacherApp:
                 self.lesson.register_reply()
             except Exception as exc:
                 print("⚠️ Счёт занятия сбился: %s" % exc)
+        # после реплики ученика номер вопроса сдвинулся (экзамен)
+        if exam is not None and exam.is_active:
+            self._sync_exam_asked()
+
+    # ---------- экзамен ----------
+    def _sync_exam_asked(self):
+        """Сказать модели, какой вопрос экзамена идёт по счёту.
+
+        Без этого она не знает, сколько уже спросила, и закрывает экзамен
+        раньше времени (живой прогон 25.10.2026: закрыла на 8-м ответе
+        из 10). Считаем по репликам сессии: затравка = вопрос 1.
+        """
+        try:
+            chat = getattr(self, "chat", None)
+            if chat is None:
+                return              # чат ещё не создан (старт приложения)
+            exam = getattr(self, "_exam", None)
+            if exam is None:
+                chat.set_exam_asked(None)
+                return
+            session = self.lesson.current()
+            replies = int(getattr(session, "replies", 0) or 0)
+            asked = min(exam_mod.QUESTIONS, replies + 1)
+            chat.set_exam_asked(asked)
+        except Exception as exc:
+            print("Счёт вопросов экзамена сбился: %s" % exc)
 
     # ---------- экзамен ----------
     def _exam_session(self):

@@ -70,6 +70,11 @@ class ChatController:
         # идущее ЗАНЯТИЕ по карте (lesson.py): {"title","type","topic"} или None.
         # В промпт подмешивается отдельным блоком (prompt_builder._lesson_block).
         self._lesson = None
+        # ЭКЗАМЕН: сколько вопросов блока уже задано (None — не экзамен или
+        # счёт ещё не начался). Число уходит в промпт: иначе модель не знает,
+        # какой вопрос по счёту задаёт, и закрывает экзамен раньше времени
+        # (живой прогон 25.10.2026 — закрыла на 8-м ответе из 10).
+        self._exam_asked = None
         # True, пока Джейн отвечает на служебную реплику-затравку в начале
         # занятия: её нельзя считать ответом ученика (ни разбор, ни прогресс).
         self._opening = False
@@ -98,6 +103,16 @@ class ChatController:
 
     def set_language(self, lang):
         self.current_lang = lang
+
+    def set_exam_asked(self, asked=None):
+        """Сколько вопросов экзамена уже задано (None — счётчик не нужен)."""
+        if asked is None:
+            self._exam_asked = None
+            return
+        try:
+            self._exam_asked = max(0, int(asked))
+        except (TypeError, ValueError):
+            self._exam_asked = None
 
     def set_lesson(self, lesson=None):
         """Задать идущее занятие (словарь {"title","type","topic"} или None).
@@ -147,6 +162,7 @@ class ChatController:
         self.history = []
         self._lesson = None
         self._opening = False
+        self._exam_asked = None
         self._reset_plan()
 
     def _reset_plan(self):
@@ -223,7 +239,8 @@ class ChatController:
             american=bool(getattr(config, "AMERICAN_ENGLISH", True)),
             words=words, teacher=self.teacher,
             exam=exam_mode, exam_questions=(exam_mod.QUESTIONS if exam_mode else None),
-            hesitation=True)   # ученик говорит вслух: повтор — не ошибка
+            hesitation=True,
+            exam_asked=(self._exam_asked if exam_mode else None))   # повтор — не ошибка
 
         print(f"📤 Язык ответа: {'РУССКИЙ' if lang == 'ru' else 'ENGLISH'}")
 
@@ -243,7 +260,8 @@ class ChatController:
                 american=bool(getattr(config, "AMERICAN_ENGLISH", True)),
                 words=words, teacher=self.teacher,
             exam=exam_mode, exam_questions=(exam_mod.QUESTIONS if exam_mode else None),
-            hesitation=True)   # ученик говорит вслух: повтор — не ошибка
+            hesitation=True,
+            exam_asked=(self._exam_asked if exam_mode else None))   # повтор — не ошибка
             ok, raw = self._ask_model(system_prompt, user_text, short_history=True)
         if not ok:
             return False, self._explain(raw)

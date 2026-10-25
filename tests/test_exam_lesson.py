@@ -116,6 +116,12 @@ def make_app(check_lesson=True):
     app._on_lesson_finished = (lambda s:
                                EnglishTeacherApp._on_lesson_finished(app, s))
     app._finish_exam = lambda: EnglishTeacherApp._finish_exam(app)
+    # ЭКЗАМЕН: счёт вопросов для промпта (живой прогон 25.10.2026 — модель
+    # закрывала экзамен раньше времени, теперь ей сообщают номер вопроса)
+    app._sync_exam_asked = lambda: EnglishTeacherApp._sync_exam_asked(app)
+    app.exam_asked = []
+    app.chat = types.SimpleNamespace(
+        set_exam_asked=lambda n: app.exam_asked.append(n))
     app._exam_pending = []
     app._exam = exam.ExamSession(session.lesson_id) if check_lesson else None
     app._exam_done = False

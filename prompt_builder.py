@@ -362,15 +362,50 @@ If the student is silent or answers in Russian, move on to the next question.
 """
 
 
-def _exam_block(exam=False, questions=None):
-    """Блок «идёт экзамен». Пусто, если экзамена нет (обратная совместимость)."""
+
+# Счётчик вопросов. Живой прогон 25.10.2026 (logs/exam_live_run.txt) показал:
+# правило «ровно 10 вопросов» модель НЕ считает — на 8-м ответе сама закрыла
+# экзамен, а потом спросила ещё раз. Поэтому на каждый ход подставляем номер:
+# «уже спрошено N из 10, спрашивай вопрос N+1». Без числа блок прежний.
+EXAM_COUNTER_TEMPLATE = """
+PROGRESS: the student has already answered {asked} of {questions} questions.
+Ask question {nxt} of {questions} now - one question, nothing else. Do not
+summarise, do not say goodbye and do not end the exam before question {questions}.
+"""
+
+EXAM_COUNTER_LAST = """
+PROGRESS: the student has answered all {questions} questions. The exam is over:
+ask NOTHING more. Give one short warm summary of the block and stop.
+"""
+
+
+def _exam_block(exam=False, questions=None, asked=None):
+    """Блок «идёт экзамен». Пусто, если экзамена нет (обратная совместимость).
+
+    asked — сколько вопросов уже задано (None = счётчик не подставляем,
+    текст блока остаётся прежним байт-в-байт для старых проверок).
+    """
     if not exam:
         return ""
     try:
         qty = max(1, int(questions))
     except (TypeError, ValueError):
         qty = 10
-    return EXAM_BLOCK_TEMPLATE.format(questions=qty)
+    text = EXAM_BLOCK_TEMPLATE.format(questions=qty)
+    if asked is None:
+        return text
+    try:
+        done = max(0, int(asked))
+    except (TypeError, ValueError):
+        return text
+    # модель не считает сама: 0 вопросов уже задано (затравка) — спроси первый
+    if done <= 0:
+        return text + EXAM_COUNTER_TEMPLATE.format(asked=0, nxt=1,
+                                                   questions=qty)
+    if done >= qty:
+        return text + EXAM_COUNTER_LAST.format(questions=qty)
+    return text + EXAM_COUNTER_TEMPLATE.format(asked=done, nxt=done + 1,
+                                               questions=qty)
 
 
 def detect_language(text):
@@ -439,7 +474,7 @@ def _hesitation_block(flag):
     """Блок про запинки. Пусто, если выключен (промпт прежний байт-в-байт)."""
     return HESITATION_BLOCK if flag else ""
 
-def build_system_prompt(mode, profile, lang="en", level=None, student=None, context=None, plan=None, lesson=None, now=None, variety=False, english_only=False, words=None, american=False, teacher=None, exam=False, exam_questions=None, hesitation=False):
+def build_system_prompt(mode, profile, lang="en", level=None, student=None, context=None, plan=None, lesson=None, now=None, variety=False, english_only=False, words=None, american=False, teacher=None, exam=False, exam_questions=None, hesitation=False, exam_asked=None):
     """Собирает system-промпт (персона + профиль ученика).
 
     mode:    'lesson' | 'free'
@@ -466,6 +501,9 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
              без подсказок и разбора по ходу); False → блок НЕ добавляется
              (промпт прежний байт-в-байт, потому что аргумент в конце).
     exam_questions: сколько вопросов на экзамене (по умолчанию 10).
+    exam_asked: сколько вопросов экзамена уже задано. None → счётчик не
+             подставляем (блок прежний байт-в-байт для smoke_test и старых
+             проверок); число → «спрашивай вопрос N+1 из 10».
     hesitation: True → блок про запинки в речи (ученик говорит вслух, повтор — не
              ошибка). False → блок НЕ добавляется (промпт прежний байт-в-байт,
              его сверяет smoke_test).
@@ -521,7 +559,7 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
             + _plan_block(plan) + _knowledge_block(context)
             + _hesitation_block(hesitation)
             + _words_block(words)
-            + _exam_block(exam, exam_questions))
+            + _exam_block(exam, exam_questions, exam_asked))
 
 
 def build_messages(system_prompt, history, user_text):
