@@ -37,6 +37,7 @@ from controllers.glossary_controller import GlossaryController
 import lesson as lesson_mod
 import lesson_summary
 import model_registry
+import picture_task
 import profile_store
 import ru_text
 import progress_map
@@ -403,6 +404,10 @@ class EnglishTeacherApp:
         self._auto_lesson_used = False   # одна попытка за запуск
         # Отложенное действие, ждущее LLM-сервер (см. _run_when_server_ready)
         self._server_task = None
+        # Задание с картинкой в конце урока: данные фото (тема, порог букв)
+        # или None. Пока не None, реплика ученика проверяется по порогу и
+        # в модель НЕ уходит (порог жёсткий, решение ученика 25.10.2026).
+        self._picture = None
 
         # ---------- карта прогресса ----------
         # curriculum.json читаем ОДИН раз: карта и вкладка «Профиль»
@@ -1468,6 +1473,74 @@ class EnglishTeacherApp:
         self._end_lesson()
         self._refresh_side_views()
         self._lesson_state("happy")
+        # Задание с картинкой — В КОНЦЕ урока (решение ученика): фото
+        # приходит репликой преподавателя, ответ голосом или письмом.
+        self._start_picture_task()
+
+    # ---------- задание с картинкой ----------
+    def _picture_level(self):
+        """Уровень ученика для порога букв ("" → порог как у A2)."""
+        return (self.current_user or {}).get("level") or ""
+
+    def _start_picture_task(self):
+        """Показать фото и включить порог букв. Одно фото за заход.
+
+        Ответ принимается и голосом, и письмом — путь один (текст
+        реплики), поэтому проверка тоже одна (_picture_reply).
+        """
+        task = picture_task.describe_task(self._picture_level())
+        if not task:
+            print("ℹ️ Фото для задания не найдено (§18: assets/pictures)")
+            return False
+        self._picture = task
+        text = ("📷 Новое задание: опиши, что видишь на фото. "
+                "Не меньше %d букв — голосом или письмом."
+                % task["threshold"])
+        self.add_message(self.teacher_name, text, picture=task["path"])
+        try:
+            self.input_bar.set_counter(task["threshold"])
+        except Exception:
+            pass
+        self._say("Look at the photo and describe it, please.")
+        return True
+
+    def _picture_reply(self, text):
+        """Проверить описание фото. True — реплику модель НЕ получает."""
+        task = self._picture or {}
+        level = task.get("level") or self._picture_level()
+        result = picture_task.check_description(text, level)
+        try:
+            self.input_bar.set_counter(result["threshold"])
+        except Exception:
+            pass
+        if result["ok"]:
+            self._picture = None
+            try:
+                self.input_bar.clear_counter()
+            except Exception:
+                pass
+            self.add_message(self.teacher_name,
+                             "✅ Задание принято: %d букв из %d. Молодец!"
+                             % (result["letters"], result["threshold"]))
+            return True
+        self.add_message(self.teacher_name, self._picture_hint(result))
+        return True
+
+    def _picture_hint(self, result):
+        """Почему описание не принято — простыми словами."""
+        reason = result.get("reason")
+        if reason == "repeated":
+            return ("🔁 Одно слово повторяется слишком часто (%d %%). "
+                    "Опиши то же самое ДРУГИМИ словами."
+                    % int(round(result.get("top_share", 0) * 100)))
+        if reason == "few_words":
+            return ("🔁 Мало разных слов: %d, а нужно хотя бы %d. "
+                    "Добавь ещё фразы."
+                    % (result.get("unique", 0), result.get("want_unique", 0)))
+        missing = max(0, result["threshold"] - result["letters"])
+        return ("✏️ Пока %d букв из %d — добавь ещё %d. "
+                "Скажи или напиши ещё пару фраз."
+                % (result["letters"], result["threshold"], missing))
 
     def _on_lesson_aborted(self, session):
         """Ученик вышел раньше: урок не засчитан (прогресс уже записан)."""
@@ -1706,9 +1779,13 @@ class EnglishTeacherApp:
     # =====================================================
     # Обратная связь от контроллеров
     # =====================================================
-    def add_message(self, sender, text):
-        """Показать реплику; возвращает метку (для Джейн — можно обновить)."""
-        mark = self.chat_view.add_message(sender, text)
+    def add_message(self, sender, text, picture=None):
+        """Показать реплику; возвращает метку (для Джейн — можно обновить).
+
+        picture — путь к фото: реплика показывается с картинкой
+        (задание «опиши фото», §18).
+        """
+        mark = self.chat_view.add_message(sender, text, picture=picture)
         # запоминаем метку последней реплики ПРЕПОДАВАТЕЛЯ: к ней привяжем
         # кнопку «прослушать повторно», когда озвучка закончится. Метку
         # возвращает только преподавательская реплика (для «Вы» — None),
@@ -2652,6 +2729,12 @@ class EnglishTeacherApp:
         # Заодно русская фраза больше не перехватывается: слово «друг»
         # спокойно переводится в подсказке, как и любое другое.
 
+        # Задание с картинкой: пока порог букв не набран, реплика в модель
+        # не уходит — преподаватель отвечает сам (порог ЖЁСТКИЙ).
+        if self._picture is not None and not skip_translate:
+            if self._picture_reply(text):
+                return
+
         if _asks_for_story(text):
             self._story_context = True      # ученик просит историю/сказку
         if self.server_ready:
@@ -2764,6 +2847,11 @@ class EnglishTeacherApp:
         self.hint_bar.clear()
         self.input_bar.set_locked(False)
         self.control_bar.set_record_enabled(True)
+        self._picture = None            # задание с картинкой сброшено
+        try:
+            self.input_bar.clear_counter()
+        except Exception:
+            pass
         # Раньше «Очистить» оставлял пустое окно. Возвращаем приветствие —
         # в нём актуальный уровень, и метка снова известна.
         self._show_greeting()

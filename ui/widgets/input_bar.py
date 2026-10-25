@@ -28,9 +28,11 @@ self.textbox.focus_get() == self.textbox. Но CTkTextbox — это фрейм,
 """
 
 import re
+import tkinter as tk
 
 import customtkinter as ctk
 
+import picture_task
 import theme
 
 PLACEHOLDER = "Напиши сообщение…"
@@ -86,6 +88,16 @@ class InputBar(ctk.CTkFrame):
             scrollbar_button_hover_color=palette["btn_hover"],
         )
         self.textbox.pack(side="left", fill="both", expand=True)
+
+        # ---- счётчик букв задания «опиши фото» ----
+        # Живёт ВНУТРИ поля ввода (решение ученика): серым справа внизу,
+        # зеленеет, когда порог набран. Пока задания нет — не виден.
+        self._counter_total = 0
+        self.counter_lbl = tk.Label(self.textbox, text="", bd=0,
+                                    highlightthickness=0,
+                                    bg=palette["input_bg"],
+                                    fg=palette["muted"],
+                                    font=theme.FONT_HEAD)
 
         self.send_btn = ctk.CTkButton(
             self,
@@ -177,6 +189,49 @@ class InputBar(ctk.CTkFrame):
         self._placeholder_on = False
         self._replace_field_text(str(text), self.palette["text"])
         self._apply_state()
+
+    # ---------- счётчик букв (задание с картинкой) ----------
+    def set_counter(self, total):
+        """Показать счётчик букв: «N из total» внутри поля. total=0 — скрыть."""
+        try:
+            self._counter_total = max(0, int(total or 0))
+        except (TypeError, ValueError):
+            self._counter_total = 0
+        self._update_counter()
+
+    def clear_counter(self):
+        """Убрать счётчик (задание закончилось)."""
+        self.set_counter(0)
+
+    def counter_text(self):
+        """Текст счётчика — удобно проверкам."""
+        try:
+            return str(self.counter_lbl.cget("text"))
+        except Exception:
+            return ""
+
+    def _update_counter(self):
+        """Пересчитать буквы и показать «N из total» нужным цветом."""
+        label = getattr(self, "counter_lbl", None)
+        if label is None:
+            return
+        if not self._counter_total:
+            try:
+                label.configure(text="")
+                label.place_forget()
+            except Exception:
+                pass
+            return
+        count = picture_task.letters(self.get_text())
+        color = (self.palette["ok"] if count >= self._counter_total
+                 else self.palette["muted"])
+        try:
+            label.configure(text="%d из %d" % (count, self._counter_total),
+                            fg=color)
+            label.place(relx=1.0, rely=1.0, anchor="se", x=-16, y=-8)
+            label.lift()
+        except Exception:
+            pass
 
     def set_busy(self, busy):
         self._busy = bool(busy)
@@ -351,6 +406,7 @@ class InputBar(ctk.CTkFrame):
     def _on_key_release(self, _event=None):
         """Кнопка следит за кириллицей: есть русское слово — «💡 Перевести».
         """
+        self._update_counter()
         if self._locked:
             self._apply_state()
         return None
@@ -374,6 +430,13 @@ class InputBar(ctk.CTkFrame):
         )
         self.send_btn.configure(fg_color=palette["accent"],
                                 hover_color=palette["accent_hover"])
+        label = getattr(self, "counter_lbl", None)
+        if label is not None:
+            try:
+                label.configure(bg=palette["input_bg"])
+            except Exception:
+                pass
+            self._update_counter()
 
     def _on_click(self):
         if self.on_send:
