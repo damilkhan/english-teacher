@@ -92,12 +92,14 @@ sys.unraisablehook = _quiet_unraisable
 # давало конфликт и «пропажу» звука. pygame.mixer.init() делается ЛЕНИВО
 # в запасном пути (_play), если поток недоступен. Модуль импортируется всегда.
 
-# Голоса ПО ЯЗЫКАМ. Мультиязычный Ava (en-US) отлично читает английский,
+# Голоса ПО ЯЗЫКАМ. Emma (en-US) читает английский, а мультиязычный Ava
+# терял «h» в связке «Hi, Damil» — ученик слышал «И, Дамил» (замер и A/B
+# вслепую 25.10.2026: Emma и Ana говорят «Хай», Ava — нет).
 # но на РУССКОМ даёт акцент (проверено: Whisper слышит искажения, напр.
 # «Дамиль» → «Доми»). Поэтому русские куски читает русский голос — так
 # каждая часть звучит НАТИВНО. Хочешь один голос — VOICE_RU = VOICE_EN
 # (тогда русский будет с акцентом).
-VOICE_EN = "en-US-AvaMultilingualNeural"
+VOICE_EN = "en-US-EmmaNeural"
 VOICE_RU = "ru-RU-SvetlanaNeural"
 VOICE = VOICE_EN                    # голос по умолчанию (совместимость)
 
@@ -105,7 +107,7 @@ VOICE = VOICE_EN                    # голос по умолчанию (сов
 # чего на смене языка «меняется человек». Поднимаем Светлану (+10 Гц) —
 # подобранный вручную сдвиг, чтобы русская речь звучала естественно.
 VOICE_PITCH = {
-    "en-US-AvaMultilingualNeural": "+0Hz",
+    "en-US-EmmaNeural": "+0Hz",
     "ru-RU-SvetlanaNeural": "+10Hz",
 }
 
@@ -118,7 +120,7 @@ def pitch_for(voice):
 # Скорость речи по голосам. Темп РАЗНЫЙ для языков (см. config): английский
 # чуть медленнее — ученику легче различать слова; русский — быстрее (родной).
 VOICE_RATE = {
-    "en-US-AvaMultilingualNeural": getattr(config, "TTS_RATE_EN", "+0%"),
+    "en-US-EmmaNeural": getattr(config, "TTS_RATE_EN", "+0%"),
     "ru-RU-SvetlanaNeural": getattr(config, "TTS_RATE_RU", "+10%"),
 }
 
