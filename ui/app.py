@@ -35,6 +35,7 @@ import exam as exam_mod
 import glossary
 from controllers.glossary_controller import GlossaryController
 import lesson as lesson_mod
+import lesson_summary
 import model_registry
 import profile_store
 import ru_text
@@ -1376,16 +1377,25 @@ class EnglishTeacherApp:
             self._lesson_state("happy")
             return
 
-        text = "🎉 Урок %s пройден!" % session.lesson_id
+        # Итог обычного занятия (25.10.2026): счётчики копились в сессии,
+        # но нигде не показывались. Балла тут нет — только реплики,
+        # подсказки, ошибки и похвала; подсказки НЕ наказывают.
+        block_done = ""
         try:
             profile = self._active_profile()
             if (session.point_id
                     and self.progress_map.get_point_state(session.point_id, profile)
                     == progress_map.COMPLETED):
-                text += " Блок «%s» пройден целиком!" % (session.block_title or session.point_id)
+                block_done = session.block_title or session.point_id
         except Exception:
-            pass
+            block_done = ""
+        text = lesson_summary.summary_text(session, block_title=block_done)
         self.add_message(self.teacher_name, text)
+        # Голосом — короткая АНГЛИЙСКАЯ похвала: русский итог английским
+        # голосом читать нельзя (цель проекта — говорение).
+        praise = lesson_summary.praise_text(session)
+        self.add_message(self.teacher_name, praise)
+        self._say(praise)
         self._end_lesson()
         self._refresh_side_views()
         self._lesson_state("happy")
