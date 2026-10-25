@@ -222,7 +222,8 @@ class ChatController:
             english_only=bool(getattr(config, "ENGLISH_ONLY", False)),
             american=bool(getattr(config, "AMERICAN_ENGLISH", True)),
             words=words, teacher=self.teacher,
-            exam=exam_mode, exam_questions=(exam_mod.QUESTIONS if exam_mode else None))
+            exam=exam_mode, exam_questions=(exam_mod.QUESTIONS if exam_mode else None),
+            hesitation=True)   # ученик говорит вслух: повтор — не ошибка
 
         print(f"📤 Язык ответа: {'РУССКИЙ' if lang == 'ru' else 'ENGLISH'}")
 
@@ -241,7 +242,8 @@ class ChatController:
                 english_only=bool(getattr(config, "ENGLISH_ONLY", False)),
                 american=bool(getattr(config, "AMERICAN_ENGLISH", True)),
                 words=words, teacher=self.teacher,
-            exam=exam_mode, exam_questions=(exam_mod.QUESTIONS if exam_mode else None))
+            exam=exam_mode, exam_questions=(exam_mod.QUESTIONS if exam_mode else None),
+            hesitation=True)   # ученик говорит вслух: повтор — не ошибка
             ok, raw = self._ask_model(system_prompt, user_text, short_history=True)
         if not ok:
             return False, self._explain(raw)

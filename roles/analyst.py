@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 import logging
 import re
 from typing import Any, Dict, List, Optional
@@ -72,6 +73,10 @@ Rules:
 - errors: list ONLY real language problems in the student's English.
   Each item: {"type": "grammar|vocabulary|spelling|pronunciation", "wrong": "...", "correct": "...", "note": "short"}.
   Use [] if there are no real errors. Never invent errors.
+- Speech hesitations: the student talks ALOUD and may repeat a word or phrase
+  ("the park in the park", "I I think"). A repetition, a restart or a stutter is
+  NOT an error — never report it, not even as "redundant". Report only real
+  language problems.
 - The student often writes in RUSSIAN. Analyse ONLY the student's ENGLISH.
   If the message is NOT in English, return "errors": [] (do NOT report Russian
   mistakes as English errors) and do not force status A/P.
@@ -86,6 +91,79 @@ Return ONLY valid JSON, no markdown, in exactly this shape:
 
 _JSON_RE = re.compile(r"\{.*\}", re.S)
 
+
+def _flat(text: Any) -> str:
+    """Текст без регистра, знаков и лишних пробелов — чтобы сравнить «то же».
+
+    Нужен для проверки «ошибка на самом деле не ошибка»: модель иногда пишет
+    {"wrong": "in the park", "correct": "in the park"} (ЗАМЕР 25.10.2026:
+    такая «ошибка» приходила 4 раза из 4 на запинку ученика).
+    """
+    t = re.sub(r"[^0-9a-z\u0430-\u044f\u0451' ]", " ", str(text or "").lower())
+    return " ".join(t.split())
+
+
+def _collapse_repeats(text: Any, rounds: int = 3) -> str:
+    """Убрать повтор подряд идущих слов/фраз: «in the park in the park» → «in the park».
+
+    Сравниваем «как сказано» и «как правильно» уже БЕЗ повторов: если разница
+    только в запинке, это не ошибка (решение ученика 25.10.2026).
+    """
+    words = _flat(text).split()
+    for _ in range(max(1, int(rounds))):
+        n = len(words)
+        out: List[str] = []
+        i = 0
+        changed = False
+        while i < n:
+            for size in range(min(6, (n - i) // 2), 0, -1):
+                if words[i:i + size] == words[i + size:i + 2 * size]:
+                    out.extend(words[i:i + size])
+                    i += 2 * size
+                    changed = True
+                    break
+            else:
+                out.append(words[i])
+                i += 1
+        words = out
+        if not changed:
+            break
+    return " ".join(words)
+
+
+def is_disfluency(wrong: Any, correct: Any) -> bool:
+    """«Ошибка» — это на самом деле запись/повтор? Тогда её не считаем.
+
+    Признаки запинки (решение ученика 25.10.2026: повтор — не ошибка):
+      * «как сказано» и «как правильно» совпадают: «in the park» → «in the park»;
+      * разница только в повторе: «the park in the park» → «in the park»,
+        «I I think» → «I think».
+    Настоящая ошибка («go» → «went», «park» → «the park») остаётся ошибкой.
+    """
+    w, c = _flat(wrong), _flat(correct)
+    if not w or not c:
+        return False            # пустое «правильно» может быть настоящей ошибкой
+    if w == c:
+        return True             # «in the park» → «in the park»: ошибки нет
+    if _collapse_repeats(wrong) == _collapse_repeats(correct):
+        return True
+    # ученик сказал ТО ЖЕ плюс лишние слова, и все лишние — повторы уже
+    # сказанного: «the park + in the park» → лишние «the», «park».
+    said = Counter(w.split())
+    right = Counter(c.split())
+    extra = said - right
+    if extra and all(word in right for word in extra):
+        return True             # лишние слова — повторы уже сказанного
+    # Ещё форма запинки (ЗАМЕР 25.10.2026, 3 раза из 4): модель предлагает
+    # «the park in the park» → «the park», то есть правильный вариант — это
+    # КУСОК сказанного, а в сказанном есть повтор.
+    said_words = w.split()
+    right_words = c.split()
+    if len(said_words) != len(set(said_words)):
+        for start in range(len(said_words) - len(right_words) + 1):
+            if said_words[start:start + len(right_words)] == right_words:
+                return True
+    return False
 
 def _clean_errors(value: Any) -> List[Dict[str, str]]:
     """Нормализует список ошибок: типы, длины, отбрасывает пустое."""
@@ -104,6 +182,8 @@ def _clean_errors(value: Any) -> List[Dict[str, str]]:
             continue
         if not wrong and not correct:
             continue
+        if is_disfluency(wrong, correct):
+            continue            # запинка/повтор — не ошибка
         if etype not in ERROR_TYPES:
             etype = "grammar"
         out.append({

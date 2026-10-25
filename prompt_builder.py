@@ -419,7 +419,23 @@ def _mistake_line(err):
         text = str(err.get("jane_response") or "")
     return text[:50]
 
-def build_system_prompt(mode, profile, lang="en", level=None, student=None, context=None, plan=None, lesson=None, now=None, variety=False, english_only=False, words=None, american=False, teacher=None, exam=False, exam_questions=None):
+# ---------- запинки в речи (ученик говорит вслух) ----------
+# ЗАМЕР 25.10.2026 (фраза «the park in the park», урок city/1.1, A2, с историей):
+# БЕЗ правила учитель исправлял запинку 5 раз из 10, С правилом — 0 из 10.
+# Решения ученика: запинку НЕ склеивать, на всех уровнях НЕ замечать.
+HESITATION_BLOCK = """
+\n\u26A0\uFE0F SPEECH HESITATIONS: the student talks aloud, so they often repeat a word
+or a phrase ("the park in the park", "I I think"). This is a natural hesitation,
+NOT a mistake: do not correct it, do not mention it, do not explain it. Answer
+the meaning of the LAST version of what they said.
+"""
+
+
+def _hesitation_block(flag):
+    """Блок про запинки. Пусто, если выключен (промпт прежний байт-в-байт)."""
+    return HESITATION_BLOCK if flag else ""
+
+def build_system_prompt(mode, profile, lang="en", level=None, student=None, context=None, plan=None, lesson=None, now=None, variety=False, english_only=False, words=None, american=False, teacher=None, exam=False, exam_questions=None, hesitation=False):
     """Собирает system-промпт (персона + профиль ученика).
 
     mode:    'lesson' | 'free'
@@ -446,6 +462,9 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
              без подсказок и разбора по ходу); False → блок НЕ добавляется
              (промпт прежний байт-в-байт, потому что аргумент в конце).
     exam_questions: сколько вопросов на экзамене (по умолчанию 10).
+    hesitation: True → блок про запинки в речи (ученик говорит вслух, повтор — не
+             ошибка). False → блок НЕ добавляется (промпт прежний байт-в-байт,
+             его сверяет smoke_test).
     """
     language_rule = language_instruction(lang)
     # имя преподавателя — одно на весь промпт (персона + строка про ученика)
@@ -496,6 +515,7 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
             + _variety_block(variety) + _english_only_block(english_only)
             + _american_block(american)
             + _plan_block(plan) + _knowledge_block(context)
+            + _hesitation_block(hesitation)
             + _words_block(words)
             + _exam_block(exam, exam_questions))
 
