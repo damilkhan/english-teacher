@@ -44,6 +44,59 @@ def is_context_error(message) -> bool:
     return str(message or "").startswith(CONTEXT_PREFIX)
 
 
+# ---------- картинки (vision) ----------
+# llama.cpp принимает картинку в OpenAI-формате: content сообщения — СПИСОК
+# кусков, картинка идёт как
+#   {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,..."}}
+# Файл читает и кодирует вызывающий код (picture_task.py): здесь только
+# формат запроса, чтобы llm_client оставался тонким сетевым слоем.
+
+IMAGE_MIME = "image/jpeg"
+
+
+def image_data_url(image):
+    """'data:image/jpeg;base64,...' или голый base64 → data URL. Пусто → None."""
+    text = str(image or "").strip()
+    if not text:
+        return None
+    if text.startswith("data:"):
+        return text
+    return "data:%s;base64,%s" % (IMAGE_MIME, text)
+
+
+def content_with_images(content, images):
+    """Текст + картинки → content-список OpenAI (текст всегда ПЕРВЫМ куском)."""
+    parts = [{"type": "text", "text": str(content or "")}]
+    for image in images or []:
+        url = image_data_url(image)
+        if url:
+            parts.append({"type": "image_url", "image_url": {"url": url}})
+    return parts
+
+
+def attach_images(messages, images):
+    """Копия messages, где к ПОСЛЕДНЕЙ реплике пользователя добавлены картинки.
+
+    Исходный список НЕ меняется: история диалога в контроллере остаётся
+    текстовой, иначе base64 копился бы в памяти на каждом ходу.
+    """
+    urls = [u for u in (image_data_url(i) for i in (images or [])) if u]
+    if not urls:
+        return messages
+    result = list(messages)
+    index = None
+    for i in range(len(result) - 1, -1, -1):
+        if str(result[i].get("role") or "") == "user":
+            index = i
+            break
+    if index is None:                  # картинок без реплики не бывает
+        return messages
+    msg = dict(result[index])
+    msg["content"] = content_with_images(msg.get("content"), urls)
+    result[index] = msg
+    return result
+
+
 def _context_overflow(response):
     """Разобрать ответ 4xx: это переполнение контекста? None — если нет.
 
@@ -104,7 +157,8 @@ class LLMClient:
             return False
 
     # ---------- основной вызов ----------
-    def complete(self, messages, max_tokens=None, temperature=None, stop=None, timeout=60):
+    def complete(self, messages, max_tokens=None, temperature=None, stop=None,
+                 timeout=60, images=None):
         """Отправляет сообщения и возвращает (ok, текст_или_ошибка).
 
         messages: список {"role": ..., "content": ...} ИЛИ строка (тогда она
@@ -115,6 +169,8 @@ class LLMClient:
         """
         if isinstance(messages, str):
             messages = [{"role": "user", "content": messages}]
+        if images:
+            messages = attach_images(messages, images)
         payload = {
             "messages": messages,
             "max_tokens": max_tokens if max_tokens is not None else self.max_tokens,
