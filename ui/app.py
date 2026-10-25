@@ -778,7 +778,8 @@ class EnglishTeacherApp:
         # Приветствие показываем НЕ через параметр greeting: нам нужна его
         # метка, чтобы потом заменить строку уровня в этом же сообщении.
         self.chat_view = ChatView(self.chat_tab, p, on_replay=self._replay_reply,
-                                  on_hover_word=self._hover_translation)
+                                  on_hover_word=self._hover_translation,
+                                  on_speak_word=self._speak_word)
 
         # ---------- нижняя часть вкладки «Чат» ----------
         # Решение ученика 23.10.2026: робот живёт ПОД чатом отдельным блоком
@@ -1635,6 +1636,18 @@ class EnglishTeacherApp:
             return False
         return True
 
+    def _speak_word(self, word, slow):
+        """Клик по слову в подсказке: Вербот произносит его по-английски.
+
+        slow=False — обычный темп, slow=True — вдвое медленнее (скорость
+        задаёт сама edge-tts, поэтому тон голоса не «плывёт», как при
+        замедлении готового mp3). Решение ученика 25.10.2026.
+        """
+        word = str(word or "").strip()
+        if not word:
+            return
+        self._say(word, rate=tts.WORD_SLOW_RATE if slow else None)
+
     def _hover_translation(self, text, position):
         """Курсор над словом в реплике преподавателя: (en, ru) или None.
 
@@ -2347,7 +2360,7 @@ class EnglishTeacherApp:
         return first
 
 
-    def _say(self, text, on_done=None, parts=None, on_part=None):
+    def _say(self, text, on_done=None, parts=None, on_part=None, rate=None):
         """Озвучка в фоне — окно ждать не должно.
 
         on_done вызывается (тоже в фоне) сразу после того, как звук доиграл;
@@ -2355,6 +2368,9 @@ class EnglishTeacherApp:
 
         parts / on_part — части реплики и колбэк «началась часть № N»: по нему
         лицо робота меняет эмоцию ровно вместе со звуком (см. _mood_speech).
+
+        rate — НЕОБЯЗАТЕЛЬНО: скорость на эту реплику ("-50%" — вдвое
+        медленнее). Нужно для медленного повтора слова по клику.
         """
         if not text:
             if on_done:
@@ -2372,7 +2388,7 @@ class EnglishTeacherApp:
             self._speech_busy = True
             try:
                 ok = tts.speak(text, name=name, name_latin=name_latin,
-                               parts=parts, on_part=on_part)
+                               parts=parts, on_part=on_part, rate=rate)
                 if ok is False:
                     # Джейн не смогла озвучить (например, edge-tts ответил 403)
                     self._dispatch(self._notify_no_voice)

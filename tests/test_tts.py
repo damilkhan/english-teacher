@@ -148,7 +148,7 @@ def test_voice_per_language():
     print("\n[1c] Голос по языку: русский текст — русским голосом")
     with restore_tts():
         used = []
-        tts._download = lambda text, voice: (used.append(voice), b"x")[1]
+        tts._download = lambda text, voice, rate=None: (used.append(voice), b"x")[1]
         tts._play = lambda data, gen: None
         tts.speak("Hello, my friend")     # английский
         tts.speak("Привет, друг мой")     # русский
@@ -201,10 +201,10 @@ def test_streaming_path():
     print("\n[1d] Потоковая озвучка: поток первым, откат при неудаче")
     with restore_tts():
         called = {"stream": 0, "synth": 0, "play": 0}
-        tts._synthesize = lambda text, voice: (called.__setitem__("synth", called["synth"] + 1), b"x")[1]
+        tts._synthesize = lambda text, voice, rate=None: (called.__setitem__("synth", called["synth"] + 1), b"x")[1]
         tts._play = lambda data, gen: called.__setitem__("play", called["play"] + 1)
 
-        def stream_ok(text, voice, gen):
+        def stream_ok(text, voice, gen, rate=None):
             called["stream"] += 1
             return True
 
@@ -246,7 +246,7 @@ def test_substitutions():
     print("\n[1g] Имя подставляется перед озвучкой по языку куска")
     with restore_tts():
         used = []
-        tts._stream_play = lambda text, voice, gen: (used.append((voice, text)), True)[1]
+        tts._stream_play = lambda text, voice, gen, rate=None: (used.append((voice, text)), True)[1]
         # Реально Джейн в русском тексте пишет имя кириллицей (по промпту) —
         # такой кусок читает Светлана, и имя звучит по-русски.
         tts.speak("Привет, Дамиль!", name="Дамиль", name_latin="Damil")
@@ -265,7 +265,7 @@ def test_segments_pipeline():
     order = []
 
     class FakePref:
-        def __init__(self, text, voice):
+        def __init__(self, text, voice, rate=None):
             self.text, self.voice = text, voice
         def wait(self, timeout=None):
             return ("P:" + self.text).encode("utf-8")
@@ -286,7 +286,7 @@ def test_segments_pipeline():
     try:
         tts._Prefetch = FakePref
         tts._sd = FakeSD()
-        tts._decode_stream_into = lambda out, text, voice, sr, ch, gen: (order.append("S:" + text), True)[1]
+        tts._decode_stream_into = lambda out, text, voice, sr, ch, gen, rate=None: (order.append("S:" + text), True)[1]
         tts._decode_into = lambda out, data, sr, ch, gen: (order.append("D:" + data.decode("utf-8")), True)[1]
         tts._STREAM_OK = True
         ok = tts._stream_play_segments([("en", "Hello"), ("ru", "Привет"), ("en", "OK")],
@@ -318,7 +318,7 @@ def test_cache():
     print("\n[2] Кэш синтеза")
     with restore_tts():
         calls = {"n": 0}
-        tts._download = lambda text, voice: (calls.__setitem__("n", calls["n"] + 1), b"data-" + text.encode("utf-8"))[1]
+        tts._download = lambda text, voice, rate=None: (calls.__setitem__("n", calls["n"] + 1), b"data-" + text.encode("utf-8"))[1]
         a = tts._synthesize("hello", tts.VOICE_EN)
         b = tts._synthesize("hello", tts.VOICE_EN)
         c = tts._synthesize("другой", tts.VOICE_RU)
@@ -337,7 +337,7 @@ def test_tempfile_playback():
     with restore_tts():
         fp = FakePygame()
         tts.pygame = fp
-        tts._download = lambda text, voice: b"MP3DATA"
+        tts._download = lambda text, voice, rate=None: b"MP3DATA"
         tts.speak("Hello there")
         m = fp.mixer.music
         check("mp3 проигран", m.played == 1, m.played)
@@ -357,7 +357,7 @@ def test_empty():
     with restore_tts():
         calls = {"n": 0}
 
-        def dl(text, voice):
+        def dl(text, voice, rate=None):
             calls["n"] += 1
             return b"x"
 
@@ -398,7 +398,7 @@ def test_serialized():
     print("\n[6] Проигрывание сериализовано")
     with restore_tts():
         tts.pygame = FakePygame()
-        tts._synthesize = lambda text, voice: b"x"
+        tts._synthesize = lambda text, voice, rate=None: b"x"
         state = {"active": 0, "max": 0, "count": 0}
 
         def fake_play(data, gen):
@@ -431,7 +431,7 @@ def test_last_wins():
         gate = threading.Event()
         calls = {"n": 0}
 
-        def slow_synth(text, voice):
+        def slow_synth(text, voice, rate=None):
             calls["n"] += 1
             if calls["n"] == 1:
                 gate.wait(2.0)       # первая реплика «висит» в синтезе
@@ -462,7 +462,7 @@ def test_download_failure():
         fp = FakePygame()
         tts.pygame = fp
 
-        def boom(text, voice):
+        def boom(text, voice, rate=None):
             raise RuntimeError("нет сети")
 
         tts._download = boom
@@ -512,7 +512,7 @@ def test_parts_callback():
     with restore_tts():
         fp = FakePygame()
         tts.pygame = fp
-        tts._download = lambda text, voice: b"MP3DATA"
+        tts._download = lambda text, voice, rate=None: b"MP3DATA"
         calls = []
         parts = ["Hi there!", "Great job, Damil! Ты молодец.", "See you!"]
         ok = tts.speak(" ".join(parts), name="Дамиль", name_latin="Damil",
@@ -533,7 +533,7 @@ def test_parts_callback_streaming():
     seen = []
 
     class FakePref:
-        def __init__(self, text, voice):
+        def __init__(self, text, voice, rate=None):
             self.text = text
         def wait(self, timeout=None):
             return b"P"
@@ -553,7 +553,7 @@ def test_parts_callback_streaming():
     try:
         tts._Prefetch = FakePref
         tts._sd = FakeSD()
-        tts._decode_stream_into = lambda out, text, voice, sr, ch, gen: True
+        tts._decode_stream_into = lambda out, text, voice, sr, ch, gen, rate=None: True
         tts._decode_into = lambda out, data, sr, ch, gen: True
         tts._STREAM_OK = True
         tracker = tts._PartTracker(seen.append)

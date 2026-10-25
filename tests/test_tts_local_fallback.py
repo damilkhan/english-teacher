@@ -87,7 +87,7 @@ def test_parallel_race():
     orig_jobs = config.TTS_PARALLEL_JOBS
     calls = []
 
-    def flaky(text, voice):
+    def flaky(text, voice, rate=None):
         calls.append(time.monotonic())
         time.sleep(0.15 if len(calls) != 2 else 0.02)   # второй отвечает быстрее
         return b"MP3" if len(calls) >= 2 else None
@@ -118,7 +118,7 @@ def test_parallel_all_fail():
     orig_rewarm = tts.warmup_async
     calls = []
 
-    def dead(text, voice):
+    def dead(text, voice, rate=None):
         calls.append(1)
         return None
 
@@ -147,7 +147,7 @@ def test_sequential_still_works():
     orig_rewarm = tts.warmup_async
     stamps = []
 
-    def once(text, voice):
+    def once(text, voice, rate=None):
         stamps.append(time.monotonic())
         return None
 
@@ -271,7 +271,7 @@ def test_segment_falls_back_to_piper():
         order.append("предзагрузка")
         return False
 
-    def no_stream(out, text, voice, sr, ch, gen):
+    def no_stream(out, text, voice, sr, ch, gen, rate=None):
         order.append("поток")
         return False
 
@@ -280,7 +280,7 @@ def test_segment_falls_back_to_piper():
     tts._piper_cache.clear()
     config.PIPER_MODEL_DIR = "tests"
     config.PIPER_VOICE_EN = os.path.basename(__file__)
-    tts._download = lambda text, voice: None
+    tts._download = lambda text, voice, rate=None: None
     tts._decode_into = no_decode
     tts._decode_stream_into = no_stream
     try:
@@ -318,7 +318,7 @@ def test_speak_chunk_uses_piper():
     tts._piper_cache.clear()
     config.PIPER_MODEL_DIR = "tests"
     config.PIPER_VOICE_EN = os.path.basename(__file__)
-    tts._synthesize = lambda text, voice: None
+    tts._synthesize = lambda text, voice, rate=None: None
     tts._play = lambda data, gen, suffix=".mp3": played.append((data[:4], suffix))
     tts._streaming_enabled = lambda: False
     try:

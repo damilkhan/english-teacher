@@ -78,7 +78,7 @@ class patch_tts:
         data = self.prefetch_data
 
         class FakePref:
-            def __init__(self, text, voice):
+            def __init__(self, text, voice, rate=None):
                 state["prefetches"].append((text, voice))
                 self.text, self.voice = text, voice
 
@@ -95,9 +95,9 @@ class patch_tts:
         tts._STREAM_OK = True
         tts._decode_into = lambda out, blob, sr, ch, gen: (
             state["played"].append(blob.decode("utf-8")), True)[1]
-        tts._decode_stream_into = lambda out, text, voice, sr, ch, gen: (
+        tts._decode_stream_into = lambda out, text, voice, sr, ch, gen, rate=None: (
             state["streams"].append((text, voice)), data != "fail_stream")[1]
-        tts._download = lambda text, voice: (
+        tts._download = lambda text, voice, rate=None: (
             state["downloads"].append((text, voice)),
             ("DL:" + text).encode("utf-8"))[1]
         tts._stop.clear()

@@ -63,7 +63,7 @@ def test_warmup_once():
     reset_warm_state()
     calls = []
     orig = tts._download_once
-    tts._download_once = lambda text, voice: (calls.append(voice), b"mp3")[1]
+    tts._download_once = lambda text, voice, rate=None: (calls.append(voice), b"mp3")[1]
     try:
         ok = tts.warmup(attempts=1)
         check("прогрев удался", ok is True, ok)
@@ -99,7 +99,7 @@ def test_download_budget():
     orig_budget, orig_timeout = tts.DOWNLOAD_BUDGET, tts.DOWNLOAD_TIMEOUT
     calls = []
 
-    def slow(text, voice):
+    def slow(text, voice, rate=None):
         calls.append(text)
         time.sleep(min(1.5, tts.DOWNLOAD_TIMEOUT))   # имитация «висит»
         return None
@@ -138,7 +138,7 @@ def test_fast_failure_retried():
     print("\n[4] Быстрый сбой («No audio») повторяется")
     orig = tts._download_once
     calls = []
-    tts._download_once = lambda text, voice: (calls.append(1), None)[1]
+    tts._download_once = lambda text, voice, rate=None: (calls.append(1), None)[1]
     reset_warm_state()
     with tts._warm_lock:                # фон прогрева не должен попадать в счёт
         tts._warm_running = True
@@ -183,7 +183,7 @@ def test_wait_bounded():
     state = {"played": 0}
 
     class HangingPref:            # предзагрузка, которая «висит»
-        def __init__(self, text, voice):
+        def __init__(self, text, voice, rate=None):
             self.text = text
 
         def wait(self, timeout=None):
@@ -196,9 +196,9 @@ def test_wait_bounded():
     tts._sd = FakeSD()
     tts._STREAM_OK = True
     tts._decode_into = lambda out, blob, sr, ch, gen: True
-    tts._decode_stream_into = lambda out, text, voice, sr, ch, gen: (
+    tts._decode_stream_into = lambda out, text, voice, sr, ch, gen, rate=None: (
         state.__setitem__("played", state["played"] + 1), True)[1]
-    tts._download = lambda text, voice: b"a" * 8
+    tts._download = lambda text, voice, rate=None: b"a" * 8
     config.TTS_PREFETCH_ALL = True
     try:
         segs = [(0, "en", "Hello, Damil!"),
@@ -225,7 +225,7 @@ def test_rewarm_after_failure():
     print("\n[6] Неудачная загрузка → повторный прогрев в фоне")
     reset_warm_state()
     orig = (tts._download_once, tts.RETRY_DELAY, tts.warmup_async)
-    tts._download_once = lambda text, voice: None
+    tts._download_once = lambda text, voice, rate=None: None
     tts.RETRY_DELAY = 0.01
     called = []
     tts.warmup_async = lambda: called.append(1)

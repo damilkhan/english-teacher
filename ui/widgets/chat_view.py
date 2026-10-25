@@ -110,7 +110,7 @@ class _Message:
 
 class ChatView(ctk.CTkFrame):
     def __init__(self, parent, palette, greeting=None, corner_radius=None,
-                 on_replay=None, on_hover_word=None):
+                 on_replay=None, on_hover_word=None, on_speak_word=None):
         super().__init__(parent, fg_color=palette["chat_bg"],
                          corner_radius=corner_radius or theme.R["card"],
                          border_width=0,
@@ -124,6 +124,11 @@ class ChatView(ctk.CTkFrame):
         self._gloss_tip = None    # окно-подсказка (Toplevel без рамки)
         self._gloss_key = None    # что показано — чтобы не мерцало
         self._gloss_body = None   # облачко, где сейчас подсвечено слово
+        # callback(слово, медленно?) — клик по слову озвучивает его (25.10.2026).
+        # Первый клик — обычный темп, второй по тому же слову — вдвое медленнее.
+        self.on_speak_word = on_speak_word
+        self._gloss_said = None   # какое слово уже произносили
+        self._gloss_slow = False  # текущий темп для этого слова
 
         self._messages = {}           # mark → _Message
         self._order = []              # метки в порядке появления
@@ -422,7 +427,7 @@ class ChatView(ctk.CTkFrame):
         """Наведение на слово в облачке (любом — теперь и у ученика)."""
         body.bind("<Motion>", lambda e, b=body: self._gloss_motion(b, e), add="+")
         body.bind("<Leave>", lambda _e: self._gloss_hide(), add="+")
-        body.bind("<ButtonPress>", lambda _e: self._gloss_hide(), add="+")
+        body.bind("<ButtonPress>", lambda e, b=body: self._gloss_click(b, e), add="+")
 
     def _gloss_motion(self, body, event):
         """Показать перевод слова под курсором. Модель здесь НЕ вызывается:
@@ -430,16 +435,7 @@ class ChatView(ctk.CTkFrame):
         всё уже лежит в словаре-кэше (см. glossary.py), поэтому ответ
         мгновенный.
         """
-        try:
-            index = body.index("@%d,%d" % (event.x, event.y))
-            text = body.get("1.0", "end-1c")
-            offset = len(body.get("1.0", index))
-        except Exception:
-            return
-        try:
-            hit = self.on_hover_word(text, offset)
-        except Exception:
-            hit = None
+        hit = self._gloss_hit_at(body, event)
         if not hit:
             self._gloss_hide()
             return
@@ -448,6 +444,48 @@ class ChatView(ctk.CTkFrame):
             return                       # та же фраза — окно не пересоздаём
         self._gloss_key = key
         self._gloss_show(hit, event.x_root, event.y_root, body=body)
+
+    def _gloss_hit_at(self, body, event):
+        """Что под курсором: {"en","ru","start","end",…} или None."""
+        if self.on_hover_word is None:
+            return None
+        try:
+            index = body.index("@%d,%d" % (event.x, event.y))
+            text = body.get("1.0", "end-1c")
+            offset = len(body.get("1.0", index))
+            return self.on_hover_word(text, offset)
+        except Exception:
+            return None
+
+    @staticmethod
+    def _gloss_key_of(hit):
+        """Ключ «что показано/произнесено» — чтобы не пересоздавать окно."""
+        return (hit.get("start"), hit.get("end"), hit.get("ru"))
+
+    def _gloss_click(self, body, event):
+        """Клик по слову озвучивает его (решение ученика 25.10.2026).
+
+        Первый клик — обычный темп, второй по ТОМУ ЖЕ слову — вдвое медленнее,
+        третий — снова обычный (поочерёдно). Клик мимо слова просто закрывает
+        подсказку, как раньше.
+        """
+        hit = self._gloss_hit_at(body, event)
+        if not hit or self.on_speak_word is None:
+            self._gloss_hide()
+            return
+        key = self._gloss_key_of(hit)
+        if key != self._gloss_key or self._gloss_tip is None:
+            self._gloss_key = key          # курсор не на подсвеченном слове
+            self._gloss_show(hit, event.x_root, event.y_root, body=body)
+        if self._gloss_said == key:
+            self._gloss_slow = not self._gloss_slow
+        else:
+            self._gloss_said = key
+            self._gloss_slow = False       # первое нажатие — обычная скорость
+        try:
+            self.on_speak_word(str(hit.get("en") or ""), self._gloss_slow)
+        except Exception:
+            pass
 
     def _gloss_show(self, hit, x_root, y_root, body=None):
         """Окно-подсказка рядом с курсором: ТОЛЬКО русский перевод.
