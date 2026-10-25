@@ -35,6 +35,7 @@ import exam as exam_mod
 import lesson as lesson_mod
 import model_registry
 import profile_store
+import ru_text
 import progress_map
 import reactions
 import server_manager
@@ -1188,10 +1189,10 @@ class EnglishTeacherApp:
         if data.get("story"):
             opening += "\n🎧 Слушай историю, а потом перескажи её — по-русски или по-английски."
         if data.get("check"):
-            opening += ("\n🎯 Это ЭКЗАМЕН по блоку: %d вопросов, подсказок нет "
+            opening += ("\n🎯 Это ЭКЗАМЕН по блоку: %s, подсказок нет "
                         "(даже перевода). Отвечай вслух по-английски. "
                         "Балл скажу в конце — %d из 10 нужно, чтобы сдать."
-                        % (exam_mod.QUESTIONS, exam_mod.PASS_SCORE))
+                        % (ru_text.questions(exam_mod.QUESTIONS), exam_mod.PASS_SCORE))
         try:
             self.reactions.reset()          # новый урок — новый счёт стараний
         except Exception:
@@ -1771,7 +1772,8 @@ class EnglishTeacherApp:
                 self._vocab_wanted = True    # начнём, когда Whisper будет готов
             return
         self._vocab_wanted = False
-        self.add_message(self.teacher_name, "📚 Давай повторим %d слов." % len(due))
+        self.add_message(self.teacher_name,
+                         "📚 Давай повторим %s." % ru_text.words(len(due)))
         self._open_vocab_panel()
 
     def review_vocabulary(self):

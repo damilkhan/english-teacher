@@ -104,15 +104,9 @@ def hit_test(x: float, y: float, tokens: Sequence[Dict[str, Any]],
     return best_id
 
 
-def plural_ru(count: int, one: str = "урок", few: str = "урока",
-              many: str = "уроков") -> str:
-    """Русское склонение: 1 урок, 2 урока, 5 уроков."""
-    n = abs(int(count))
-    if n % 10 == 1 and n % 100 != 11:
-        return one
-    if 2 <= n % 10 <= 4 and not (12 <= n % 100 <= 14):
-        return few
-    return many
+# Склонение живёт в ru_text.py (нужно в разных местах, а Tk для него не нужен).
+# Здесь оставлено имя plural_ru: им пользуются подсказки карты и тесты.
+from ru_text import plural_ru  # noqa: E402  (после блока констант — так читается лучше)
 
 
 def tooltip_text(number: Any, title: str, lessons: int) -> str:
