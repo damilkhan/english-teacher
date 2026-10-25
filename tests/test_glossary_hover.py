@@ -6,14 +6,15 @@
 #
 # ЗАЧЕМ. Решения ученика (25.10.2026):
 #   * подсказка-перевод появляется ТОЛЬКО при наведении курсора;
-#   * только в репликах Вербота (свои он говорил сам — их не переводим);
+#   * с 25.10.2026 — и в репликах УЧЕНИКА (на письме «сказал сам — значит
+#     знает» не работает), а в окне ТОЛЬКО русский (английский убран);
 #   * разбор реплики моделью идёт В ПАУЗЕ, а не во время ответа/озвучки.
 #
 # Проверяем:
 #   1) контроллер ждёт паузу: пока занято — модель не зовётся;
 #   2) очередь не больше N: новая реплика вытесняет старую;
 #   3) в облачке преподавателя наведение показывает перевод (окно есть);
-#   4) в облачке ученика подсказки нет вообще;
+#   4) в облачке ученика подсказка ТОЖЕ появляется;
 #   5) уход курсора и прокрутка окно закрывают;
 #   6) lookup не зовёт модель (счётчик запросов не растёт).
 # =========================================================
@@ -148,25 +149,35 @@ if tip is not None:
             except Exception:
                 pass
 check("в подсказке перевод фразы", "с нетерпением ждать" in texts, texts)
-check("для фразы показан и английский", "Look forward to" in texts, texts)
+check("английского в окне нет (решение 25.10.2026)", "Look forward to" not in texts, texts)
 
 chat._gloss_hide()
 root.update()
 check("уход курсора закрывает окно", chat._gloss_tip is None)
 
 # ---------------------------------------------------------
-print("\n[4] В облачке ученика подсказок нет")
+print("\n[4] В облачке ученика подсказка ТОЖЕ есть (25.10.2026)")
 chat.add_message("Вы", "Look forward to seeing you there!")
 root.update()
 user_msg = chat._messages["msg_2"]
 check("это реплика ученика", user_msg.is_user is True)
-check("окно не появилось", chat._gloss_tip is None)
 
 teacher_bound = bool(chat._messages[mark].body.bind("<Motion>"))
 user_bound = bool(user_msg.body.bind("<Motion>"))
 check("у реплики Вербота наведение привязано", teacher_bound is True, teacher_bound)
-check("у реплики ученика наведение НЕ привязано", user_bound is False, user_bound)
-check("окно так и не появилось", chat._gloss_tip is None)
+check("у реплики ученика наведение привязано", user_bound is True, user_bound)
+
+ubox = user_msg.body.bbox("1.2")
+check("текст реплики ученика на месте", ubox is not None, ubox)
+if ubox:
+    chat._gloss_motion(user_msg.body, SimpleEvent(
+        x=ubox[0] + 3, y=ubox[1] + ubox[3] // 2, x_root=120, y_root=120,
+        widget=user_msg.body))
+root.update()
+check("окно появилось и у ученика", chat._gloss_tip is not None)
+chat._gloss_hide()
+root.update()
+check("уход курсора окно закрыл", chat._gloss_tip is None)
 
 # ---------------------------------------------------------
 print("\n[5] Прокрутка закрывает подсказку")

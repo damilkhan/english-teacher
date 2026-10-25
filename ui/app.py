@@ -1612,11 +1612,13 @@ class EnglishTeacherApp:
         # поэтому сравнивать имя не нужно: оно теперь настраивается.
         if mark:
             self._jane_mark = mark
-            # разбор в словарь-подсказку — в фоне и только в паузе
-            try:
-                self.glossary_controller.request(text)
-            except Exception:
-                pass
+        # разбор в словарь-подсказку — в фоне и только в паузе. Реплики
+        # УЧЕНИКА тоже: на письме он хочет проверить и свои слова
+        # (решение 25.10.2026, было — только преподаватель).
+        try:
+            self.glossary_controller.request(text)
+        except Exception:
+            pass
         return mark
 
     # ---------------- подсказки-переводы по наведению (25.10.2026) -------------

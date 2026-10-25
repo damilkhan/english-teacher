@@ -118,11 +118,12 @@ class ChatView(ctk.CTkFrame):
         self.palette = palette
         self.on_replay = on_replay    # callback(text) — озвучить реплику повторно
         # callback(текст_реплики, позиция) → {"en","ru",…} | None.
-        # Реплики УЧЕНИКА подсказок не получают (решение 25.10.2026): он их
-        # сказал сам, значит слова уже знает.
+        # Подсказки есть и в репликах УЧЕНИКА (решение 25.10.2026): на письме
+        # «сказал сам — значит знает» не работает, он тоже хочет проверить.
         self.on_hover_word = on_hover_word
         self._gloss_tip = None    # окно-подсказка (Toplevel без рамки)
         self._gloss_key = None    # что показано — чтобы не мерцало
+        self._gloss_body = None   # облачко, где сейчас подсвечено слово
 
         self._messages = {}           # mark → _Message
         self._order = []              # метки в порядке появления
@@ -344,8 +345,8 @@ class ChatView(ctk.CTkFrame):
         # эмодзи они больше). Так обрезка снизу лечится сама и без таймеров.
         msg.body.bind("<Configure>",
                       lambda _e, b=msg.body: self._fit_body_height(b), add="+")
-        # подсказки-переводы — ТОЛЬКО в репликах преподавателя
-        if self.on_hover_word is not None and not msg.is_user:
+        # подсказки-переводы — во ВСЕХ облачках, у ученика тоже
+        if self.on_hover_word is not None:
             self._bind_hover(msg.body)
         self._fill_body(msg)
 
@@ -374,20 +375,40 @@ class ChatView(ctk.CTkFrame):
 
         body.configure(state="normal", bg=bg)
         body.delete("1.0", "end")
+        # Карта «смещение в ЧИСТОМ тексте → счётчик символов Tk». Нужна для
+        # подсветки слова: картинка-эмодзи в индексах Tk занимает 1 символ, а
+        # в get() не появляется вовсе (замерено 25.10.2026: «1.0 + 4c» → 1.4,
+        # а get() короче на число эмодзи). Без карты выделение уезжает.
+        offset_map = [(0, 0)]
+        text_off = 0
+        tk_off = 0
         for index, line in enumerate(lines):
             if index:
                 body.insert("end", "\n")
+                text_off += 1
+                tk_off += 1
+                offset_map.append((text_off, tk_off))
             for kind, chunk, _w in line:
                 if kind is True:
                     photo = self._emoji.photo(chunk, master=body)
                     if photo is None:
                         body.insert("end", chunk)
+                        text_off += len(chunk)
                     else:
                         body.image_create("end", image=photo,
                                           align=emoji_render.ALIGN,
                                           padx=EMOJI_PAD)
+                    tk_off += 1
+                    offset_map.append((text_off, tk_off))
                 else:
                     body.insert("end", chunk)
+                    text_off += len(chunk)
+                    tk_off += len(chunk)
+                    offset_map.append((text_off, tk_off))
+        try:
+            body._gloss_map = offset_map
+        except Exception:
+            pass
         body.configure(width=width, height=max(1, len(lines)))
         body.configure(state="disabled")
         try:
@@ -398,7 +419,7 @@ class ChatView(ctk.CTkFrame):
 
     # ---------------- подсказки-переводы по наведению (25.10.2026) --------------
     def _bind_hover(self, body):
-        """Наведение на слово в облачке преподавателя."""
+        """Наведение на слово в облачке (любом — теперь и у ученика)."""
         body.bind("<Motion>", lambda e, b=body: self._gloss_motion(b, e), add="+")
         body.bind("<Leave>", lambda _e: self._gloss_hide(), add="+")
         body.bind("<ButtonPress>", lambda _e: self._gloss_hide(), add="+")
@@ -426,10 +447,14 @@ class ChatView(ctk.CTkFrame):
         if key == self._gloss_key and self._gloss_tip is not None:
             return                       # та же фраза — окно не пересоздаём
         self._gloss_key = key
-        self._gloss_show(hit, event.x_root, event.y_root)
+        self._gloss_show(hit, event.x_root, event.y_root, body=body)
 
-    def _gloss_show(self, hit, x_root, y_root):
-        """Окно-подсказка рядом с курсором: перевод, для фразы — и английский."""
+    def _gloss_show(self, hit, x_root, y_root, body=None):
+        """Окно-подсказка рядом с курсором: ТОЛЬКО русский перевод.
+
+        Английское слово в окне больше не дублируется (решение 25.10.2026):
+        вместо него слово подсвечивается прямо в облачке.
+        """
         self._gloss_hide()
         p = self.palette
         try:
@@ -447,10 +472,6 @@ class ChatView(ctk.CTkFrame):
         tk.Label(box, text=str(hit.get("ru") or ""), bg=p["btn"], fg=p["text"],
                  font=theme.FONT_SMALL, padx=9, pady=5,
                  justify="left", anchor="w", bd=0).pack(fill="x")
-        if hit.get("phrase"):
-            tk.Label(box, text=str(hit.get("en") or ""), bg=p["btn"],
-                     fg=p["muted"], font=theme.FONT_SMALL, padx=9, pady=5,
-                     justify="left", anchor="w", bd=0).pack(fill="x")
         tip.update_idletasks()
         x = x_root + 12
         y = y_root + 18
@@ -462,15 +483,56 @@ class ChatView(ctk.CTkFrame):
             y = max(8, y_root - tip.winfo_reqheight() - 10)
         tip.wm_geometry("+%d+%d" % (x, y))
         self._gloss_tip = tip
+        if body is not None:
+            self._gloss_mark(body, hit)
 
     def _gloss_hide(self):
         self._gloss_key = None
+        self._gloss_unmark()
         if self._gloss_tip is not None:
             try:
                 self._gloss_tip.destroy()
             except Exception:
                 pass
             self._gloss_tip = None
+
+    def _text_index(self, body, offset):
+        """Смещение в чистом тексте → индекс tk.Text (эмодзи считаются)."""
+        offset = max(0, int(offset or 0))
+        table = getattr(body, "_gloss_map", None) or [(0, 0)]
+        text_off, tk_off = table[0]
+        for t_off, k_off in table:
+            if t_off <= offset:
+                text_off, tk_off = t_off, k_off
+            else:
+                break
+        try:
+            return body.index("1.0 + %dc" % (tk_off + max(0, offset - text_off)))
+        except Exception:
+            return "1.0 + %dc" % offset
+
+    def _gloss_mark(self, body, hit):
+        """Подсветить переводимое слово/фразу в тексте облачка."""
+        self._gloss_unmark()
+        try:
+            start = self._text_index(body, hit.get("start") or 0)
+            end = self._text_index(body, hit.get("end") or start)
+            body.tag_config("gloss", foreground=self.palette.get("warn", "#FBBF24"))
+            body.tag_add("gloss", start, end)
+        except Exception:
+            return
+        self._gloss_body = body
+
+    def _gloss_unmark(self):
+        """Снять подсветку (уход курсора, смена слова, прокрутка)."""
+        body = getattr(self, "_gloss_body", None)
+        self._gloss_body = None
+        if body is None:
+            return
+        try:
+            body.tag_remove("gloss", "1.0", "end")
+        except Exception:
+            pass
     def _schedule_fit(self, body):
         """Попросить подгонку высоты в следующем простое (виджет ещё не размещён)."""
         try:
