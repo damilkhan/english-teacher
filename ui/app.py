@@ -32,6 +32,8 @@ import character
 import commands
 import config
 import exam as exam_mod
+import glossary
+from controllers.glossary_controller import GlossaryController
 import lesson as lesson_mod
 import model_registry
 import profile_store
@@ -262,6 +264,7 @@ class EnglishTeacherApp:
         self.panel_visible = False
         self.active_panel = None      # "settings" | "users" | None
         self.busy = False
+        self._speech_busy = False    # идёт озвучка: модель на перевод не зовём
         self.server_state = "offline"
         self.server_ready = False
         self.stt_state = "loading"      # loading | ready | error
@@ -336,6 +339,11 @@ class EnglishTeacherApp:
         # перевод RU→EN для подсказки (наша же модель: ~0.3 с на фразу)
         self.translator = translate.Translator(
             self.llm, max_tokens=getattr(config, "TRANSLATE_MAX_TOKENS", 90))
+        # подсказки-переводы по наведению (25.10.2026): словарь в памяти +
+        # файловый кэш data/glossary.json; модель зовётся ТОЛЬКО в паузах
+        self.glossary = glossary.Glossary(llm=self.llm)
+        self.glossary_controller = GlossaryController(
+            self.glossary, is_idle=self._glossary_idle)
 
         # ---------- контроллеры ----------
         # роль-Аналитик: разбирает реплики ученика в режиме урока
@@ -768,7 +776,8 @@ class EnglishTeacherApp:
 
         # Приветствие показываем НЕ через параметр greeting: нам нужна его
         # метка, чтобы потом заменить строку уровня в этом же сообщении.
-        self.chat_view = ChatView(self.chat_tab, p, on_replay=self._replay_reply)
+        self.chat_view = ChatView(self.chat_tab, p, on_replay=self._replay_reply,
+                                  on_hover_word=self._hover_translation)
 
         # ---------- нижняя часть вкладки «Чат» ----------
         # Решение ученика 23.10.2026: робот живёт ПОД чатом отдельным блоком
@@ -1593,8 +1602,36 @@ class EnglishTeacherApp:
         # поэтому сравнивать имя не нужно: оно теперь настраивается.
         if mark:
             self._jane_mark = mark
+            # разбор в словарь-подсказку — в фоне и только в паузе
+            try:
+                self.glossary_controller.request(text)
+            except Exception:
+                pass
         return mark
 
+    # ---------------- подсказки-переводы по наведению (25.10.2026) -------------
+    def _glossary_idle(self):
+        """Приложение свободно? Перевод-подсказка ждёт именно такой паузы.
+
+        Приоритет ученика: ответ учителя и озвучка. Пока идёт «Думает…»,
+        распознавание или звук — разбор реплики не начинаем.
+        """
+        if self.busy or self._speech_busy:
+            return False
+        recording = getattr(self, "recording", None)
+        if recording is True:
+            return False
+        return True
+
+    def _hover_translation(self, text, position):
+        """Курсор над словом в реплике преподавателя: (en, ru) или None.
+
+        Модель НЕ вызывается — только словарь в памяти, ответ мгновенный.
+        """
+        try:
+            return self.glossary.lookup(text, position)
+        except Exception:
+            return None
     def _show_greeting(self):
         """Показать приветствие и запомнить его метку.
 
@@ -2320,6 +2357,7 @@ class EnglishTeacherApp:
         name_latin = u.get("name_latin")
 
         def _worker():
+            self._speech_busy = True
             try:
                 ok = tts.speak(text, name=name, name_latin=name_latin,
                                parts=parts, on_part=on_part)
@@ -2329,6 +2367,7 @@ class EnglishTeacherApp:
                 else:
                     self._dispatch(self._clear_no_voice)
             finally:
+                self._speech_busy = False
                 if on_done:
                     try:
                         on_done()
@@ -2743,7 +2782,8 @@ class EnglishTeacherApp:
         self.window.mainloop()
 
     def on_closing(self):
-        for stopper in (self.monitor.stop, self.dispatcher.stop):
+        for stopper in (self.monitor.stop, self.dispatcher.stop,
+                        self.glossary_controller.stop):
             try:
                 stopper()
             except Exception:

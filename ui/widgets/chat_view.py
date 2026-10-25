@@ -110,13 +110,19 @@ class _Message:
 
 class ChatView(ctk.CTkFrame):
     def __init__(self, parent, palette, greeting=None, corner_radius=None,
-                 on_replay=None):
+                 on_replay=None, on_hover_word=None):
         super().__init__(parent, fg_color=palette["chat_bg"],
                          corner_radius=corner_radius or theme.R["card"],
                          border_width=0,
                          height=140)   # запрос «минимум», растёт за счёт expand
         self.palette = palette
         self.on_replay = on_replay    # callback(text) — озвучить реплику повторно
+        # callback(текст_реплики, позиция) → {"en","ru",…} | None.
+        # Реплики УЧЕНИКА подсказок не получают (решение 25.10.2026): он их
+        # сказал сам, значит слова уже знает.
+        self.on_hover_word = on_hover_word
+        self._gloss_tip = None    # окно-подсказка (Toplevel без рамки)
+        self._gloss_key = None    # что показано — чтобы не мерцало
 
         self._messages = {}           # mark → _Message
         self._order = []              # метки в порядке появления
@@ -239,6 +245,7 @@ class ChatView(ctk.CTkFrame):
 
     def clear(self):
         """Стереть чат: удалить все реплики и картинки-эмодзи."""
+        self._gloss_hide()
         for msg in self._messages.values():
             self._destroy_message(msg)
         self._messages.clear()
@@ -337,6 +344,9 @@ class ChatView(ctk.CTkFrame):
         # эмодзи они больше). Так обрезка снизу лечится сама и без таймеров.
         msg.body.bind("<Configure>",
                       lambda _e, b=msg.body: self._fit_body_height(b), add="+")
+        # подсказки-переводы — ТОЛЬКО в репликах преподавателя
+        if self.on_hover_word is not None and not msg.is_user:
+            self._bind_hover(msg.body)
         self._fill_body(msg)
 
     def _fill_body(self, msg):
@@ -386,6 +396,81 @@ class ChatView(ctk.CTkFrame):
             pass
         self._schedule_fit(body)
 
+    # ---------------- подсказки-переводы по наведению (25.10.2026) --------------
+    def _bind_hover(self, body):
+        """Наведение на слово в облачке преподавателя."""
+        body.bind("<Motion>", lambda e, b=body: self._gloss_motion(b, e), add="+")
+        body.bind("<Leave>", lambda _e: self._gloss_hide(), add="+")
+        body.bind("<ButtonPress>", lambda _e: self._gloss_hide(), add="+")
+
+    def _gloss_motion(self, body, event):
+        """Показать перевод слова под курсором. Модель здесь НЕ вызывается:
+
+        всё уже лежит в словаре-кэше (см. glossary.py), поэтому ответ
+        мгновенный.
+        """
+        try:
+            index = body.index("@%d,%d" % (event.x, event.y))
+            text = body.get("1.0", "end-1c")
+            offset = len(body.get("1.0", index))
+        except Exception:
+            return
+        try:
+            hit = self.on_hover_word(text, offset)
+        except Exception:
+            hit = None
+        if not hit:
+            self._gloss_hide()
+            return
+        key = (hit.get("start"), hit.get("end"), hit.get("ru"))
+        if key == self._gloss_key and self._gloss_tip is not None:
+            return                       # та же фраза — окно не пересоздаём
+        self._gloss_key = key
+        self._gloss_show(hit, event.x_root, event.y_root)
+
+    def _gloss_show(self, hit, x_root, y_root):
+        """Окно-подсказка рядом с курсором: перевод, для фразы — и английский."""
+        self._gloss_hide()
+        p = self.palette
+        try:
+            tip = tk.Toplevel(self)
+        except Exception:
+            return
+        tip.wm_overrideredirect(True)
+        try:
+            tip.wm_attributes("-topmost", True)
+        except Exception:
+            pass
+        tip.configure(bg=p["border"])
+        box = tk.Frame(tip, bg=p["btn"], bd=0)
+        box.pack(padx=1, pady=1)
+        tk.Label(box, text=str(hit.get("ru") or ""), bg=p["btn"], fg=p["text"],
+                 font=theme.FONT_SMALL, padx=9, pady=5,
+                 justify="left", anchor="w", bd=0).pack(fill="x")
+        if hit.get("phrase"):
+            tk.Label(box, text=str(hit.get("en") or ""), bg=p["btn"],
+                     fg=p["muted"], font=theme.FONT_SMALL, padx=9, pady=5,
+                     justify="left", anchor="w", bd=0).pack(fill="x")
+        tip.update_idletasks()
+        x = x_root + 12
+        y = y_root + 18
+        screen_w = tip.winfo_screenwidth()
+        screen_h = tip.winfo_screenheight()
+        if x + tip.winfo_reqwidth() > screen_w - 8:
+            x = max(8, screen_w - tip.winfo_reqwidth() - 8)
+        if y + tip.winfo_reqheight() > screen_h - 8:
+            y = max(8, y_root - tip.winfo_reqheight() - 10)
+        tip.wm_geometry("+%d+%d" % (x, y))
+        self._gloss_tip = tip
+
+    def _gloss_hide(self):
+        self._gloss_key = None
+        if self._gloss_tip is not None:
+            try:
+                self._gloss_tip.destroy()
+            except Exception:
+                pass
+            self._gloss_tip = None
     def _schedule_fit(self, body):
         """Попросить подгонку высоты в следующем простое (виджет ещё не размещён)."""
         try:
@@ -626,6 +711,7 @@ class ChatView(ctk.CTkFrame):
 
     def _on_wheel(self, event=None):
         """Колесо мыши: прокручиваем чат, только если курсор над чатом."""
+        self._gloss_hide()          # подсказка-перевод «уезжает» вместе с текстом
         if event is None:
             return None
         widget = getattr(event, "widget", None)
