@@ -124,6 +124,10 @@ def rate_for(voice, rate=None):
 
 RATE = "+10%"                 # скорость речи по умолчанию (если нет в VOICE_RATE)
 WORD_SLOW_RATE = "-50%"       # медленный повтор слова в подсказке (полтемпа)
+# Тишина ПЕРЕД первым звуком реплики. Звуковое устройство на старте
+# выбрасывает первые ~100-200 мс, а первое слово короткое («Hi») —
+# поэтому оно и пропадало в начале разговора (замер 25.10.2026).
+LEAD_SILENCE_MS = 200
 DOWNLOAD_TIMEOUT = 5.0        # ТОЛЬКО скачивание (проигрывание — отдельно)
 DOWNLOAD_BUDGET = 7.0         # общий предел на ВСЕ повторы одного куска
 PLAYBACK_TICK = 0.05          # шаг опроса get_busy (для прерывания речи)
@@ -1113,6 +1117,26 @@ def _play_segment(out, text, voice, samplerate, channels, my_gen,
     return _piper_play(out, text, lang, samplerate, channels, my_gen)
 
 
+def _write_silence(out, samplerate, channels,
+                   ms: int = LEAD_SILENCE_MS) -> bool:
+    """Отдать в звук ms миллисекунд тишины: устройство просыпается на НЕЙ.
+
+    Тихо и без замеров: уровень не отдаём (робот не должен шевелить губами).
+    """
+    try:
+        frames = int(samplerate * max(0, int(ms)) / 1000)
+    except (TypeError, ValueError):
+        return False
+    if frames <= 0:
+        return False
+    if channels > 1:
+        data = _np.zeros((frames, channels), dtype="int16")
+    else:
+        data = _np.zeros(frames, dtype="int16")
+    out.write(_np.ascontiguousarray(data))
+    return True
+
+
 def _stream_play_segments(segments, my_gen, tracker=None, rate=None) -> bool:
     """Проиграть все куски ЧЕРЕЗ ОДИН звуковой выход.
 
@@ -1152,8 +1176,12 @@ def _stream_play_segments(segments, my_gen, tracker=None, rate=None) -> bool:
     played = False
     waits = []                                 # сколько ждали каждый кусок
     try:
+        t_open = time.monotonic()
         with _sd.OutputStream(samplerate=samplerate, channels=channels,
                               dtype="int16", blocksize=STREAM_BLOCKSIZE) as out:
+            # Тишина перед речью: устройство просыпается на ней, а не на
+            # первом слове (иначе «Hi» в начале съедалось — см. LEAD_SILENCE_MS).
+            _write_silence(out, samplerate, channels)
             # кусок 0 — ПОТОКОМ (быстрый старт, не ждём полной загрузки)
             index0, lang0, chunk0 = segments[0]
             if tracker is not None:
@@ -1161,6 +1189,8 @@ def _stream_play_segments(segments, my_gen, tracker=None, rate=None) -> bool:
             if _play_segment(out, chunk0, voice_for(lang0),
                              samplerate, channels, my_gen, lang=lang0, rate=rate):
                 played = True
+                print("⏱ TTS: первый звук через %.2f с (включая %.0f мс тишины)"
+                      % (time.monotonic() - t_open, LEAD_SILENCE_MS))
             # остальные куски — из предзагрузки (без пауз между языками)
             for i in range(1, len(segments)):
                 if _stop.is_set() or my_gen != _current_generation():
