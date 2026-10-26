@@ -92,12 +92,31 @@ BUBBLE_MIN_PX = 170    # уже этого текст не переносим (�
 PICTURE_MAX_PX = 340
 
 
+def _clean_spans(spans):
+    """Проверить раскраску: [(начало, конец, стиль)] — только годные куски.
+
+    Стиль — короткое имя из палитры: "err" (красный), "ok" (зелёный),
+    "warn". Мусор не роняет реплику: просто не красится.
+    """
+    out = []
+    for item in (spans or ()):
+        try:
+            start, end, style = item
+            start, end = int(start), int(end)
+            style = str(style or "").strip().lower()
+        except (TypeError, ValueError):
+            continue
+        if style in ("err", "ok", "warn") and end > start >= 0:
+            out.append((start, end, style))
+    return out
+
+
 class _Message:
     """Одна реплика: всё, что нужно, чтобы её обновить или перекрасить."""
 
     __slots__ = ("mark", "sender", "text", "is_user", "row", "bubble",
                  "header", "name_lbl", "stamp_lbl", "body", "tail", "replay",
-                 "picture", "photo", "picture_lbl")
+                 "picture", "photo", "picture_lbl", "spans")
 
     def __init__(self, mark, sender, text, is_user):
         self.mark = mark
@@ -115,6 +134,7 @@ class _Message:
         self.picture = None    # путь к фото (задание «опиши фото»)
         self.photo = None      # PhotoImage: держим ссылку, иначе Tk её съест
         self.picture_lbl = None  # tk.Label с фото внутри облачка
+        self.spans = []        # раскраска текста: [(начало, конец, стиль)]
 
 
 class ChatView(ctk.CTkFrame):
@@ -125,6 +145,7 @@ class ChatView(ctk.CTkFrame):
                          border_width=0,
                          height=140)   # запрос «минимум», растёт за счёт expand
         self.palette = palette
+        self._last_user_mark = None   # метка последней реплики ученика (§43)
         self.on_replay = on_replay    # callback(text) — озвучить реплику повторно
         # callback(текст_реплики, позиция) → {"en","ru",…} | None.
         # Подсказки есть и в репликах УЧЕНИКА (решение 25.10.2026): на письме
@@ -201,7 +222,7 @@ class ChatView(ctk.CTkFrame):
     # =====================================================
     # Публичный API (его зовут ui/app.py и тесты)
     # =====================================================
-    def add_message(self, sender, text, stamp=None, picture=None):
+    def add_message(self, sender, text, stamp=None, picture=None, spans=None):
         """Добавить реплику. Возвращает метку (только для реплик преподавателя).
 
         Метка нужна, чтобы потом включить кнопку «прослушать повторно»
@@ -216,6 +237,8 @@ class ChatView(ctk.CTkFrame):
         mark = "msg_%d" % self._seq
         msg = _Message(mark, sender, text, is_user)
         msg.picture = picture
+        # раскраска кусков текста (§43): [(начало, конец, "err"/"ok"/"warn")]
+        msg.spans = _clean_spans(spans)
         self._messages[mark] = msg
         self._order.append(mark)
 
@@ -223,7 +246,11 @@ class ChatView(ctk.CTkFrame):
             self._wrap_px = self._content_width()
         self._build_bubble(msg, stamp=stamp)
         self._scroll_to_bottom()
-        return None if is_user else mark
+        if is_user:
+            # метка реплики ученика: нужна, чтобы потом подсветить ошибки (§43)
+            self._last_user_mark = mark
+            return None
+        return mark
 
     def update_message(self, mark, text, body_tag="body"):
         """Заменить текст УЖЕ показанной реплики, не добавляя новую.
@@ -236,6 +263,7 @@ class ChatView(ctk.CTkFrame):
         if msg is None or msg.body is None:
             return False
         msg.text = str(text or "")
+        msg.spans = []          # текст другой — старая раскраска не годится
         self._fill_body(msg)
         self._scroll_to_bottom()
         return True
@@ -432,14 +460,26 @@ class ChatView(ctk.CTkFrame):
         # в get() не появляется вовсе (замерено 25.10.2026: «1.0 + 4c» → 1.4,
         # а get() короче на число эмодзи). Без карты выделение уезжает.
         offset_map = [(0, 0)]
+        # Вторая карта — «смещение в ТЕКСТЕ РЕПЛИКИ (msg.text) → символ tk.Text».
+        # Нужна для раскраски (§43): переносы строк в облачке ВСТАВЛЯЮТСЯ (их
+        # нет в тексте реплики), а эмодзи-картинка занимает символ tk.Text.
+        # Без этой карты красное/зелёное съезжало на несколько букв (замер
+        # 26.10.2026: вместо «a bus station» красилось « «a bus stati»).
+        src_map = [(0, 0)]
+        src_text = msg.text or ""
         text_off = 0
         tk_off = 0
+        src_off = 0
         for index, line in enumerate(lines):
             if index:
                 body.insert("end", "\n")
                 text_off += 1
                 tk_off += 1
                 offset_map.append((text_off, tk_off))
+                # перенос строки — свой у реплики или вставленный нами?
+                if src_text.startswith("\n", src_off):
+                    src_off += 1
+                src_map.append((src_off, tk_off))
             for kind, chunk, _w in line:
                 if kind is True:
                     photo = self._emoji.photo(chunk, master=body)
@@ -451,18 +491,25 @@ class ChatView(ctk.CTkFrame):
                                           align=emoji_render.ALIGN,
                                           padx=EMOJI_PAD)
                     tk_off += 1
+                    src_off += len(chunk)
                     offset_map.append((text_off, tk_off))
+                    src_map.append((src_off, tk_off))
                 else:
                     body.insert("end", chunk)
                     text_off += len(chunk)
                     tk_off += len(chunk)
+                    src_off += len(chunk)
                     offset_map.append((text_off, tk_off))
+                    src_map.append((src_off, tk_off))
         try:
             body._gloss_map = offset_map
+            body._src_map = src_map
         except Exception:
             pass
         body.configure(width=width, height=max(1, len(lines)))
         body.configure(state="disabled")
+        # раскраска кусков (ошибки красным, исправления зелёным, §43)
+        self._apply_spans(msg)
         try:
             body._fit_extra = 0        # новый текст — новый отсчёт подгонки
         except Exception:
@@ -470,6 +517,75 @@ class ChatView(ctk.CTkFrame):
         self._schedule_fit(body)
 
     # ---------------- подсказки-переводы по наведению (25.10.2026) --------------
+    # ---------------- раскраска текста (§43, 26.10.2026) ----------------
+    # Ученик попросил: ошибки в его тексте — КРАСНЫМ, исправленные слова —
+    # ЗЕЛЁНЫМ, чтобы сразу бросалось в глаза. Цвета берём из theme.py
+    # ("err" / "ok"), поэтому тёмная и светлая темы обе читаемые.
+    SPAN_TAGS = {"err": "span_err", "ok": "span_ok", "warn": "span_warn"}
+
+    def _src_index(self, body, offset):
+        """Смещение в ТЕКСТЕ РЕПЛИКИ → индекс tk.Text (переносы и эмодзи учтены)."""
+        offset = max(0, int(offset or 0))
+        table = getattr(body, "_src_map", None) or [(0, 0)]
+        src_off, tk_off = table[0]
+        for s_off, k_off in table:
+            if s_off <= offset:
+                src_off, tk_off = s_off, k_off
+            else:
+                break
+        try:
+            return body.index("1.0 + %dc" % (tk_off + max(0, offset - src_off)))
+        except Exception:
+            return "1.0 + %dc" % offset
+
+    def _apply_spans(self, msg):
+        """Покрасить куски текста реплики (смещения — в ЧИСТОМ тексте).
+
+        Смещения считаются по тексту реплики, а картинки-эмодзи в индексах
+        tk.Text занимают один символ, поэтому перевод делаем через
+        `_text_index` (та же карта, что у подсветки слов при наведении).
+        """
+        body = getattr(msg, "body", None)
+        if body is None:
+            return 0
+        for tag in self.SPAN_TAGS.values():
+            try:
+                body.tag_remove(tag, "1.0", "end")
+            except Exception:
+                pass
+        applied = 0
+        for start, end, style in (getattr(msg, "spans", None) or ()):
+            tag = self.SPAN_TAGS.get(style)
+            color = self.palette.get(style)
+            if not tag or not color:
+                continue
+            try:
+                body.tag_config(tag, foreground=color)
+                body.tag_add(tag, self._src_index(body, start),
+                             self._src_index(body, end))
+                applied += 1
+            except Exception:
+                continue
+        return applied
+
+    def mark_message(self, mark, spans):
+        """Раскрасить УЖЕ показанную реплику (например, ошибки ученика).
+
+        Возвращает True, если хоть один кусок покрашен. Неизвестная метка и
+        пустой список — тихое False: проверка не должна ломать чат.
+        """
+        msg = self._messages.get(mark)
+        if msg is None or msg.body is None:
+            return False
+        msg.spans = _clean_spans(spans)
+        if not msg.spans:
+            return False
+        return self._apply_spans(msg) > 0
+
+    def last_user_mark(self):
+        """Метка последней реплики ученика (None, если её ещё не было)."""
+        return self._last_user_mark
+
     def _bind_hover(self, body):
         """Наведение на слово в облачке (любом — теперь и у ученика)."""
         body.bind("<Motion>", lambda e, b=body: self._gloss_motion(b, e), add="+")
@@ -1002,6 +1118,7 @@ class ChatView(ctk.CTkFrame):
     def apply_theme(self, palette):
         """Перекрасить чат под новую палитру (тёмная ↔ светлая)."""
         self.palette = palette
+        self._last_user_mark = None   # метка последней реплики ученика (§43)
         self.configure(fg_color=palette["chat_bg"])
         self.canvas.configure(bg=palette["chat_bg"])
         self.list_frame.configure(fg_color=palette["chat_bg"])
