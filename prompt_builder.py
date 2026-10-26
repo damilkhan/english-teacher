@@ -474,7 +474,38 @@ def _hesitation_block(flag):
     """Блок про запинки. Пусто, если выключен (промпт прежний байт-в-байт)."""
     return HESITATION_BLOCK if flag else ""
 
-def build_system_prompt(mode, profile, lang="en", level=None, student=None, context=None, plan=None, lesson=None, now=None, variety=False, english_only=False, words=None, american=False, teacher=None, exam=False, exam_questions=None, hesitation=False, exam_asked=None):
+
+# ---------- значения и формы слов при исправлении (26.10.2026) ----------
+# Живой случай: ученик написал «I go to lie down» (лечь), а память подсказала
+# ему «lie — лгать» — и он решил, что исправление неверное. Ответ был верен,
+# но объяснения не было. Решение ученика: правило ОБЩЕЕ для всех слов
+# (lie/lay, left, bank, watch…), а не только про lie.
+# ВАЖНО: блок включается флагом (как запинки) — без флага вывод
+# build_system_prompt остаётся прежним байт-в-байт (tests/smoke_test).
+WORD_FORMS_BLOCK = """
+\n\U0001F4D6 WORD MEANINGS AND WORD FORMS - BE EXACT:
+One English word can have several meanings (lie = to be flat / to say
+something untrue; lay = to put down; left = direction / went away; right,
+bank, bear, book, watch, date, spring, can, light). Before you correct a
+word, make sure YOUR meaning is the same as the meaning the student had.
+- If the word also means something else, name the meaning you mean in ONE
+  short line: "lie down = to get into a flat position (a lie = something
+  untrue)".
+- Never replace the student's word with a word that means something else.
+- When a verb form is wrong, show the forms: lie - lay - lain (to be flat),
+  lie - lied - lied (to say something untrue).
+- If the standard and the colloquial form differ (lie down / lay down), say
+  in one line which one is standard, and do not repeat that correction in
+  later replies.
+Then go on with the lesson: one short sentence, not a grammar lecture.
+"""
+
+
+def _word_forms_block(flag):
+    """Блок «значения и формы слов». Пусто, если выключен (промпт прежний)."""
+    return WORD_FORMS_BLOCK if flag else ""
+
+def build_system_prompt(mode, profile, lang="en", level=None, student=None, context=None, plan=None, lesson=None, now=None, variety=False, english_only=False, words=None, american=False, teacher=None, exam=False, exam_questions=None, hesitation=False, exam_asked=None, word_forms=False):
     """Собирает system-промпт (персона + профиль ученика).
 
     mode:    'lesson' | 'free'
@@ -558,6 +589,7 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
             + _american_block(american)
             + _plan_block(plan) + _knowledge_block(context)
             + _hesitation_block(hesitation)
+            + _word_forms_block(word_forms)
             + _words_block(words)
             + _exam_block(exam, exam_questions, exam_asked))
 
