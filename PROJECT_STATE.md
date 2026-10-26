@@ -3244,7 +3244,11 @@ replies >= reply_target`. План реплик работал как обрыв
 
 - Вживую в окне НЕ проверено: `Профиль → Статистика` (нужен перезапуск
   `run_teacher.bat`), и строка карты в плане урока.
-- **Долг в данных:** 2 заведомо ложные правки в профиле
-  (`once a month → once last weekend`, `some way pancakes → some pancakes`).
-  Удаление ученик НЕ подтверждал — спросить.
+- ~~Долг в данных~~ **ЧИСТКА СДЕЛАНО 26.10.2026** (ученик подтвердил):
+  2 заведомо ложные правки удалены и из JSON, и из SQLite —
+  `once a month → once last weekend`, `some way pancakes → some pancakes`.
+  Стало: грамматика 18 (было 20), лексика 2, база 20 записей (было 22).
+  Бэкапы рядом: `profiles/user_1_progress.json.bak-before-clean`,
+  `profiles/stats_1.db.bak-before-clean` (в `.gitignore`, в git не идут).
+  Скрипт `logs/_clean_fake_mistakes.py` (не в git).
 - Кнопку «не ошибка», задания из карты и блок в обычном чате — по-прежнему НЕ делаем.
