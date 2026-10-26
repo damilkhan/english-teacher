@@ -75,11 +75,12 @@ def test_changes():
     check("первая строка — исправленный текст",
           data["lines"][0].startswith("Better: ") and "bus stop" in data["lines"][0],
           data["lines"][:1])
-    check("правки идут строками «· »",
-          all(line.startswith("·") for line in data["lines"][1:]),
-          data["lines"])
-    check("правок в списке не больше MAX_NOTES (или есть «+N more»)",
-          len(data["lines"]) - 1 <= photo_check.MAX_NOTES + 1, data["lines"])
+    # 26.10.2026: списка правок больше нет — только исправленное предложение,
+    # где зелёным горят изменённые слова (см. проверку [9]).
+    check("списка правок нет — одна строка с исправленным текстом",
+          len(data["lines"]) == 1, data["lines"])
+    check("строк «· add …» больше не печатаем",
+          "\u00b7" not in data["text"], data["text"])
     check("длинная правка обрезается с «…»",
           "\u2026" in photo_check._short(" ".join(["word"] * 20)),
           photo_check._short(" ".join(["word"] * 20)))
@@ -305,11 +306,22 @@ def test_spans():
     check("раскраска есть", len(data["spans"]) >= 2, data["spans"])
     good = [text[a:b] for a, b, st in data["spans"] if st == "ok"]
     bad = [text[a:b] for a, b, st in data["spans"] if st == "err"]
-    check("исправленный текст красится целиком",
-          any(piece.startswith("I see a bus stop") for piece in good), good)
-    check("верный вариант правки зелёный",
-          any("standing" in piece for piece in good), good)
-    check("неверное слово красное", any("staying" in piece for piece in bad), bad)
+    check("исправленные слова зелёные (standing, a bus stop, It is)",
+          "standing" in good and "a bus stop" in good and "It is" in good, good)
+    check("весь текст целиком НЕ зелёный",
+          not any(piece.startswith("I see a bus stop in this photo")
+                  for piece in good), good)
+    check("в тексте Вербота красного нет (ошибки красные у ученика)",
+          bad == [], bad)
+    # Живой случай 26.10.2026: в тексте ученика не было ОШИБКИ, не хватало
+    # слов «It is» — их надо вставить в его же предложение и покрасить.
+    one = photo_check.report(
+        "They are staying near the bus. Possible they are waiting when doors open",
+        "They are staying near the bus. It is possible they are waiting"
+        " when doors open")
+    pieces = [one["text"][a:b] for a, b, st in one["spans"] if st == "ok"]
+    check("недостающие слова вставлены в предложение и зелёные",
+          pieces == ["It is"], (pieces, one["text"]))
     check("все куски внутри текста",
           all(0 <= a < b <= len(text) for a, b, _ in data["spans"]),
           data["spans"])

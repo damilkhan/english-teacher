@@ -84,19 +84,20 @@ def main():
     green = tagged(body, "span_ok")
     red = tagged(body, "span_err")
     check("зелёное есть", bool(green), green)
-    check("красное есть", bool(red), red)
+    # 26.10.2026: в тексте Вербота красного не бывает — красные только
+    # ошибки в реплике самого ученика (ниже, раздел [2]).
+    check("в тексте Вербота красного нет", red == "", red)
     check("цвет зелёного из theme.DARK",
           tag_color(body, "span_ok").lower() == theme.DARK["ok"].lower(),
           tag_color(body, "span_ok"))
-    check("цвет красного из theme.DARK",
-          tag_color(body, "span_err").lower() == theme.DARK["err"].lower(),
-          tag_color(body, "span_err"))
+    # цвет красного проверяем в реплике ученика (раздел [2]):
+    # у Вербота красного больше нет
     # перенос строки в облачке — ВСТАВЛЕННЫЙ, поэтому сравниваем без него
-    check("весь исправленный текст зелёный",
-          " ".join(green.split()).startswith(" ".join(data["corrected"].split())),
-          (green, data["corrected"]))
-    check("красное — это слово ученика",
-          "staying" in red or "station" in red, red)
+    # Только изменённые слова зелёные, а не весь текст (просьба ученика).
+    check("зелёное — это правки Вербота (standing, a bus stop)",
+          "standing" in green and "a bus stop" in green, green)
+    check("весь текст целиком НЕ зелёный",
+          not " ".join(green.split()).startswith("Better: I see"), green)
     check("цвета в правках не пересекаются",
           all(a <= b for a, b in zip([r for r in _ranges(body, "span_ok")],
                                      [s for s in _ranges(body, "span_err")]))
@@ -116,6 +117,9 @@ def main():
     user_body = view._messages[user_mark].body
     user_red = tagged(user_body, "span_err")
     check("красное появилось в реплике ученика", bool(user_red), user_red)
+    check("цвет красного из theme.DARK",
+          tag_color(user_body, "span_err").lower() == theme.DARK["err"].lower(),
+          tag_color(user_body, "span_err"))
     check("красное — куски его текста",
           "staying" in user_red and "a bus station" in user_red, user_red)
 

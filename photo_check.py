@@ -211,60 +211,61 @@ def _find_run(items, target, after):
     return None
 
 
+def corrected_spans(original, corrected, offset=0):
+    """Зелёные куски в исправленном тексте: ТОЛЬКО то, что изменил Вербот.
+
+    Просьба ученика 26.10.2026: не приписывать правки списком, а показывать
+    его же предложение, где вставленные и заменённые слова горят зелёным
+    («It is possible …» — значит «It is» зелёное, остальное обычное).
+    Смещения — в тексте corrected, сдвинутые на offset (учёт «Better: »).
+
+    Удалённые слова зелёными быть не могут: в новом тексте их просто нет.
+    Свои ошибки ученик видит красным в своей реплике (spans_for_changes).
+    """
+    before = words(original)
+    places = [(m.start(), m.end(), m.group(0).lower())
+              for m in _WORD_RE.finditer(str(corrected or ""))]
+    if not before or not places:
+        return []
+    after = [place[2] for place in places]
+    ops = difflib.SequenceMatcher(None, before, after,
+                                   autojunk=False).get_opcodes()
+    spans = []
+    for tag, _i1, _i2, j1, j2 in ops:
+        if tag == "equal" or j2 <= j1:
+            continue                    # удаление: показывать нечего
+        spans.append((offset + places[j1][0], offset + places[j2 - 1][1], "ok"))
+    return spans
+
+
 def chat_message(data):
     """Готовое сообщение для чата: {"text", "lines", "spans", "spoken"}.
 
-    Текст БЕЗ эмодзи в начале: раскраска считается по смещениям, а эмодзи в
-    облачке — картинка и в индексах tk.Text занимает один символ. Цвет и
-    так бросается в глаза, поэтому «\u270f» здесь не нужен.
+    Показываем ИСПРАВЛЕННОЕ ПРЕДЛОЖЕНИЕ ученика («Better: …»), где зелёным
+    горят только слова, которые изменил Вербот. Отдельного списка правок
+    нет: ученик (26.10.2026) просил вставлять недостающие слова в его же
+    текст, а не печатать «· add «it is»» рядом.
 
-    spans: исправленный текст — зелёный ("ok"), неверные куски — красный
-    ("err"), верные — зелёный. spoken — что произнести голосом.
+    data["original"] — текст ученика: без него не понять, что зеленить.
+    Текст БЕЗ эмодзи: раскраска считается по смещениям, а эмодзи в облачке —
+    картинка и в индексах tk.Text занимает один символ.
+
+    spoken — что произнести голосом (только исправленный текст).
     """
     data = data or {}
     empty = {"text": "", "lines": [], "spans": [], "spoken": ""}
     if not data.get("ok"):
         return dict(empty)
     corrected = str(data.get("corrected") or "").strip()
-    changes = data.get("changes") or []
     if not corrected:
         return dict(empty)
-    if not changes:
+    if not data.get("changes"):
         return {"text": GOOD_NOTE, "lines": [GOOD_NOTE], "spans": [],
                 "spoken": SPOKEN_GOOD}
     prefix = "Better: "
-    lines = [prefix + corrected]
-    spans = [(len(prefix), len(prefix) + len(corrected), "ok")]
-    shown = 0
-    for item in changes:
-        if shown >= MAX_NOTES:
-            break
-        wrong = _short(item.get("wrong") or "")
-        right = _short(item.get("right") or "")
-        if wrong and right:
-            line = "\u00b7 %s \u2192 %s" % (wrong, right)
-        elif right:
-            line = "\u00b7 add \u00ab%s\u00bb" % right
-        else:
-            line = "\u00b7 remove \u00ab%s\u00bb" % wrong
-        base = sum(len(x) + 1 for x in lines)
-        lines.append(line)
-        if wrong and right:
-            spans.append((base + 2, base + 2 + len(wrong), "err"))
-            tail_at = base + 2 + len(wrong) + len(" \u2192 ")
-            spans.append((tail_at, tail_at + len(right), "ok"))
-        elif right:
-            at = line.index("\u00ab") + 1
-            spans.append((base + at, base + at + len(right), "ok"))
-        elif wrong:
-            at = line.index("\u00ab") + 1
-            spans.append((base + at, base + at + len(wrong), "err"))
-        shown += 1
-    rest = len(changes) - shown
-    if rest > 0:
-        lines.append("\u00b7 +%d more" % rest)
-    text = "\n".join(lines)
-    return {"text": text, "lines": lines, "spans": spans,
+    text = prefix + corrected
+    spans = corrected_spans(data.get("original") or "", corrected, len(prefix))
+    return {"text": text, "lines": [text], "spans": spans,
             "spoken": "Better. %s" % corrected}
 
 
@@ -278,7 +279,8 @@ def report(original, corrected):
         return {"ok": False, "corrected": corrected, "changes": [],
                 "text": "", "lines": [], "spans": [], "spoken": ""}
     changes = word_changes(original, corrected)
-    data = {"ok": True, "corrected": corrected, "changes": changes}
+    data = {"ok": True, "original": original, "corrected": corrected,
+            "changes": changes}
     data.update(chat_message(data))
     return data
 
