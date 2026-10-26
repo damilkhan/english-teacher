@@ -33,6 +33,7 @@ import character
 import commands
 import config
 import exam as exam_mod
+import gaps
 import glossary
 from controllers.glossary_controller import GlossaryController
 import lesson as lesson_mod
@@ -42,6 +43,7 @@ import photo_check
 import picture_task
 import profile_store
 import ru_text
+import stats_store
 import progress_map
 import reactions
 import server_manager
@@ -1037,6 +1039,60 @@ class EnglishTeacherApp:
             ctk.CTkLabel(box, text=str(value), anchor="w", justify="left",
                          wraplength=520, font=theme.FONT_UI,
                          text_color=p["text"]).pack(anchor="w", padx=6)
+        self._build_stats_section(box, p, profile)
+
+    def _build_stats_section(self, box, p=None, profile=None):
+        """«Статистика» в профиле: таблица «Правило · Раз · Примеры» (§46).
+
+        Считаем по базе stats_store (SQLite), а не по JSON: в JSON история
+        обрезана до 20 записей на тип, а карте пробелов нужен весь счёт.
+        Сетка из CTkLabel, НЕ treeview — у нас своя тёмная тема и шрифты.
+        Красный счёт = правило встречалось 2+ раза (пробел).
+        """
+        p = p or self.palette
+        user_id = (self.current_user or {}).get("id")
+        try:
+            # первый заход: перенести ошибки из JSON в таблицу (§46), иначе
+            # ученик увидит «пусто» при 20 записанных ошибках в профиле
+            stats_store.ensure_migrated(
+                profile if profile is not None else self._active_profile(), user_id)
+        except Exception as exc:
+            print("Статистика: перенос из профиля не удался (%s)" % exc)
+        try:
+            rows = gaps.table_rows(user_id)
+        except Exception as exc:
+            print("Статистика не прочитана: %s" % exc)
+            rows = []
+        ctk.CTkLabel(box, text="📊 Статистика", anchor="w",
+                     font=theme.FONT_SECTION,
+                     text_color=p["muted"]).pack(anchor="w", padx=6, pady=(18, 0))
+        if not rows:
+            ctk.CTkLabel(box, text="Пока пусто: ошибок ещё не было.",
+                         anchor="w", font=theme.FONT_UI,
+                         text_color=p["text"]).pack(anchor="w", padx=6)
+            return
+        grid = ctk.CTkFrame(box, fg_color="transparent")
+        grid.pack(anchor="w", fill="x", padx=4, pady=(2, 6))
+        for col, title in enumerate(("Правило", "Раз", "Примеры")):
+            ctk.CTkLabel(grid, text=title, anchor="w", font=theme.FONT_UI,
+                         text_color=p["muted"]).grid(row=0, column=col, sticky="w",
+                                                    padx=(0, 10), pady=(0, 4))
+        for line, item in enumerate(rows, start=1):
+            tally = str(item.get("count", 0))
+            ctk.CTkLabel(grid, text=str(item.get("label") or item.get("rule")),
+                         anchor="w", font=theme.FONT_UI,
+                         text_color=p["text"]).grid(row=line, column=0, sticky="w",
+                                                    padx=(0, 10))
+            ctk.CTkLabel(grid, text=tally, anchor="w", font=theme.FONT_UI,
+                         text_color=p["warn"] if item.get("gap") else p["text"]
+                         ).grid(row=line, column=1, sticky="w", padx=(0, 10))
+            ctk.CTkLabel(grid, text=str(item.get("examples") or "—"), anchor="w",
+                         justify="left", wraplength=300, font=theme.FONT_UI,
+                         text_color=p["muted"]).grid(row=line, column=2, sticky="w")
+        ctk.CTkLabel(box, text="Красный счёт — пробел: правило встречалось 2+ раза.",
+                     anchor="w", justify="left", wraplength=520,
+                     font=theme.FONT_UI,
+                     text_color=p["muted"]).pack(anchor="w", padx=6, pady=(0, 4))
 
     def _refresh_side_views(self):
         """Обновить «Карту» и «Профиль» (после смены ученика и т. п.)."""
