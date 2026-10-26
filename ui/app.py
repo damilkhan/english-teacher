@@ -21,6 +21,7 @@
 # карточки на градиенте. Размеры пересчитываются в _layout().
 # =========================================================
 
+import os
 import threading
 import time
 import tkinter as tk
@@ -271,6 +272,8 @@ class EnglishTeacherApp:
         self.active_panel = None      # "settings" | "users" | None
         self.busy = False
         self._speech_busy = False    # идёт озвучка: модель на перевод не зовём
+        # §41: состояние, которое МЫ поставили ради движения рта во время речи
+        self._face_auto = None
         self.server_state = "offline"
         self.server_ready = False
         self.stt_state = "loading"      # loading | ready | error
@@ -413,6 +416,9 @@ class EnglishTeacherApp:
         # (баг 25.10.2026: итог влезал РАНЬШЕ реплики и обрывал озвучку).
         self._reply_in_flight = False
         self._deferred_finish = None    # сессия урока, ждущая конца ответа
+        # ...и до какого момента ждём конца ОЗВУЧКИ (баг 26.10.2026: итог
+        # показывался, пока реплика ещё звучала, и глушил её).
+        self._deferred_deadline = None
         # §36: задания урока. _lesson_payload — словарь урока для промпта
         # (title/topic/task/exam + номер задания и фаза), _last_student_text —
         # за какую реплику пришёл разбор Аналитика (зачёт по варианту Б).
@@ -1161,7 +1167,7 @@ class EnglishTeacherApp:
 
         # закрытый урок (предыдущий не пройден) не начинаем — даже если
         # id пришёл не из окна блока (защита в глубине)
-        if self._lesson_is_locked(data["id"]):
+        if self._lesson_is_locked(data["id"]) and not self._test_tail_flag():
             self.add_message(self.teacher_name, LESSON_LOCKED_NOTE)
             return None
 
@@ -1260,6 +1266,10 @@ class EnglishTeacherApp:
         if session is None:
             return None
 
+        # 🧪 ТЕСТ (временный): флаг-файл ставит урок на последний шаг
+        if self._test_tail_flag():
+            self._jump_to_lesson_tail(session)
+
         # занятие — это учёба: режим Джейн «урок» (без служебной строки в чат)
         self.mode = "lesson"
         self.chat.set_mode("lesson")
@@ -1324,6 +1334,65 @@ class EnglishTeacherApp:
                 lambda: self._open_lesson_dialog(lesson_payload, student_text),
                 on_timeout=self._lesson_server_timeout)
         return session
+
+    @staticmethod
+    def _test_tail_flag():
+        """Включён ли 🧪 тестовый режим «сразу конец урока» (см. config)."""
+        path = getattr(config, "LESSON_TEST_TAIL_FLAG", "")
+        try:
+            return bool(path) and os.path.exists(path)
+        except Exception:
+            return False
+
+    def _test_lesson_id(self):
+        """🧪 Тест: ЛЮБОЙ обычный урок (не экзамен) — первый по карте.
+
+        Закрытость и «пройдено» намеренно не смотрим: прогресс ученика уже
+        ушёл вперёд (1.1–1.3 пройдены, дальше экзамен 1.4), а проверить надо
+        ОБЫЧНОЕ занятие с тремя заданиями и фото в конце.
+        """
+        try:
+            order = list(getattr(self.progress_map, "_lesson_order", []) or [])
+        except Exception as exc:
+            print("⚠️ Тест: карта не прочиталась (%s)" % exc)
+            return ""
+        for lesson_id in order:
+            data = self._lesson_data(lesson_id) or {}
+            if lesson_mod.is_check_lesson(data.get("type")):
+                continue                    # экзамен пропускаем
+            return lesson_id
+        return ""
+
+    def _jump_to_lesson_tail(self, session):
+        """🧪 Тест: подвести урок к ПОСЛЕДНЕМУ шагу (задание + реплика).
+
+        Нужен, чтобы проверить конец урока (итог → похвала → фото), не
+        проходя три задания заново. Включается флаг-файлом, в обычной работе
+        не вызывается.
+        """
+        try:
+            if lesson_mod.is_check_lesson(session.lesson_type):
+                print("⚠️ ТЕСТ: это ЭКЗАМЕН, а нужен обычный урок — пропускаю прыжок")
+                return
+            if session.has_tasks:
+                session.tasks_done = max(0, session.tasks_total - 1)
+                session.task_phase = lesson_mod.TASK_ASK
+            # реплик оставляем ОДНУ до страховочного предела (не до плана 12:
+            # план больше не закрывает урок, lesson.py §38)
+            session.replies = max(0, session.hard_reply_limit - 1)
+        except Exception as exc:
+            print("⚠️ Тестовый прыжок в конец урока не удался: %s" % exc)
+            return
+        print("🧪 ТЕСТ: урок сразу на последнем шаге "
+              "(задание %d/%d, реплика %d/%d — осталась одна)"
+              % (session.task_index, session.tasks_total or 0,
+                 session.replies + 1, session.hard_reply_limit))
+        # Сообщение ПО-АНГЛИЙСКИ: русская реплика переключает язык урока
+        # (проверено 26.10.2026 — при русском тексте ответ шёл по-русски).
+        self.add_message(self.teacher_name,
+                         "🧪 TEST MODE: this lesson starts at the LAST step. "
+                         "Answer once and I will show the summary and the "
+                         "photo task.")
 
     def _open_lesson_dialog(self, lesson_payload, student_text=""):
         """Дать Джейн начать занятие (первая реплика урока).
@@ -1502,13 +1571,20 @@ class EnglishTeacherApp:
         # голосом читать нельзя (цель проекта — говорение).
         praise = lesson_summary.praise_text(session)
         self.add_message(self.teacher_name, praise)
-        self._say(praise)
+        # Похвала — тоже ПОСЛЕ речи: tts.speak() глушит текущую реплику, и
+        # последний ответ обрывался на полуслове (баг 26.10.2026).
+        if getattr(self, "_speech_busy", False):
+            self._say_after_current(praise)
+        else:
+            self._say(praise)
         self._end_lesson()
         self._refresh_side_views()
         self._lesson_state("happy")
         # Задание с картинкой — В КОНЦЕ урока (решение ученика): фото
         # приходит репликой преподавателя, ответ голосом или письмом.
-        self._start_picture_task()
+        # Выгружаем ТОЛЬКО когда Вербот досказал: иначе фото и просьба
+        # влезали посреди реплики/похвалы (баг 26.10.2026).
+        self._wait_for_speech(self._start_picture_task)
 
     # ---------- задание с картинкой ----------
     def _picture_level(self):
@@ -1526,8 +1602,10 @@ class EnglishTeacherApp:
             print("ℹ️ Фото для задания не найдено (§18: assets/pictures)")
             return False
         self._picture = task
-        text = ("📷 Новое задание: опиши, что видишь на фото. "
-                "Не меньше %d букв — голосом или письмом."
+        # Текст задания — ПО-АНГЛИЙСКИ (просьба ученика 26.10.2026):
+        # русская реплика учителя в истории переключает урок на русский.
+        text = ("📷 New task: describe what you see in the photo. "
+                "Say or write at least %d letters."
                 % task["threshold"])
         self.add_message(self.teacher_name, text, picture=task["path"])
         try:
@@ -1554,26 +1632,26 @@ class EnglishTeacherApp:
             except Exception:
                 pass
             self.add_message(self.teacher_name,
-                             "✅ Задание принято: %d букв из %d. Молодец!"
+                             "✅ Task accepted: %d letters of %d. Well done!"
                              % (result["letters"], result["threshold"]))
             return True
         self.add_message(self.teacher_name, self._picture_hint(result))
         return True
 
     def _picture_hint(self, result):
-        """Почему описание не принято — простыми словами."""
+        """Почему описание не принято — простыми словами (по-английски)."""
         reason = result.get("reason")
         if reason == "repeated":
-            return ("🔁 Одно слово повторяется слишком часто (%d %%). "
-                    "Опиши то же самое ДРУГИМИ словами."
+            return ("🔁 One word repeats too often (%d %%). "
+                    "Say the same thing in OTHER words."
                     % int(round(result.get("top_share", 0) * 100)))
         if reason == "few_words":
-            return ("🔁 Мало разных слов: %d, а нужно хотя бы %d. "
-                    "Добавь ещё фразы."
+            return ("🔁 Too few different words: %d, need at least %d. "
+                    "Add a couple more phrases."
                     % (result.get("unique", 0), result.get("want_unique", 0)))
         missing = max(0, result["threshold"] - result["letters"])
-        return ("✏️ Пока %d букв из %d — добавь ещё %d. "
-                "Скажи или напиши ещё пару фраз."
+        return ("✏️ %d letters of %d — add %d more. "
+                "Say or write a couple more sentences."
                 % (result["letters"], result["threshold"], missing))
 
     def _on_lesson_aborted(self, session):
@@ -1632,11 +1710,13 @@ class EnglishTeacherApp:
             self._sync_exam_asked()
 
     # ---------- задания урока (§36, 26.10.2026) ----------
-    def _sync_lesson_prompt(self, just_credited=False):
+    def _sync_lesson_prompt(self, just_credited=False, closing=False):
         """Пересобрать словарь урока для промпта (номер задания, фаза).
 
         just_credited=True — задание только что засчитано: преподаватель
         должен СРАЗУ дать следующее (в этой же реплике).
+        closing=True — эта реплика ЗАКРЫВАЕТ урок: спрашивать больше нельзя,
+        только подтвердить ответ и похвалить (просьба ученика 26.10.2026).
         """
         session = self.lesson.current()
         payload = getattr(self, "_lesson_payload", None)
@@ -1650,11 +1730,27 @@ class EnglishTeacherApp:
             return
         if just_credited:
             merged["task_done_now"] = True
+        if closing:
+            merged["lesson_closing"] = True
         self._lesson_payload = merged
         try:
             self.chat.set_lesson(merged)
         except Exception:
             pass
+
+    def _mark_lesson_closing(self):
+        """Реплика закрывает урок → сказать модели «без вопросов»."""
+        session = self.lesson.current()
+        if session is None or not session.is_active:
+            return False
+        try:
+            closing = bool(session.should_finish)
+        except Exception:
+            return False
+        if not closing:
+            return False
+        self._sync_lesson_prompt(closing=True)
+        return True
 
     def _credit_task_by_text(self, text):
         """Вариант В: ученик ПОВТОРИЛ исправление — засчитать задание сразу.
@@ -1699,6 +1795,26 @@ class EnglishTeacherApp:
             self._reply_in_flight = True
         self.lesson.credit_finished()
 
+    def _credit_rest_tasks(self, session):
+        """Урок закрывается по пределу реплик: остаток заданий — с пометкой.
+
+        Решение ученика 26.10.2026 (вариант Б): иначе итог говорил «Заданий:
+        2 из 3», а урок всё равно засчитывался — цифры не сходились.
+        """
+        if session is None or not getattr(session, "has_tasks", False):
+            return 0
+        if getattr(session, "all_tasks_done", False):
+            return 0
+        try:
+            added = session.credit_rest(marked=True)
+        except Exception as exc:
+            print("⚠️ Остаток заданий не засчитан: %s" % exc)
+            return 0
+        if added:
+            print("ℹ️ Предел реплик: заданий добрано с подсказкой — %d" % added)
+        return added
+
+
     def _task_from_analysis(self, result):
         """Вариант Б: разбор Аналитика решает, сдано ли задание (§36).
 
@@ -1732,6 +1848,14 @@ class EnglishTeacherApp:
         if state == lesson_mod.ANSWER_NEEDS_FIX or corrections:
             session.expect_repeat(corrections)
             self._sync_lesson_prompt()   # «ждём верный повтор этой фразы»
+            # первую ошибку попыткой НЕ считаем: попытки — это неудачные
+            # ПОВТОРЫ (иначе 3 ошибки подряд «съедали» задание сразу)
+            return False
+        # Ответ НЕ ПО ЗАДАНИЮ (болтовня, «hello», разбор не удался — unclear):
+        # попытка всё равно считается. Без этого задание висело до самого
+        # предела реплик, и урок закрывался с «Заданий: 2 из 3» (§41).
+        if session.note_task_attempt() >= lesson_mod.MAX_TASK_ATTEMPTS:
+            return self._credit_task(session, text, marked=True)
         return False
 
     # ---------- экзамен ----------
@@ -2302,6 +2426,15 @@ class EnglishTeacherApp:
             self._auto_lesson_used = True          # начинать нечего
             self.add_message(self.teacher_name, ALL_LESSONS_NOTE)
             return False
+        if self._test_tail_flag():
+            # 🧪 ТЕСТ: не ждём реплику ученика — сразу начинаем урок
+            # (он тут же встанет на последний шаг, см. _jump_to_lesson_tail)
+            self._auto_lesson_used = True
+            self._auto_lesson_armed = False
+            test_id = self._test_lesson_id() or lesson_id
+            print("🧪 ТЕСТ: начинаю урок %s сразу (без реплики ученика)" % test_id)
+            self.start_lesson(test_id, auto=True)
+            return True
         self._auto_lesson_armed = True
         print("🎓 Автозапуск урока взведён: следующий — %s" % lesson_id)
         return True
@@ -2496,6 +2629,38 @@ class EnglishTeacherApp:
     # -----------------------------------------------------
     # Эквалайзер «кто говорит»
     # -----------------------------------------------------
+    # Состояния БЕЗ речи (happy / smile / idle …) держат рот ЗАСТЫВШИМ
+    # (StateConfig.static_mouth или talk=False). Если озвучка идёт в таком
+    # состоянии, ученик СЛЫШИТ речь, а рот стоит — живой баг 26.10.2026:
+    # похвала и задание к фото читались «без рта» (лицо было happy, §37/§40).
+    _TALKING_FACE = {"happy": "speak_happy", "smile": "speak_happy",
+                     "scorn": "speak_happy", "sad": "speak_sad",
+                     "angry": "speak_sad", "surprised": "speak_surprised",
+                     "thinking": "speak_thinking", "listening": "speaking",
+                     "idle": "speaking", "story_end": "speaking"}
+    _SPEAKING_STATES = ("speaking", "speak_happy", "speak_sad",
+                        "speak_surprised", "speak_thinking", "speak_story")
+
+    def _keep_mouth_moving(self, char):
+        """Пока идёт озвучка, лицо обязано быть «говорящим» (§41).
+
+        Иначе рот замирает: у happy/smile/idle static_mouth или talk=False.
+        """
+        state = getattr(char, "state", None)
+        if getattr(self, "_speech_busy", False):
+            if state in self._SPEAKING_STATES:
+                return
+            target = self._TALKING_FACE.get(state)
+            if target and self._character_state(target):
+                self._face_auto = target
+        else:
+            # маска, которую мы сами поставили ради речи, — вернуть покой
+            auto = getattr(self, "_face_auto", None)
+            self._face_auto = None
+            if auto and auto == state:
+                self._character_state("idle")
+
+
     def _visual_tick(self):
         """Опрос громкости: 0..100 от озвучки Джейн и от микрофона ученика.
 
@@ -2523,6 +2688,7 @@ class EnglishTeacherApp:
                 speaker, level = self._last_speaker, 0.0
             self._last_speaker = speaker
             self.visualizer.update_level(level, speaker)
+            self._keep_mouth_moving(getattr(self, "character", None))
             char = getattr(self, "character", None)
             if char is not None and getattr(char, "available", False):
                 # не дёргаем лицо, если уровень почти не изменился
@@ -2555,7 +2721,13 @@ class EnglishTeacherApp:
             # §32: итог НЕ встаёт перед озвучкой этого ответа. Поднимаем флаг
             # «ответ ещё звучит» — покажет итог _finish_speech.
             self._reply_in_flight = True
-            self.lesson.finish()
+            self._credit_rest_tasks(session)
+            # credit_rest мог сам закрыть сессию (задания кончились) —
+            # тогда finish() промолчал бы и итог НЕ показался бы
+            if session.is_active:
+                self.lesson.finish()
+            else:
+                self.lesson.credit_finished()
 
         # «актёрская игра»: настроение её собственного текста
         self._start_mood_play(response)
@@ -2904,6 +3076,9 @@ class EnglishTeacherApp:
         self._reply_in_flight = True
         self._last_student_text = text       # за какую реплику придёт разбор
         self._register_lesson_reply(text)    # на экзамене текст нужен для балла
+        # Реплика, которая закрывает урок: спрашивать больше НЕЛЬЗЯ — иначе
+        # бот задаёт новый вопрос и тут же уходит в итог с фото (баг 26.10.2026).
+        self._mark_lesson_closing()
         # §36 (вариант В): ученик повторил исправление — задание сдано ДО
         # ответа учителя, поэтому он сразу даёт следующее в той же реплике.
         self._credit_task_by_text(text)
@@ -2918,7 +3093,19 @@ class EnglishTeacherApp:
         session = getattr(self, "_deferred_finish", None)
         if session is None:
             return
+        # Страховочный таймер мог сработать РАНЬШЕ, чем доиграла реплика
+        # (до первого звука бывает 10 с, плюс сам ответ). Пока Вербот
+        # говорит, итог не показываем — иначе похвала глушит речь на
+        # полуслове (tts.speak сначала делает tts.stop), а фото выгружается
+        # посреди ответа. Живой баг 26.10.2026.
+        if getattr(self, "_speech_busy", False) and self._speech_wait_left() > 0:
+            try:
+                self.window.after(200, self._run_deferred_finish)
+                return
+            except Exception:
+                pass            # окна нет (проверки) — показываем как раньше
         self._deferred_finish = None
+        self._deferred_deadline = None
         self._reply_in_flight = False        # защита от второго откладывания
         self._on_lesson_finished(session)
 
@@ -2944,6 +3131,42 @@ class EnglishTeacherApp:
                 _say_now()          # окна нет (проверки) — говорим сразу
 
         _check(200)
+
+    def _speech_wait_left(self):
+        """Сколько ещё можно ждать конца озвучки (страховка от зависания)."""
+        if getattr(self, "_deferred_deadline", None) is None:
+            margin = getattr(config, "LESSON_SPEECH_WAIT_MS", 90000) / 1000.0
+            self._deferred_deadline = time.monotonic() + margin
+        return self._deferred_deadline - time.monotonic()
+
+    def _wait_for_speech(self, action, step_ms=200):
+        """Выполнить действие, когда озвучка ДОИГРАЕТ (не обрывая реплику).
+
+        tts.speak() в начале глушит предыдущую речь, поэтому итог урока,
+        похвала и задание с фото не должны запускаться, пока Вербот говорит
+        (живой баг 26.10.2026: реплика оборвалась, а задание с фото уже
+        выгрузилось). Страховка: ждём не дольше LESSON_SPEECH_WAIT_MS.
+        """
+        deadline = time.monotonic() + getattr(
+            config, "LESSON_SPEECH_WAIT_MS", 90000) / 1000.0
+
+        def _fire():
+            try:
+                action()
+            except Exception as exc:
+                print("⚠️ Действие после речи не выполнилось: %s" % exc)
+
+        def _tick():
+            if (not getattr(self, "_speech_busy", False)
+                    or time.monotonic() >= deadline):
+                _fire()
+                return
+            try:
+                self.window.after(step_ms, _tick)
+            except Exception:
+                _fire()          # окна нет (проверки) — не ждём
+
+        _tick()
 
     def _run_when_server_ready(self, action, on_timeout=None):
         """Выполнить действие, когда LLM-сервер ответит.
