@@ -237,7 +237,12 @@ struggles, and do not switch to another topic on your own.
 # без него вывод промпта прежний байт-в-байт (smoke_test).
 TASK_CYCLE_TEMPLATE = """
 \U0001F4CB TASKS: this lesson has {total} small tasks, ONE at a time.
-{line}
+{line}{rules}
+"""
+# Общие правила цикла нужны, только пока урок ИДЁТ. На последней реплике и
+# после сдачи всех заданий они противоречат строке фазы («дай следующее
+# задание» против «вопросов больше нет»), поэтому там они не печатаются.
+TASK_RULES = """
 A task counts as DONE only after the student said it correctly. If the student
 made a mistake, give the correct version in one short line and ask them to say
 it again (or to say it in another way). Then wait for the repeat.
@@ -292,9 +297,11 @@ def _task_cycle_block(lesson):
     index = max(1, min(total, index))
     phase = str(lesson.get("task_phase") or "").strip().lower()
     expected = str(lesson.get("repeat_expected") or "").strip()
+    last = index >= total
     if phase == "done":
-        line = ("All %d tasks are done. Praise the student in ONE short line and"
-                " do NOT start a new task: the lesson is over." % total)
+        line = ("All %d tasks are done. Confirm the last answer, praise it in ONE"
+                " short line and do NOT ask ANY question and do NOT start a new"
+                " task: the lesson is over." % total)
     elif phase == "fix" and expected:
         line = ("Task %d of %d is NOT done yet: the student has to repeat your"
                 " correction \"%s\" first. Do not start a new task and do NOT ask"
@@ -305,14 +312,47 @@ def _task_cycle_block(lesson):
                 " corrected version first. Do not start a new task and do NOT ask"
                 " anything else in that reply: just wait for the repeat."
                 % (index, total))
+    elif lesson.get("lesson_closing"):
+        line = ("Task %d of %d. This is the LAST reply of the lesson: confirm the"
+                " student's answer and praise it in ONE short line. Do NOT ask any"
+                " question and do NOT give a new task — the lesson ends now."
+                % (index, total))
     elif lesson.get("task_done_now"):
         line = ("Task %d of %d is DONE. Praise the repeat in three or four words"
                 " and give task %d of %d right now, in this same reply."
                 % (max(1, index - 1), total, index, total))
+    elif last:
+        line = ("Task %d of %d is the LAST task. If the student answered correctly,"
+                " praise it in ONE short line and STOP. If there is a mistake, give"
+                " the correct version in one short line and STOP. Do not add a"
+                " question — the lesson ends after this reply." % (index, total))
     else:
         line = ("You are on task %d of %d: give it now, or wait for the"
                 " student's answer if you already gave it." % (index, total))
-    return TASK_CYCLE_TEMPLATE.format(total=total, line=line)
+    rules = "" if (phase in ("done", "fix") or lesson.get("lesson_closing") or last) else TASK_RULES
+    return TASK_CYCLE_TEMPLATE.format(total=total, line=line, rules=rules)
+
+
+def strip_trailing_question(text):
+    """Отрезать хвостовой вопрос: модель дописывает его после похвалы.
+
+    Ищем ПЕРВЫЙ «?»; если его нет — текст не меняем. Иначе режем по
+    последнему «.» или «!» ПЕРЕД ним (конец похвалы/правки), а если такого
+    знака нет — прямо по «?». Нужно для конца урока (§39): после ВЕРНОГО
+    ответа бот не должен задавать новый вопрос.
+    """
+    if not text:
+        return text
+    q = text.find("?")
+    if q < 0:
+        return text
+    cut = -1
+    for ch in (".", "!"):
+        pos = text.rfind(ch, 0, q)
+        if pos > cut:
+            cut = pos
+    end = cut + 1 if cut >= 0 else q
+    return text[:end].strip()
 
 
 # ---------- дата и время (необязательно) ----------

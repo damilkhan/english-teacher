@@ -277,6 +277,20 @@ class ChatController:
         cleaned = prompt_builder.clean_response(raw)
         if not cleaned:
             cleaned = prompt_builder.fallback_response(lang)
+        # §39: на последнем задании (или при закрытии урока) модель любит
+        # дописывать вопрос после похвалы — отрезаем его, чтобы после
+        # ВЕРНОГО ответа бот не задавал новый вопрос.
+        lesson = self._lesson or {}
+        if isinstance(lesson, dict):
+            try:
+                total = int(lesson.get("tasks_total") or 0)
+                index = int(lesson.get("task_index") or 0)
+            except (TypeError, ValueError):
+                total = index = 0
+            phase = str(lesson.get("task_phase") or "").strip().lower()
+            if (lesson.get("lesson_closing") or phase == "done"
+                    or (total > 0 and index >= total and phase == "ask")):
+                cleaned = prompt_builder.strip_trailing_question(cleaned)
         return True, cleaned
 
     def _ask_model(self, system_prompt, user_text, short_history=False):
