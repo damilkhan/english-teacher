@@ -169,7 +169,7 @@ class BlockPanel(ctk.CTkToplevel):
 
     # -----------------------------------------------------
     def _lesson_row(self, parent, item: Dict[str, Any], p) -> None:
-        """Строка одного урока: номер · название · тип · балл · кнопка «Начать».
+        """Строка одного урока: название · тип · балл · кнопка «Начать».
 
         Закрытый урок (предыдущий не пройден) начать НЕЛЬЗЯ: кнопка серая,
         без нажатия. Балл экзамена пишется рядом с кнопкой.
@@ -207,10 +207,6 @@ class BlockPanel(ctk.CTkToplevel):
         title_lbl = ctk.CTkLabel(row, text=item.get("title") or "", anchor="w",
                                  font=theme.FONT_UI, text_color=p["text"])
         title_lbl.pack(side="left", padx=(4 + 14 * int(item.get("depth") or 0), 0))
-
-        ctk.CTkLabel(row, text=item.get("id") or "", width=58, anchor="w",
-                     font=theme.FONT_SMALL,
-                     text_color=p["muted"]).pack(side="left")
 
     # -----------------------------------------------------
     def _pick(self, lesson_id: str) -> None:

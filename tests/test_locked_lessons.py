@@ -66,6 +66,8 @@ def blank_app(profile=None):
                                     app, point, prof))
     app._lesson_data = (lambda lid, pid=None:
                         EnglishTeacherApp._lesson_data(app, lid, pid))
+    # 🧪 тестовый режим «сразу конец урока»: файла-флага в тестах нет
+    app._test_tail_flag = lambda: False
     return app
 
 
