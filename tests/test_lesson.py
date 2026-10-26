@@ -90,7 +90,15 @@ def main():
     check("старт: 0 из лимита", s.progress == (0, L.DEFAULT_REPLY_TARGET), s.progress)
     check("текст заблокирован (speaking)", s.allows_text() is False and s.allows_voice())
     check("метка урока", s.label() == "Урок 1.1 · Hello / Hi", s.label())
-    check("текст прогресса", s.progress_text() == "0/%d" % s.reply_target)
+    # §36 (26.10.2026): у обычного урока счётчик — ЗАДАНИЯ, а не реплики.
+    # По репликам теперь считаются только экзамен и аудирование.
+    check("прогресс урока — задания: «Задание 1/3»",
+          s.progress_text() == "Задание 1/3", s.progress_text())
+    check("урок-аудирование — по репликам: «0/12»",
+          L.LessonSession("x", lesson_type="listening").progress_text()
+          == "0/12"
+          and L.LessonSession("x", lesson_type="lecture").progress_text()
+          == "Задание 1/3")
 
     st = s.register_reply()
     check("после реплики — 1", st["replies"] == 1, st)

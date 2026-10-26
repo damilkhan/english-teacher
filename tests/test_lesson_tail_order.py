@@ -146,6 +146,8 @@ def test_send_marks_in_flight():
     app = make_app()
     app.chat = types.SimpleNamespace(send=lambda t: app.steps.append("send"))
     app._register_lesson_reply = lambda text: app.steps.append("count")
+    # §36: зачёт задания по тексту — на пустышке ничего не решает
+    app._credit_task_by_text = lambda text: False
     App._send_to_teacher(app, "today i ate flatbread")
     check("порядок: флаг → счёт → отправка",
           app.steps == ["count", "send"] and app._reply_in_flight is True,

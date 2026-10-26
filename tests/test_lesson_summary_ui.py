@@ -102,7 +102,11 @@ check("слово ЭКЗАМЕН в тексте сохранилось",
 
 print("[5] Настоящая сессия занятия даёт те же числа")
 
-session = lesson.LessonSession("city/1.1", block_title="В городе", reply_target=12)
+# §36 (26.10.2026): обычный урок считает ЗАДАНИЯ, а по репликам живут
+# экзамен и аудирование — поэтому «реплики из reply_target» проверяем на
+# уроке-аудировании, а задания — ниже отдельным случаем.
+session = lesson.LessonSession("city/1.1", block_title="В городе",
+                               lesson_type="listening", reply_target=12)
 session.register_reply()
 session.register_reply()
 session.use_hint()
@@ -118,6 +122,30 @@ check("блок из сессии", "Блок «В городе» пройден
 praise = lesson_summary.praise_text(session)
 check("похвала по настоящей сессии", "2 replies" in praise and "2 mistakes" in praise,
       praise)
+
+print("[6] Урок с заданиями: итог и похвала говорят про ЗАДАНИЯ (§36)")
+
+tasks = lesson.LessonSession("city/1.2", lesson_type="speaking", reply_target=12)
+# тексты РАЗНЫЕ: за одну и ту же реплику второй зачёт не даётся (защита
+# от двойного зачёта между вариантами В и Б)
+for said in ("I went to the park", "I came home late", "I met my friend"):
+    tasks.register_reply()
+    tasks.credit_task(said)
+tasks.add_mistakes(1)
+
+task_text = lesson_summary.summary_text(tasks)
+check("заданий 3 из 3", "📋 Заданий: 3 из 3" in task_text, task_text)
+check("без пометки «с подсказкой»", "с подсказкой" not in task_text, task_text)
+check("реплики остались справочно", "🗣 Реплик: 3" in task_text, task_text)
+task_praise = lesson_summary.praise_text(tasks)
+check("похвала про задания", "3 tasks done" in task_praise, task_praise)
+
+marked = lesson.LessonSession("city/1.3", lesson_type="speaking")
+marked.register_reply()
+marked.credit_task("nope", marked=True)
+marked_text = lesson_summary.summary_text(marked)
+check("пометка «с подсказкой: 1» видна",
+      "Заданий: 1 из 3 (с подсказкой: 1)" in marked_text, marked_text)
 
 print()
 if FAILED:
