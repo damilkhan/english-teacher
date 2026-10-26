@@ -174,7 +174,7 @@ def main():
     check("после снятия поле снова редактируемо",
           "disabled" not in str(input_bar._field.cget("state")))
     check("вернулась обычная подсказка",
-          input_bar.textbox.get("0.0", "end-1c") == "Напиши сообщение…",
+          input_bar.textbox.get("0.0", "end-1c") == "Напиши по-английски для чата или по-русски для перевода.",
           input_bar.textbox.get("0.0", "end-1c"))
 
     input_bar.set_locked(True, LOCK_HINT)
