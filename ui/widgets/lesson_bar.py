@@ -117,9 +117,19 @@ class LessonBar(ctk.CTkFrame):
 
 
 def _looks_like_progress(text: str) -> bool:
-    """Похоже на «4/12»? (для аккуратного обновления счётчика)."""
+    """Похоже на «4/12» или «Задание 2/3»? (для аккуратного обновления).
+
+    С 26.10.2026 (§36) у урока с заданиями счётчик подписан словом:
+    «· Задание 2/3». Без этого set_progress добавлял бы второй счётчик,
+    и в полосе висели бы оба.
+    """
     body = str(text or "").strip().lstrip("·").strip()
     if not body:
         return False
     left, sep, right = body.partition("/")
-    return bool(sep) and left.isdigit() and right.isdigit()
+    if not (sep and right.isdigit()):
+        return False
+    if left.isdigit():
+        return True
+    tail = left.split()[-1] if left.split() else ""
+    return tail.isdigit()

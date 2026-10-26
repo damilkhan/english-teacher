@@ -413,6 +413,11 @@ class EnglishTeacherApp:
         # (баг 25.10.2026: итог влезал РАНЬШЕ реплики и обрывал озвучку).
         self._reply_in_flight = False
         self._deferred_finish = None    # сессия урока, ждущая конца ответа
+        # §36: задания урока. _lesson_payload — словарь урока для промпта
+        # (title/topic/task/exam + номер задания и фаза), _last_student_text —
+        # за какую реплику пришёл разбор Аналитика (зачёт по варианту Б).
+        self._lesson_payload = None
+        self._last_student_text = ""
 
         # ---------- карта прогресса ----------
         # curriculum.json читаем ОДИН раз: карта и вкладка «Профиль»
@@ -1266,6 +1271,10 @@ class EnglishTeacherApp:
         lesson_payload = {"title": data.get("title"), "type": data.get("type"),
                           "topic": data.get("topic"), "task": data.get("task"),
                           "exam": bool(data.get("check"))}
+        # §36: без заданий task_prompt() пустой — словарь экзамена и
+        # аудирования не меняется ни на байт.
+        lesson_payload.update(session.task_prompt())
+        self._lesson_payload = dict(lesson_payload)
         try:
             self.chat.set_lesson(lesson_payload)
         except Exception:
@@ -1382,8 +1391,14 @@ class EnglishTeacherApp:
                                    session.progress_text())
 
     def _on_lesson_reply(self, state):
-        if state:
-            self.lesson_bar.set_progress("%d/%d" % (state["replies"], state["target"]))
+        if not state:
+            return
+        # §36: у урока с заданиями полоса показывает ЗАДАНИЯ («Задание 2/3»),
+        # а не реплики; экзамен и аудирование — по-прежнему реплики.
+        session = self.lesson.current()
+        text = (session.progress_text() if session is not None
+                else "%d/%d" % (state["replies"], state["target"]))
+        self.lesson_bar.set_progress(text)
 
     def _finish_exam(self):
         """Экзамен отвечен полностью: итог, запись в профиль, закрытие."""
@@ -1580,6 +1595,8 @@ class EnglishTeacherApp:
         self._story_context = False     # рассказ был частью урока
         self._exam = None               # экзамен закрыт вместе с занятием
         self._exam_pending = []
+        self._lesson_payload = None     # §36: словарь урока больше не нужен
+        self._last_student_text = ""
         try:
             self.chat.set_exam_asked(None)   # счёт вопросов экзамена сброшен
         except Exception:
@@ -1613,6 +1630,109 @@ class EnglishTeacherApp:
         # после реплики ученика номер вопроса сдвинулся (экзамен)
         if exam is not None and exam.is_active:
             self._sync_exam_asked()
+
+    # ---------- задания урока (§36, 26.10.2026) ----------
+    def _sync_lesson_prompt(self, just_credited=False):
+        """Пересобрать словарь урока для промпта (номер задания, фаза).
+
+        just_credited=True — задание только что засчитано: преподаватель
+        должен СРАЗУ дать следующее (в этой же реплике).
+        """
+        session = self.lesson.current()
+        payload = getattr(self, "_lesson_payload", None)
+        if session is None or not isinstance(payload, dict):
+            return
+        merged = dict(payload)
+        try:
+            merged.update(session.task_prompt())
+        except Exception as exc:
+            print("⚠️ Задания урока не попали в промпт: %s" % exc)
+            return
+        if just_credited:
+            merged["task_done_now"] = True
+        self._lesson_payload = merged
+        try:
+            self.chat.set_lesson(merged)
+        except Exception:
+            pass
+
+    def _credit_task_by_text(self, text):
+        """Вариант В: ученик ПОВТОРИЛ исправление — засчитать задание сразу.
+
+        Проверка текстовая (вхождение/difflib), без модели, поэтому вызывается
+        ДО ответа учителя: он уже знает, что задание сдано, и даёт следующее
+        в той же реплике. Синонимы («скажи иначе») этот путь не ловит — для
+        них вариант Б, разбор Аналитика (_task_from_analysis).
+        """
+        session = self.lesson.current()
+        if session is None or not session.is_active or not session.has_tasks:
+            return False
+        try:
+            matched = session.says_fix(text)
+        except Exception as exc:
+            print("⚠️ Проверка повтора сбилась: %s" % exc)
+            return False
+        if not matched:
+            return False
+        return self._credit_task(session, text, marked=False)
+
+    def _credit_task(self, session, text="", marked=False):
+        """Засчитать задание: полоса, промпт, а последнее — закрыть урок."""
+        try:
+            session.credit_task(text, marked=marked)
+        except Exception as exc:
+            print("⚠️ Зачёт задания не получился: %s" % exc)
+            return False
+        self._sync_lesson_prompt(just_credited=True)
+        try:
+            self.lesson_bar.set_progress(session.progress_text())
+        except Exception:
+            pass
+        if session.all_tasks_done:
+            self._close_lesson_after_credit()
+        return True
+
+    def _close_lesson_after_credit(self):
+        """Урок закрылся зачётом задания: итог — ПОСЛЕ речи учителя (§32)."""
+        if getattr(self, "_speech_busy", False):
+            # преподаватель ещё говорит: итог ждёт конца озвучки
+            self._reply_in_flight = True
+        self.lesson.credit_finished()
+
+    def _task_from_analysis(self, result):
+        """Вариант Б: разбор Аналитика решает, сдано ли задание (§36).
+
+        Второго вызова модели НЕТ: те же поля, что и раньше, плюс
+        answer_state. Нужен там, где сравнение текстом бессильно: ученик
+        сказал ту же мысль ДРУГИМИ словами («I am going to» вместо «I will»).
+        """
+        session = self.lesson.current()
+        if session is None or not session.is_active or not session.has_tasks:
+            return False
+        if not result or not result.get("ok"):
+            return False
+        text = getattr(self, "_last_student_text", "")
+        if session.already_credited(text):
+            return False          # этот же ответ уже засчитан по тексту (В)
+        state = str(result.get("answer_state") or "").strip().lower()
+        if session.task_phase == lesson_mod.TASK_FIX:
+            if state == lesson_mod.ANSWER_REPEAT_OK:
+                return self._credit_task(session, text, marked=False)
+            if session.note_task_attempt() >= lesson_mod.MAX_TASK_ATTEMPTS:
+                # ученик так и не повторил верно: засчитываем С ПОМЕТКОЙ,
+                # иначе урок висел бы вечно (решение ученика 26.10.2026)
+                return self._credit_task(session, text, marked=True)
+            return False
+        # фаза «первый ответ»: либо задание сдано, либо просим повторить
+        if state == lesson_mod.ANSWER_CORRECT:
+            return self._credit_task(session, text, marked=False)
+        errors = result.get("errors") or []
+        corrections = [item.get("correct") for item in errors
+                       if isinstance(item, dict)]
+        if state == lesson_mod.ANSWER_NEEDS_FIX or corrections:
+            session.expect_repeat(corrections)
+            self._sync_lesson_prompt()   # «ждём верный повтор этой фразы»
+        return False
 
     # ---------- экзамен ----------
     def _sync_exam_asked(self):
@@ -2432,6 +2552,9 @@ class EnglishTeacherApp:
         exam = self._exam_session()
         if (session is not None and session.is_active and session.should_finish
                 and exam is None):
+            # §32: итог НЕ встаёт перед озвучкой этого ответа. Поднимаем флаг
+            # «ответ ещё звучит» — покажет итог _finish_speech.
+            self._reply_in_flight = True
             self.lesson.finish()
 
         # «актёрская игра»: настроение её собственного текста
@@ -2525,6 +2648,8 @@ class EnglishTeacherApp:
             errors = result.get("errors") or []
             if errors:
                 self._note_mistakes(len(errors))
+        # §36: разбор решает, сдано ли ТЕКУЩЕЕ задание урока (вариант Б)
+        self._task_from_analysis(result)
         # ЭКЗАМЕН: разбор пришёл — теперь можно поставить балл за ответ
         step = self._exam_score_answer(result)
         if step is not None and step.get("finished"):
@@ -2777,7 +2902,11 @@ class EnglishTeacherApp:
         # для балла), но помечаем, что ответ учителя ещё в пути — иначе итог
         # урока встанет раньше ответа (живой баг 25.10.2026).
         self._reply_in_flight = True
+        self._last_student_text = text       # за какую реплику придёт разбор
         self._register_lesson_reply(text)    # на экзамене текст нужен для балла
+        # §36 (вариант В): ученик повторил исправление — задание сдано ДО
+        # ответа учителя, поэтому он сразу даёт следующее в той же реплике.
+        self._credit_task_by_text(text)
         self.chat.send(text)
 
     def _run_deferred_finish(self):

@@ -76,8 +76,20 @@ def summary_text(session, block_title: str = "") -> str:
     if title:
         head += " Блок «%s» пройден целиком!" % title
 
+    tasks_total = _count(session, "tasks_total")
+    tasks_done = _count(session, "tasks_done")
+    tasks_marked = _count(session, "tasks_marked")
+
     lines = [head]
-    if target:
+    if tasks_total:
+        # §36: у урока с заданиями главное — сколько ЗАДАНИЙ сдано, реплики
+        # остаются ниже справочно (решение ученика 26.10.2026).
+        line = "📋 Заданий: %d из %d" % (tasks_done, tasks_total)
+        if tasks_marked:
+            line += " (с подсказкой: %d)" % tasks_marked
+        lines.append(line)
+        lines.append("🗣 Реплик: %d" % replies)
+    elif target:
         lines.append("🗣 Реплик: %d из %d" % (replies, target))
     else:
         lines.append("🗣 Реплик: %d" % replies)
@@ -93,16 +105,33 @@ PRAISE_CLEAN = "Perfect! %d replies and no mistakes at all. Well done!"
 PRAISE_FEW = "Good job! %d replies and only %d %s. Keep it up!"
 PRAISE_MANY = "Nice try! %d replies and %d %s. We will fix them next lesson."
 
+# §36: урок с заданиями хвалим за ЗАДАНИЯ, а не за число реплик.
+# Склонение «1 task / 2 tasks» — как у mistake/mistakes: иначе английский
+# голос прочитает «1 tasks».
+PRAISE_TASKS_CLEAN = "Perfect! %d %s done and no mistakes at all. Well done!"
+PRAISE_TASKS_FEW = "Good job! %d %s done and only %d %s. Keep it up!"
+PRAISE_TASKS_MANY = "Nice try! %d %s done and %d %s. We will fix them next lesson."
+
 
 def praise_text(session) -> str:
     """Короткая английская похвала для голоса (её же видно в чате)."""
     replies = _count(session, "replies")
     mistakes = _count(session, "mistakes")
-    if mistakes <= CLEAN_MISTAKES:
-        return PRAISE_CLEAN % replies
+    # §36: урок с заданиями хвалим за задания, а не за число реплик
+    tasks = _count(session, "tasks_total")
+    done = _count(session, "tasks_done") if tasks else replies
     word = "mistake" if mistakes == 1 else "mistakes"
+    tword = "task" if done == 1 else "tasks"
+    if mistakes <= CLEAN_MISTAKES:
+        if tasks:
+            return PRAISE_TASKS_CLEAN % (done, tword)
+        return PRAISE_CLEAN % replies
     if mistakes <= FEW_MISTAKES:
+        if tasks:
+            return PRAISE_TASKS_FEW % (done, tword, mistakes, word)
         return PRAISE_FEW % (replies, mistakes, word)
+    if tasks:
+        return PRAISE_TASKS_MANY % (done, tword, mistakes, word)
     return PRAISE_MANY % (replies, mistakes, word)
 
 
