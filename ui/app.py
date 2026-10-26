@@ -38,6 +38,7 @@ from controllers.glossary_controller import GlossaryController
 import lesson as lesson_mod
 import lesson_summary
 import model_registry
+import photo_check
 import picture_task
 import profile_store
 import ru_text
@@ -1634,6 +1635,9 @@ class EnglishTeacherApp:
             self.add_message(self.teacher_name,
                              "✅ Task accepted: %d letters of %d. Well done!"
                              % (result["letters"], result["threshold"]))
+            # Грамматику смотрим ВДОГОНКУ и не наказываем за неё: задание уже
+            # засчитано, исправленный вариант придёт отдельной репликой (§42).
+            self._start_picture_check(text)
             return True
         self.add_message(self.teacher_name, self._picture_hint(result))
         return True
@@ -1653,6 +1657,68 @@ class EnglishTeacherApp:
         return ("✏️ %d letters of %d — add %d more. "
                 "Say or write a couple more sentences."
                 % (result["letters"], result["threshold"], missing))
+
+    # ---------- мягкая проверка грамматики описания (§42) ----------
+    def _start_picture_check(self, text):
+        """Проверить грамматику описания — в ФОНЕ, после зачёта задания.
+
+        Задание уже принято по длине (picture_task), поэтому проверка ничего
+        не отменяет: она приходит вдогонку подсказкой. Модель просим вернуть
+        ИСПРАВЛЕННЫЙ ТЕКСТ, изменения считает код (замер §18: так ложных
+        правок почти нет).
+        """
+        if not getattr(config, "PICTURE_CHECK_ENABLED", True):
+            return False
+        if not str(text or "").strip():
+            return False
+        try:
+            threading.Thread(target=self._picture_check_worker, args=(text,),
+                             daemon=True).start()
+        except Exception as exc:
+            print("⚠️ Проверка грамматики не запустилась: %s" % exc)
+            return False
+        return True
+
+    def _picture_check_worker(self, text):
+        """Фон: один короткий запрос к модели за исправленным текстом."""
+        level = (self._picture or {}).get("level") or self._picture_level()
+        try:
+            ok, raw = self.llm.complete(
+                photo_check.build_messages(text, level),
+                max_tokens=getattr(config, "PICTURE_CHECK_MAX_TOKENS", 220),
+                temperature=0.0,
+                timeout=getattr(config, "PICTURE_CHECK_TIMEOUT", 45))
+        except Exception as exc:
+            print("⚠️ Проверка грамматики: %s" % exc)
+            return
+        if not ok:
+            print("⚠️ Проверка грамматики не удалась: %s" % raw)
+            return
+        self._dispatch(lambda: self._apply_picture_check(text, raw))
+
+    def _apply_picture_check(self, text, raw):
+        """Главный поток: показать исправленный текст и запомнить правки.
+
+        Если ответ модели не похож на исправление (переписала текст, ответила
+        пустым) — молчим: лучше тишина, чем чужой текст вместо правки.
+        """
+        data = photo_check.report(text, raw)
+        if not data.get("ok"):
+            print("ℹ️ Проверка грамматики: ответ модели не похож на исправление"
+                  " — не показываю")
+            return
+        self.add_message(self.teacher_name, "\n".join(data["lines"]))
+        self._remember_photo_mistakes(text, data)
+        return data
+
+    def _remember_photo_mistakes(self, text, data):
+        """Правки из описания — в профиль ученика (та же копилка ошибок)."""
+        try:
+            analysis = photo_check.analysis_from(data)
+            user_id = (self.current_user or {}).get("id")
+            profile_store.record_analysis(analysis, text, "", user_id)
+        except Exception as exc:
+            print("⚠️ Ошибки из описания фото не записались: %s" % exc)
 
     def _on_lesson_aborted(self, session):
         """Ученик вышел раньше: урок не засчитан (прогресс уже записан)."""
