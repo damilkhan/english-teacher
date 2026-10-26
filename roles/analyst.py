@@ -25,6 +25,7 @@ import logging
 import re
 from typing import Any, Dict, List, Optional
 
+import gaps
 import profile_store
 
 _log = logging.getLogger(__name__)
@@ -78,7 +79,15 @@ Whether it must be EVALUATED (move_status):
 Rules:
 - ONLY move_type A can be A or P. For Q, S, F, O the status is ALWAYS N.
 - errors: list ONLY real language problems in the student's English.
-  Each item: {"type": "grammar|vocabulary|spelling|pronunciation", "wrong": "...", "correct": "...", "note": "short"}.
+  Each item: {"type": "grammar|vocabulary|spelling|pronunciation", "wrong": "...", "correct": "...", "rule": "...", "note": "short"}.
+  "rule" is ONE word from this closed list (your own labels are not allowed):
+  past_simple, aux_verb, verb_form, word_order, article, preposition, plural,
+  spelling, word_choice, other.
+  past_simple = past tense form; aux_verb = do/does/did, questions, negatives;
+  verb_form = verb form after a modal or wrong -ing/-ed; word_order = order of
+  words; article = a/an/the; preposition = in/on/at and other prepositions;
+  plural = plural of a noun; spelling = letters of a word; word_choice = wrong
+  word or wrong form of a word; other = anything else.
   Use [] if there are no real errors. Never invent errors.
 - Speech hesitations: the student talks ALOUD and may repeat a word or phrase
   ("the park in the park", "I I think"). A repetition, a restart or a stutter is
@@ -181,16 +190,18 @@ def is_disfluency(wrong: Any, correct: Any) -> bool:
     return False
 
 def _clean_errors(value: Any) -> List[Dict[str, str]]:
-    """Нормализует список ошибок: типы, длины, отбрасывает пустое."""
+    """Нормализует список ошибок: типы, правило (§46), длины, пустое."""
     out: List[Dict[str, str]] = []
     if not isinstance(value, list):
         return out
     for item in value[:MAX_ERRORS]:
+        rule = ""
         if isinstance(item, dict):
             wrong = str(item.get("wrong") or "").strip()
             correct = str(item.get("correct") or "").strip()
             etype = str(item.get("type") or "").strip().lower()
             note = str(item.get("note") or "").strip()
+            rule = str(item.get("rule") or "").strip().lower()
         elif isinstance(item, str):
             wrong, correct, etype, note = item.strip(), "", "", ""
         else:
@@ -201,11 +212,15 @@ def _clean_errors(value: Any) -> List[Dict[str, str]]:
             continue            # запинка/повтор — не ошибка
         if etype not in ERROR_TYPES:
             etype = "grammar"
+        # §46: правило из закрытого списка. Модель не назвала — догадка
+        # по паре «было → стало» (иначе грамматика свалится в «прочее»).
+        rule = gaps.normalize_rule(rule) if rule else gaps.guess_rule(wrong, correct)
         out.append({
             "type": etype,
             "wrong": wrong[:80],
             "correct": correct[:80],
             "note": note[:80],
+            "rule": rule,
         })
     return out
 
@@ -285,7 +300,7 @@ class Analyst:
 
     def analyze(self, student_text: str, teacher_reply: str = "",
                 mode: str = "lesson", level: Optional[str] = None,
-                expected: str = "") -> Dict[str, Any]:
+                expected: str = "", gaps_line: str = "") -> Dict[str, Any]:
         """Классифицирует реплику ученика. Не падает: при проблеме — дефолт.
 
         expected — исправление, которое преподаватель попросил повторить
@@ -295,7 +310,7 @@ class Analyst:
         if not str(student_text or "").strip():
             return default_analysis()
         raw = self._ask(self.build_prompt(student_text, teacher_reply, level,
-                                         expected=expected))
+                                         expected=expected, gaps_line=gaps_line))
         parsed = parse_analysis(raw)
         if parsed is None:
             _log.warning("Аналитик: ответ модели не разобран — беру нейтральный дефолт")
@@ -309,7 +324,8 @@ class Analyst:
         return parsed
 
     def build_prompt(self, student_text: str, teacher_reply: str = "",
-                     level: Optional[str] = None, expected: str = "") -> str:
+                     level: Optional[str] = None, expected: str = "",
+                     gaps_line: str = "") -> str:
         """Собирает промпт Аналитика (словарь таксономии встроен в текст)."""
         context_parts: List[str] = []
         if level:
@@ -323,6 +339,11 @@ class Analyst:
         if want:
             context_parts.append("- The teacher asked the student to repeat this"
                                  " correction: \"%s\"" % want[:MAX_REPLY_CHARS])
+        # §46: карта пробелов — СПРАВКА о прошлых ошибках, а не задание
+        # найти их снова. Формулировку запрета даёт gaps.prompt_block.
+        gaps_text = str(gaps_line or "").strip()
+        if gaps_text:
+            context_parts.append(gaps_text)
         context = ("\n" + "\n".join(context_parts) + "\n") if context_parts else ""
         return ANALYST_PROMPT_TEMPLATE % {
             "context": context,

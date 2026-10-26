@@ -264,6 +264,10 @@ def test_chat_controller_integration():
         deadline = time.time() + 5
         while chat.busy and time.time() < deadline:
             time.sleep(0.02)
+        # busy снимается В НАЧАЛЕ _finish, а история и разбор дописываются
+        # после (там теперь ещё и запись в SQLite, §46) — ждём их отдельно
+        while not analyses and time.time() < deadline:
+            time.sleep(0.02)
 
         check("ответ Учителя показан",
               any(s == user_manager.teacher_name() for s, _ in messages), messages)

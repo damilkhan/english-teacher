@@ -154,8 +154,13 @@ def format_plan(plan: Optional[Dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def _profile_summary(profile: Dict[str, Any], level: Optional[str]) -> str:
-    """Короткая сводка профиля ученика для промпта Планировщика."""
+def _profile_summary(profile: Dict[str, Any], level: Optional[str],
+                     gaps_line: str = "") -> str:
+    """Короткая сводка профиля ученика для промпта Планировщика.
+
+    gaps_line — карта пробелов (§46): что ученик чаще всего ломает. Это
+    СПРАВКА для выбора темы урока, а не приказ вставить эти ошибки.
+    """
     profile = profile or {}
     parts: List[str] = []
     if level:
@@ -183,6 +188,10 @@ def _profile_summary(profile: Dict[str, Any], level: Optional[str]) -> str:
         if pairs:
             parts.append("- %s: %s" % (label, "; ".join(pairs)))
 
+    gaps_text = str(gaps_line or "").strip()
+    if gaps_text:
+        parts.append(gaps_text)
+
     covered = [str(t) for t in (profile.get("topics_passed") or [])[-6:] if str(t).strip()]
     if covered:
         parts.append("- Already covered: %s" % ", ".join(covered))
@@ -203,11 +212,12 @@ class Planner:
     format_plan = staticmethod(format_plan)
 
     def plan(self, profile: Dict[str, Any], level: Optional[str] = None,
-             mode: str = "lesson", context: str = "") -> Dict[str, Any]:
+             mode: str = "lesson", context: str = "",
+             gaps_line: str = "") -> Dict[str, Any]:
         """Строит план урока. Не падает: при проблеме — пустой план (ok=False)."""
         if mode != "lesson":
             return default_plan()
-        raw = self._ask(self.build_prompt(profile, level, context))
+        raw = self._ask(self.build_prompt(profile, level, context, gaps_line))
         parsed = parse_plan(raw)
         if parsed is None:
             _log.warning("Планировщик: ответ модели не разобран — пустой план")
@@ -215,12 +225,13 @@ class Planner:
         return parsed
 
     def build_prompt(self, profile: Dict[str, Any], level: Optional[str] = None,
-                     context: str = "") -> str:
+                     context: str = "", gaps_line: str = "") -> str:
         """Собирает промпт Планировщика: шаблон + (методичка) + профиль ученика."""
         context = str(context or "").strip()[:MAX_CONTEXT_CHARS]
         ctx_block = ("\nMETHODOLOGY NOTES (guide the design):\n%s\n" % context) if context else ""
         head = PLANNER_PROMPT_TEMPLATE % {"context": ctx_block}
-        return head + "\nSTUDENT PROFILE:\n" + _profile_summary(profile, level) + "\n"
+        return (head + "\nSTUDENT PROFILE:\n"
+                + _profile_summary(profile, level, gaps_line) + "\n")
 
     def _ask(self, prompt: str) -> Optional[str]:
         """Один вызов модели как ОДНО сообщение пользователя (OpenAI-эндпоинт).

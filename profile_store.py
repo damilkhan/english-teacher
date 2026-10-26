@@ -20,6 +20,8 @@ import os
 from datetime import datetime
 
 import config
+import gaps
+import stats_store
 import user_manager
 import vocabulary
 
@@ -229,7 +231,20 @@ def record_analysis(analysis, user_text, jane_response="", user_id=None):
     if not isinstance(analysis, dict):
         analysis = {}
 
+    # §46: первый запуск — перенести ошибки, накопленные в JSON, в таблицу.
+    # Делаем ДО записи новых: иначе база не пустая и старые записи потерялись бы.
+    if getattr(config, "GAPS_ENABLED", True):
+        try:
+            stats_store.ensure_migrated(profile, user_id)
+        except Exception as exc:
+            print("Статистика: перенос старых ошибок не удался (%s)" % exc)
+
     now = datetime.now().isoformat()
+    # куда пришла ошибка: обычный чат / описание фото / экзамен (§46)
+    source = "photo" if analysis.get("photo") else (
+        "exam" if analysis.get("exam") else "chat")
+    lesson = str(analysis.get("lesson") or analysis.get("lesson_id") or "")[:40]
+    stats_items = []          # те же ошибки — в stats_store (SQLite)
     move_type = str(analysis.get("move_type") or "O")
     move_status = str(analysis.get("move_status") or "N")
     errors = analysis.get("errors") or []
@@ -244,14 +259,28 @@ def record_analysis(analysis, user_text, jane_response="", user_id=None):
             etype = "vocabulary"
         if etype not in ("grammar", "vocabulary", "pronunciation"):
             etype = "grammar"
+        wrong = str(err.get("wrong") or "")[:80]
+        correct = str(err.get("correct") or "")[:80]
+        note = str(err.get("note") or "")[:80]
+        # §46: правило из ЗАКРЫТОГО списка. Правила нет (правки из описания
+        # фото, старые записи) — берём догадку по паре слов, чтобы запись
+        # не свалилась в «прочее» навсегда.
+        rule = gaps.normalize_rule(err.get("rule"))
+        if not str(err.get("rule") or "").strip():
+            rule = gaps.guess_rule(wrong, correct)
         profile["mistakes"][etype].append({
             "date": now,
             "user_text": (user_text or "")[:100],
             "jane_response": (jane_response or "")[:200],
             "type": etype,
-            "wrong": str(err.get("wrong") or "")[:80],
-            "correct": str(err.get("correct") or "")[:80],
-            "note": str(err.get("note") or "")[:80],
+            "wrong": wrong,
+            "correct": correct,
+            "note": note,
+            "rule": rule,
+        })
+        stats_items.append({
+            "date": now, "wrong": wrong, "correct": correct, "note": note,
+            "type": etype, "rule": rule, "source": source, "lesson": lesson,
         })
         profile["mistakes"][etype] = profile["mistakes"][etype][-MAX_ERRORS_PER_TYPE:]
         recorded += 1
@@ -281,6 +310,12 @@ def record_analysis(analysis, user_text, jane_response="", user_id=None):
     profile["analysis_log"] = profile["analysis_log"][-ANALYSIS_LOG_LIMIT:]
 
     save(profile, user_id)          # отмечает конец занятия (+1), как и раньше
+
+    if stats_items and getattr(config, "GAPS_ENABLED", True):
+        try:
+            stats_store.add_mistakes(stats_items, user_id)
+        except Exception as exc:
+            print("Статистика: ошибки не записались (%s)" % exc)
 
     if recorded:
         notes.append("📝 *Разбор: %s/%s · ошибок %d*" % (move_type, move_status, recorded))

@@ -24,6 +24,7 @@ import threading
 from datetime import datetime
 
 import config
+import gaps
 import llm_client
 import profile_store
 import exam as exam_mod
@@ -344,6 +345,26 @@ class ChatController:
             print("⚠️ Слова для промпта не прочитаны: %s" % exc)
             return []
 
+    def _gaps_block(self, for_analyst=False):
+        """Карта пробелов (§46): строка «частые проблемы» для ролей Джейн.
+
+        Планировщику — 1 раз на урок (выбрать тему под пробел).
+        Аналитику — по умолчанию НЕТ: замер 26.10.2026 на 5 ВЕРНЫХ текстах дал
+        1 ложную правку из 25 вызовов, а правило ученика — «хоть одна ложная,
+        строку убрать». Включается флагом GAPS_IN_ANALYST.
+        Пусто → промпт остаётся прежним байт-в-байт. Никогда не бросает.
+        """
+        if not getattr(config, "GAPS_ENABLED", True):
+            return ""
+        flag = "GAPS_IN_ANALYST" if for_analyst else "GAPS_IN_PLANNER"
+        if not getattr(config, flag, not for_analyst):
+            return ""
+        try:
+            return gaps.prompt_block(self.user_id)
+        except Exception as exc:
+            print("Карта пробелов не собрана: %s" % exc)
+            return ""
+
     def _ensure_plan_async(self):
         """Построить план урока В ФОНЕ (не блокируя ответ Учителя).
 
@@ -363,7 +384,8 @@ class ChatController:
             context = self._rag_context("lesson design task cycle feedback scaffolding")
             plan = self.planner.plan(profile_store.load(self.user_id),
                                      level=user.get("level"), mode="lesson",
-                                     context=context)
+                                     context=context,
+                                     gaps_line=self._gaps_block())
             self._plan_text = self.planner.format_plan(plan)
             if self._plan_text:
                 self._dispatch(lambda: self._emit(self.on_plan, self._plan_text))
@@ -414,7 +436,8 @@ class ChatController:
             expected = str((self._lesson or {}).get("repeat_expected") or "")
             return self.analyst.analyze(user_text, teacher_reply=reply,
                                         mode=self.mode, level=level,
-                                        expected=expected)
+                                        expected=expected,
+                                        gaps_line=self._gaps_block(for_analyst=True))
         except Exception as exc:
             print(f"⚠️ Аналитик недоступен: {exc}")
             return None

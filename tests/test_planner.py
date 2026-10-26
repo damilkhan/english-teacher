@@ -211,7 +211,8 @@ def test_chat_integration():
     class StubPlanner:
         def __init__(self):
             self.calls = 0
-        def plan(self, profile, level=None, mode="lesson", context=""):
+        def plan(self, profile, level=None, mode="lesson", context="",
+                 gaps_line=""):
             self.calls += 1
             return {"focus": "Past Simple", "goals": ["g1"],
                     "activities": [{"name": "Warm-up", "task": "talk", "minutes": 3}],
