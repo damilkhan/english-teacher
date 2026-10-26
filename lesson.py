@@ -342,14 +342,34 @@ class LessonSession:
         return (self.replies, self.reply_target)
 
     @property
-    def should_finish(self) -> bool:
-        """Пора завершать: все задания сданы ИЛИ набран лимит реплик.
+    def hard_reply_limit(self) -> int:
+        """Страховочный предел реплик для урока С ЗАДАНИЯМИ.
 
-        Лимит реплик остаётся СТРАХОВКОЙ: если ученик так и не смог
-        повторить (или модель ведёт урок мимо заданий), занятие всё равно
-        закроется, а не повиснет навсегда.
+        reply_target (12) — это ПЛАН занятия. Раньше он же был обрывом: на
+        12-й реплике урок закрывался, даже если ученик стоял посреди задания,
+        и бот «сбегал» из темы (живой баг 26.10.2026: «скажи Hi иначе» → итог
+        и фото). Теперь сверх плана есть запас (LESSON_HARD_REPLY_EXTRA):
+        диалог не рвётся, но и бесконечным не становится.
         """
-        return self.all_tasks_done or self.replies >= self.reply_target
+        if not self.has_tasks:
+            return self.reply_target
+        try:
+            extra = max(0, int(getattr(_config, "LESSON_HARD_REPLY_EXTRA", 8)))
+        except (TypeError, ValueError):
+            extra = 8
+        return self.reply_target + extra
+
+    @property
+    def should_finish(self) -> bool:
+        """Пора завершать: все задания сданы ИЛИ набран страховочный предел.
+
+        Для урока с заданиями лимит-план реплик НЕ закрывает занятие: иначе
+        бот бросает текущее задание на полуслове. Экзамен и аудирование
+        (заданий нет) живут по репликам, как раньше.
+        """
+        if self.has_tasks:
+            return self.all_tasks_done or self.replies >= self.hard_reply_limit
+        return self.replies >= self.reply_target
 
     @property
     def has_tasks(self) -> bool:
@@ -421,7 +441,14 @@ class LessonSession:
         if not self.is_active:
             return self.state()
         self.replies += 1
-        if self.replies >= self.reply_target:
+        # Урок С ЗАДАНИЯМИ закрывает ПРИЛОЖЕНИЕ — после ответа и зачёта
+        # задания. Если закрыть здесь, `is_active` станет False и зачёт
+        # последнего задания не сработает: ученик отвечает верно, а в итоге
+        # «Заданий: 2 из 3» (живой баг 26.10.2026).
+        if self.has_tasks:
+            return self.state()
+        # экзамен и аудирование живут по репликам — как раньше
+        if self.should_finish:
             self.finished = True
         return self.state()
 
@@ -489,6 +516,30 @@ class LessonSession:
         else:
             self.task_phase = TASK_ASK
         return self.state()
+
+    def credit_rest(self, marked: bool = True) -> int:
+        """Засчитать НЕДОДЕЛАННЫЕ задания, когда урок упирается в предел.
+
+        Живой баг 26.10.2026: урок закрылся по страховочному пределу реплик,
+        в итоге «Заданий: 2 из 3», а блок всё равно засчитан — цифры не
+        сходились. Решение ученика (вариант Б): остаток засчитываем С
+        ПОМЕТКОЙ «с подсказкой». Тогда в итоге честно «3 из 3
+        (с подсказкой: 1)», и урок не застревает навсегда.
+
+        Возвращает, сколько заданий добрали.
+        """
+        if not self.is_active or not self.has_tasks:
+            return 0
+        added = 0
+        # потолок — сами задания: защита от бесконечного цикла
+        while not self.all_tasks_done and added <= self.tasks_total:
+            before = self.tasks_done
+            self.credit_task("", marked=marked)
+            if self.tasks_done == before:
+                break
+            added += 1
+        return added
+
 
     def task_prompt(self) -> Dict[str, Any]:
         """Что рассказать модели про задания (пусто — заданий нет).
