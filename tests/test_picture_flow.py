@@ -134,14 +134,14 @@ def test_repeat_and_few():
     app._start_picture_task()
     app._picture_reply("cat " * 60)
     last = texts(app)[-1]
-    check("повтор поймали", "повторяется" in last, last)
-    check("сказано про другие слова", "ДРУГИМИ" in last, last)
+    check("повтор поймали", "repeats too often" in last, last)
+    check("сказано про другие слова", "OTHER words" in last, last)
 
     app2 = make_app()
     app2._start_picture_task()
     app2._picture_reply("one two three one two three " * 10)
     last2 = texts(app2)[-1]
-    check("мало разных слов поймали", "Мало разных слов" in last2, last2)
+    check("мало разных слов поймали", "Too few different words" in last2, last2)
 
 
 def test_good():
@@ -155,7 +155,7 @@ def test_good():
     check("задание закрыто", app._picture is None)
     check("счётчик убран", app.input_bar.counter == 0, app.input_bar.counter)
     last = texts(app)[-1]
-    check("сказано «принято»", "принято" in last, last)
+    check("сказано «принято»", "Task accepted" in last, last)
     check("число букв в ответе", str(res["letters"]) in last, last)
 
 
@@ -177,11 +177,12 @@ def test_handle_text():
 
     finish = source[source.find("def _on_lesson_finished("):]
     finish = finish[:finish.find("def _on_lesson_aborted(")]
+    # 26.10.2026: фото ждёт конца речи учителя — старт через _wait_for_speech
     check("задание стартует в конце обычного урока",
-          "_start_picture_task()" in finish)
+          "_wait_for_speech(self._start_picture_task)" in finish)
     check("в ветках экзамена задания НЕТ",
-          finish.count("_start_picture_task()") == 1,
-          finish.count("_start_picture_task()"))
+          finish.count("self._start_picture_task") == 1,
+          finish.count("self._start_picture_task"))
 
 
 def test_unknown_level():

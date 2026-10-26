@@ -43,6 +43,7 @@ for _stream in (sys.stdout, sys.stderr):
     except Exception:
         pass
 
+import config
 import lesson                                                    # noqa: E402
 import lesson_summary                                            # noqa: E402
 import prompt_builder                                            # noqa: E402
@@ -150,10 +151,22 @@ check("фаза done", q.task_phase == lesson.TASK_DONE, q.task_phase)
 check("полоса «Задание 3/3»", q.progress_text() == "Задание 3/3", q.progress_text())
 check("после закрытия зачёты не идут", q.credit_task("four")["tasks_done"] == 3)
 
+# §38 (26.10.2026): план реплик НЕ обрывает урок с заданиями — он идёт
+# дальше, пока не сданы задания, и закрывается только на СТРАХОВОЧНОМ пределе.
 brake = lesson.LessonSession("1.5", lesson_type="speaking", reply_target=2)
-brake.register_reply()
-brake.register_reply()
-check("лимит реплик остаётся страховкой", brake.finished is True)
+for _ in range(2):
+    brake.register_reply()
+check("на плане реплик урок НЕ закрылся", brake.is_active is True, brake.state())
+check("предел = план + запас", brake.hard_reply_limit == 2 + config.LESSON_HARD_REPLY_EXTRA,
+      brake.hard_reply_limit)
+while brake.is_active:
+    brake.register_reply()
+check("лимит реплик остаётся страховкой (закрылся на пределе)",
+      brake.finished is True and brake.replies == brake.hard_reply_limit,
+      (brake.replies, brake.hard_reply_limit))
+check("экзамен живёт по репликам: предел = план",
+      lesson.LessonSession("x", lesson_type="check").hard_reply_limit
+      == lesson.LessonSession("x", lesson_type="check").reply_target)
 
 print("[7] Промпт: блок заданий и его фаза")
 

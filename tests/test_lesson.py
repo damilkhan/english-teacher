@@ -107,7 +107,10 @@ def main():
 
     # ---------- 4. Автозавершение по лимиту ----------
     print("\n[4] Автозавершение по лимиту")
-    t = L.LessonSession("2.1", lesson_type="speaking", reply_target=3)
+    # 26.10.2026 (§38): у урока с ЗАДАНИЯМИ план реплик больше не закрывает
+    # занятие (бот бросал тему на полуслове) — лимит проверяем на аудировании,
+    # где заданий нет и счёт идёт по репликам, как раньше.
+    t = L.LessonSession("2.1", lesson_type="listening", reply_target=3)
     t.register_reply(); t.register_reply()
     check("2 из 3 — ещё не завершено", t.is_active and not t.finished, t.state())
     t.register_reply()
@@ -116,7 +119,7 @@ def main():
     extra = t.register_reply()
     check("после завершения реплики не считаются", extra["replies"] == 3, extra)
     check("ожидаемое завершение (finish) снимает abort", True)
-    t2 = L.LessonSession("2.2", reply_target=2)
+    t2 = L.LessonSession("2.2", lesson_type="listening", reply_target=2)
     t2.abort(); t2.finish()
     check("finish после abort → завершено и не прервано",
           t2.finished is True and t2.aborted is False, t2.state())
@@ -169,7 +172,9 @@ def main():
     check("сначала занятия нет", ctrl.is_active is False and ctrl.lesson_id is None)
     check("register_reply без занятия → None", ctrl.register_reply() is None)
 
-    sess = ctrl.start("1.1", point_id="point_1", lesson_type="speaking",
+    # §38: у урока с заданиями план реплик не закрывает занятие, поэтому
+    # закрытие по лимиту проверяем на аудировании (счёт по репликам).
+    sess = ctrl.start("1.1", point_id="point_1", lesson_type="listening",
                       title="Hello / Hi", reply_target=2)
     check("старт вернул сессию", sess is not None and sess.lesson_id == "1.1")
     check("занятие активно", ctrl.is_active is True)

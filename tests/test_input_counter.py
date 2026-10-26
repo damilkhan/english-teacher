@@ -6,7 +6,7 @@
 #
 # Живой (скрытый) виджет InputBar:
 #   1) пока задания нет, счётчика не видно;
-#   2) set_counter(N) показывает «0 из N» серым;
+#   2) set_counter(N) показывает «0 of N» серым;
 #   3) буквы считаются по тексту поля и обновляются при вводе;
 #   4) достигнут порог — цвет зелёный (palette["ok"]);
 #   5) clear_counter убирает счётчик;
@@ -60,7 +60,7 @@ def main():
     print("\n[2] Порог включён")
     bar.set_counter(105)
     root.update()
-    check("текст «0 из 105»", bar.counter_text() == "0 из 105", bar.counter_text())
+    check("текст «0 of 105»", bar.counter_text() == "0 of 105", bar.counter_text())
     check("счётчик виден", bool(bar.counter_lbl.place_info()))
     check("цвет серый", str(bar.counter_lbl.cget("fg")) == theme.DARK["muted"],
           bar.counter_lbl.cget("fg"))
@@ -69,7 +69,7 @@ def main():
     bar.set_text("A street with people.")
     bar.set_counter(105)
     root.update()
-    check("«17 из 105»", bar.counter_text() == "17 из 105", bar.counter_text())
+    check("«17 of 105»", bar.counter_text() == "17 of 105", bar.counter_text())
     check("цвет всё ещё серый",
           str(bar.counter_lbl.cget("fg")) == theme.DARK["muted"],
           bar.counter_lbl.cget("fg"))
@@ -78,7 +78,7 @@ def main():
     bar.set_text("There are many shops on the street and people are walking there.")
     bar.set_counter(40)
     root.update()
-    check("текст обновился", bar.counter_text().endswith("из 40"), bar.counter_text())
+    check("текст обновился", bar.counter_text().endswith("of 40"), bar.counter_text())
     check("цвет зелёный", str(bar.counter_lbl.cget("fg")) == theme.DARK["ok"],
           bar.counter_lbl.cget("fg"))
     count = int(bar.counter_text().split()[0])

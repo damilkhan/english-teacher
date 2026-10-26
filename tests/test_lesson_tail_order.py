@@ -104,6 +104,7 @@ def make_app(store=None):
     app.steps = []              # порядок действий
     app._reply_in_flight = False
     app._deferred_finish = None
+    app._deferred_deadline = None
     app._speech_busy = False
     app.window = FakeWindow()
 
@@ -118,9 +119,13 @@ def make_app(store=None):
     app.progress_map = types.SimpleNamespace(
         get_point_state=lambda *a, **k: (_ for _ in ()).throw(KeyError("нет точки")))
 
-    for name in ("_on_lesson_finished", "_run_deferred_finish"):
+    for name in ("_on_lesson_finished", "_run_deferred_finish",
+                 "_say_after_current", "_wait_for_speech",
+                 "_speech_wait_left"):
         setattr(app, name, types.MethodType(getattr(App, name), app))
     app.store = store or FakeStore()
+    # §39: _send_to_teacher помечает «урок закрывается» — здесь пустышка
+    app._mark_lesson_closing = lambda: None
     return app
 
 
