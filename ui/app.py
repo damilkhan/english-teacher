@@ -1608,13 +1608,16 @@ class EnglishTeacherApp:
         text = ("📷 New task: describe what you see in the photo. "
                 "Say or write at least %d letters."
                 % task["threshold"])
-        self.add_message(self.teacher_name, text, picture=task["path"])
+        mark = self.add_message(self.teacher_name, text, picture=task["path"])
         try:
             self.input_bar.set_counter(task["threshold"])
         except Exception:
             pass
-        # Просьбу говорим ПОСЛЕ похвалы: иначе обрываем её на полуслове.
-        self._say_after_current("Look at the photo and describe it, please.")
+        # Просьбу говорим ПОСЛЕ текущей речи (иначе обрываем её на полуслове),
+        # а у самой реплики появляется значок 🔊 — как у прочих ответов (§43).
+        self._say_after_current(
+            "New task. Describe what you see in the photo. Say or write at"
+            " least %d letters." % task["threshold"], mark=mark)
         return True
 
     def _picture_reply(self, text):
@@ -1632,9 +1635,14 @@ class EnglishTeacherApp:
                 self.input_bar.clear_counter()
             except Exception:
                 pass
-            self.add_message(self.teacher_name,
-                             "✅ Task accepted: %d letters of %d. Well done!"
-                             % (result["letters"], result["threshold"]))
+            mark = self.add_message(
+                self.teacher_name,
+                "✅ Task accepted: %d letters of %d. Well done!"
+                % (result["letters"], result["threshold"]))
+            # Голосом тоже: раньше задание было «немым» (§43).
+            self._say_after_current(
+                "Task accepted. %d letters of %d. Well done!"
+                % (result["letters"], result["threshold"]), mark=mark)
             # Грамматику смотрим ВДОГОНКУ и не наказываем за неё: задание уже
             # засчитано, исправленный вариант придёт отдельной репликой (§42).
             self._start_picture_check(text)
@@ -1707,9 +1715,39 @@ class EnglishTeacherApp:
             print("ℹ️ Проверка грамматики: ответ модели не похож на исправление"
                   " — не показываю")
             return
-        self.add_message(self.teacher_name, "\n".join(data["lines"]))
+        # Текст с раскраской (§43): исправления зелёным, неверные куски
+        # красным; голосом читаем ТОЛЬКО исправленный текст, без списка.
+        mark = self.add_message(self.teacher_name, data.get("text") or "",
+                                spans=data.get("spans") or [])
+        spoken = data.get("spoken") or ""
+        if spoken:
+            self._say_after_current(spoken, mark=mark)
+        self._mark_student_text(text, data)
         self._remember_photo_mistakes(text, data)
         return data
+
+    def _mark_student_text(self, text, data):
+        """Подсветить ошибки КРАСНЫМ в реплике самого ученика (§43).
+
+        Ученик просил, чтобы ошибки сразу бросались в глаза: красным в его
+        тексте и зелёным в исправлении. Если метки реплики нет (чат чистили,
+        текст не совпал) — молча выходим: подсветка не обязательна.
+        """
+        view = getattr(self, "chat_view", None)
+        if view is None or not data:
+            return 0
+        try:
+            mark = view.last_user_mark()
+            if not mark or view.message_text(mark) != text:
+                return 0
+            spans = photo_check.spans_for_changes(text, data.get("changes") or [])
+            if not spans:
+                return 0
+            view.mark_message(mark, spans)
+            return len(spans)
+        except Exception as exc:
+            print("⚠️ Подсветка ошибок в реплике ученика: %s" % exc)
+            return 0
 
     def _remember_photo_mistakes(self, text, data):
         """Правки из описания — в профиль ученика (та же копилка ошибок)."""
@@ -2108,13 +2146,16 @@ class EnglishTeacherApp:
     # =====================================================
     # Обратная связь от контроллеров
     # =====================================================
-    def add_message(self, sender, text, picture=None):
+    def add_message(self, sender, text, picture=None, spans=None):
         """Показать реплику; возвращает метку (для Джейн — можно обновить).
 
         picture — путь к фото: реплика показывается с картинкой
         (задание «опиши фото», §18).
+        spans — [(начало, конец, "err"/"ok")] в тексте реплики (§43).
         """
-        mark = self.chat_view.add_message(sender, text, picture=picture)
+        # spans — раскраска текста (§43): ошибки красным, исправления зелёным
+        mark = self.chat_view.add_message(sender, text, picture=picture,
+                                          spans=spans)
         # запоминаем метку последней реплики ПРЕПОДАВАТЕЛЯ: к ней привяжем
         # кнопку «прослушать повторно», когда озвучка закончится. Метку
         # возвращает только преподавательская реплика (для «Вы» — None),
@@ -3175,15 +3216,20 @@ class EnglishTeacherApp:
         self._reply_in_flight = False        # защита от второго откладывания
         self._on_lesson_finished(session)
 
-    def _say_after_current(self, text):
+    def _say_after_current(self, text, mark=None):
         """Озвучить, когда ТЕКУЩАЯ речь доиграет.
 
         tts.speak() в начале глушит предыдущую реплику (tts.stop()), поэтому
         просьба про фото, сказанная сразу после похвалы, обрывала её на
         полуслове — «Вербот запнулся» (баг 25.10.2026).
         """
+        def _done():
+            # значок 🔊 у реплики — как у обычного ответа Вербот (§43)
+            if mark:
+                self._dispatch(lambda: self.chat_view.enable_replay(mark))
+
         def _say_now():
-            self._say(text)
+            self._say(text, on_done=_done if mark else None)
 
         def _check(left):
             # _speech_busy снимается по окончании звука; ждём не дольше 30 с
