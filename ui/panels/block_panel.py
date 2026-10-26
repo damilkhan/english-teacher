@@ -27,6 +27,7 @@ TYPE_LABELS = {
     "speaking": "говорение",
     "chat": "текст",
     "listening": "аудирование",
+    "check": "проверка",
 }
 
 # Значок кнопки запуска (текстовый: ▶ рисуется шрифтом, эмодзи тут не нужны).
@@ -43,6 +44,9 @@ LOCKED_TEXT = "закрыто"
 # Состояние урока, при котором начинать нельзя (см. progress_map).
 STATE_LOCKED = "locked"
 
+# Ширина колонки с номером урока («1.1») слева от названия.
+NUMBER_WIDTH = 30
+
 WIDTH = 480
 HEIGHT = 440
 
@@ -54,6 +58,11 @@ def block_title(point: Optional[Dict[str, Any]]) -> str:
     title = str(point.get("block_title") or "").strip()
     head = "Блок %s" % number if number is not None else "Блок"
     return "%s: %s" % (head, title) if title else head
+
+
+def lesson_number(lesson_id: Any) -> str:
+    """Короткий номер урока: «city/1.1» → «1.1» (префикс блока не нужен)."""
+    return str(lesson_id or "").rsplit("/", 1)[-1].strip()
 
 
 def lesson_items(point: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -69,6 +78,7 @@ def lesson_items(point: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
         ltype = str(lesson.get("type") or "")
         items.append({
             "id": str(lesson.get("id") or ""),
+            "number": lesson_number(lesson.get("id")),
             "title": str(lesson.get("title") or ""),
             "type": ltype,
             "kind": TYPE_LABELS.get(ltype, ltype),
@@ -169,7 +179,7 @@ class BlockPanel(ctk.CTkToplevel):
 
     # -----------------------------------------------------
     def _lesson_row(self, parent, item: Dict[str, Any], p) -> None:
-        """Строка одного урока: название · тип · балл · кнопка «Начать».
+        """Строка одного урока: номер · название · тип · балл · кнопка «Начать».
 
         Закрытый урок (предыдущий не пройден) начать НЕЛЬЗЯ: кнопка серая,
         без нажатия. Балл экзамена пишется рядом с кнопкой.
@@ -204,9 +214,16 @@ class BlockPanel(ctk.CTkToplevel):
                          font=theme.FONT_SMALL,
                          text_color=p["cyan"]).pack(side="right", padx=(8, 0))
 
+        indent = 4 + 14 * int(item.get("depth") or 0)
+        number_lbl = ctk.CTkLabel(row, text=item.get("number") or "",
+                                  width=NUMBER_WIDTH, anchor="w",
+                                  font=theme.FONT_SMALL,
+                                  text_color=p["muted"])
+        number_lbl.pack(side="left", padx=(indent, 0))
+
         title_lbl = ctk.CTkLabel(row, text=item.get("title") or "", anchor="w",
                                  font=theme.FONT_UI, text_color=p["text"])
-        title_lbl.pack(side="left", padx=(4 + 14 * int(item.get("depth") or 0), 0))
+        title_lbl.pack(side="left", padx=(2, 0))
 
     # -----------------------------------------------------
     def _pick(self, lesson_id: str) -> None:
