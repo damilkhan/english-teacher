@@ -224,11 +224,26 @@ def _words_block(words):
 LESSON_BLOCK_TEMPLATE = """
 \n\U0001F3EB CURRENT LESSON: {title}
 The student just started this lesson. Topic: {topic}.
-{task_line}Run THIS lesson now: keep the student talking, ask one short question at a time,
+{task_line}{task_cycle}Run THIS lesson now: keep the student talking, ask one short question at a time,
 let the student answer, and gently correct mistakes. Adapt if the student
 struggles, and do not switch to another topic on your own.
 """
 
+# ---------- задания урока (§36, 26.10.2026) ----------
+# Урок = 3 маленьких задания, каждое по циклу: дал → ученик ответил (с
+# ошибкой) → исправил и попросил повторить → ученик повторил ВЕРНО →
+# засчитано, и СРАЗУ следующее задание (можно в той же реплике).
+# Блок добавляется ТОЛЬКО когда в словаре урока есть tasks_total —
+# без него вывод промпта прежний байт-в-байт (smoke_test).
+TASK_CYCLE_TEMPLATE = """
+\U0001F4CB TASKS: this lesson has {total} small tasks, ONE at a time.
+{line}
+A task counts as DONE only after the student said it correctly. If the student
+made a mistake, give the correct version in one short line and ask them to say
+it again (or to say it in another way). Then wait for the repeat.
+When a task is done, praise it in three or four words and give the NEXT task in
+the SAME reply. Do not pile up two tasks in one reply.
+"""
 
 def _lesson_block(lesson):
     """Блок «идёт занятие». Пусто, если занятия нет (обратная совместимость)."""
@@ -245,8 +260,59 @@ def _lesson_block(lesson):
         return ""
     # пустая задача не добавляет ничего — вывод блока не меняется
     task_line = ("Do this first: %s\n" % task) if task else ""
+    # задания урока: пустая строка, если заданий нет — вывод не меняется
+    task_cycle = _task_cycle_block(lesson if isinstance(lesson, dict) else None)
     return LESSON_BLOCK_TEMPLATE.format(title=title, topic=topic or title,
-                                        task_line=task_line)
+                                        task_line=task_line,
+                                        task_cycle=task_cycle)
+
+
+def _task_cycle_block(lesson):
+    """Блок «задания урока»: номер задания и фаза (§36). Пусто — без заданий.
+
+    Фазы (их ведёт lesson.py, модель только читает):
+      ask  — задание дано, ждём ответ ученика;
+      fix  — ученик ошибся, ждём ВЕРНЫЙ ПОВТОР исправления;
+      done — все задания сданы, урок закончился.
+    task_done_now ставит приложение: задание только что засчитано, поэтому
+    следующее нужно дать прямо в этой реплике.
+    """
+    if not isinstance(lesson, dict):
+        return ""
+    try:
+        total = int(lesson.get("tasks_total") or 0)
+    except (TypeError, ValueError):
+        total = 0
+    if total <= 0:
+        return ""
+    try:
+        index = int(lesson.get("task_index") or 1)
+    except (TypeError, ValueError):
+        index = 1
+    index = max(1, min(total, index))
+    phase = str(lesson.get("task_phase") or "").strip().lower()
+    expected = str(lesson.get("repeat_expected") or "").strip()
+    if phase == "done":
+        line = ("All %d tasks are done. Praise the student in ONE short line and"
+                " do NOT start a new task: the lesson is over." % total)
+    elif phase == "fix" and expected:
+        line = ("Task %d of %d is NOT done yet: the student has to repeat your"
+                " correction \"%s\" first. Do not start a new task and do NOT ask"
+                " anything else in that reply: just wait for the repeat."
+                % (index, total, expected))
+    elif phase == "fix":
+        line = ("Task %d of %d is NOT done yet: the student has to say the"
+                " corrected version first. Do not start a new task and do NOT ask"
+                " anything else in that reply: just wait for the repeat."
+                % (index, total))
+    elif lesson.get("task_done_now"):
+        line = ("Task %d of %d is DONE. Praise the repeat in three or four words"
+                " and give task %d of %d right now, in this same reply."
+                % (max(1, index - 1), total, index, total))
+    else:
+        line = ("You are on task %d of %d: give it now, or wait for the"
+                " student's answer if you already gave it." % (index, total))
+    return TASK_CYCLE_TEMPLATE.format(total=total, line=line)
 
 
 # ---------- дата и время (необязательно) ----------

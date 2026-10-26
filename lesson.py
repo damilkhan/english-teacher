@@ -21,8 +21,9 @@
 
 from __future__ import annotations
 
+import difflib
 import logging
-from typing import Any, Dict, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 _log = logging.getLogger(__name__)
 
@@ -65,6 +66,39 @@ try:
     CHECK_REPLY_TARGET = max(1, int(_exam.QUESTIONS))
 except Exception:                                     # pragma: no cover
     CHECK_REPLY_TARGET = 10
+
+# ---------- задания внутри урока (§36, 26.10.2026) ----------
+# Обычный урок = несколько маленьких заданий, каждое по циклу:
+# дал задание → ученик ответил (с ошибкой) → исправил и попросил повторить →
+# ученик повторил ВЕРНО → задание засчитано → сразу следующее.
+# Значения берём из config (одна точка настройки), дефолт — безопасный.
+try:
+    TASKS_PER_LESSON = max(0, int(getattr(_config, "LESSON_TASKS", 3)))
+except Exception:                                     # pragma: no cover
+    TASKS_PER_LESSON = 3
+try:
+    MAX_TASK_ATTEMPTS = max(1, int(getattr(_config, "LESSON_TASK_ATTEMPTS", 3)))
+except Exception:                                     # pragma: no cover
+    MAX_TASK_ATTEMPTS = 3
+
+# Фаза задания:
+#   TASK_ASK  — задание дано, ждём первый ответ ученика;
+#   TASK_FIX  — ответ с ошибкой, ждём ВЕРНЫЙ ПОВТОР исправления;
+#   TASK_DONE — все задания сделаны (урок закрывается).
+TASK_ASK = "ask"
+TASK_FIX = "fix"
+TASK_DONE = "done"
+
+# Что вернул Аналитик про ответ ученика (вариант Б, §36).
+ANSWER_CORRECT = "correct"      # ответ по заданию и без реальных ошибок
+ANSWER_NEEDS_FIX = "needs_fix"  # пытался, но есть что исправлять
+ANSWER_REPEAT_OK = "repeat_ok"  # это тот самый верный повтор исправления
+ANSWER_UNCLEAR = "unclear"      # не понять (вопрос, комментарий, не по теме)
+ANSWER_STATES = (ANSWER_CORRECT, ANSWER_NEEDS_FIX, ANSWER_REPEAT_OK,
+                 ANSWER_UNCLEAR)
+
+# Насколько похожим должен быть повтор (вариант В, без модели).
+REPEAT_RATIO = 0.80
 
 
 # =========================================================
@@ -183,6 +217,60 @@ def voice_hint(lesson_type: Any) -> str:
     return "🎤 Ответь голосом"
 
 
+# ---------- задания: кто и как решает «сдано» (§36) ----------
+def tasks_for(lesson_type: Any) -> int:
+    """Сколько заданий в уроке: 0 — считаем по репликам, как раньше.
+
+    Экзамен (check) и аудирование (listening) в цикл заданий НЕ входят:
+    у экзамена свои 10 вопросов (exam.QUESTIONS, §30), у рассказа —
+    пересказ целиком, его на «повтори фразу» не разложишь.
+    """
+    if normalize_type(lesson_type) in (CHECK, LISTENING):
+        return 0
+    return TASKS_PER_LESSON
+
+
+def _flat(text: Any) -> str:
+    """Текст без регистра, знаков и лишних пробелов — чтобы сравнивать «то же».
+
+    Та же нормализация, что у Аналитика (roles/analyst.py): сравнение повтора
+    не должно зависеть от точки в конце и большой буквы.
+    """
+    value = str(text or "").lower()
+    keep = []
+    for ch in value:
+        keep.append(ch if (ch.isalnum() or ch == "'") else " ")
+    return " ".join("".join(keep).split())
+
+
+def says_fix(student_text: Any, corrections) -> bool:
+    """Ученик ПОВТОРИЛ исправление? Проверка без модели (вариант В, §36).
+
+    Быстрый путь: Аналитик уже назвал правильные куски (`errors[].correct`),
+    мы их запомнили и сравниваем текст ученика:
+      * правильный кусок есть в сказанном целиком («went» в «I went home»);
+      * или фраза похожа на нужную (difflib ≥ REPEAT_RATIO) — на случай,
+        когда просили повторить целое предложение.
+    ВАЖНО: пустой список исправлений → False. Иначе зачёт был бы бесплатным.
+    Ограничение честное: смысл не понимаем, поэтому синонимы («I'm gonna»)
+    этот путь НЕ ловит — для них есть Аналитик (вариант Б).
+    """
+    said = _flat(student_text)
+    if not said:
+        return False
+    wanted = [_flat(item) for item in (corrections or [])]
+    wanted = [item for item in wanted if item]
+    if not wanted:
+        return False
+    for want in wanted:
+        if want in said:
+            continue
+        if difflib.SequenceMatcher(None, said, want).ratio() >= REPEAT_RATIO:
+            continue
+        return False
+    return True
+
+
 # =========================================================
 # Сессия занятия
 # =========================================================
@@ -192,6 +280,10 @@ class LessonSession:
     Считает реплики УЧЕНИКА: голос и текст одинаково. Когда набрано
     reply_target реплик — помечается завершённым. Если ученик вышел
     раньше — прервано (не засчитывается, но прогресс уже записан).
+
+    С 26.10.2026 (§36) у обычного урока есть ещё ЗАДАНИЯ (tasks_total):
+    урок закрывается, когда сданы ВСЕ задания, а счётчик реплик остаётся
+    страховкой от зависания. Экзамен и аудирование живут по репликам.
     """
 
     def __init__(self, lesson_id: str, point_id: Optional[str] = None,
@@ -231,6 +323,17 @@ class LessonSession:
         self.mistakes = 0
         self.finished = False
         self.aborted = False
+        # ---------- задания (§36) ----------
+        # tasks_total = 0 — урок считается по репликам, как раньше
+        # (экзамен, аудирование, или LESSON_TASKS = 0).
+        self.tasks_total = tasks_for(self.lesson_type)
+        self.tasks_done = 0
+        self.tasks_marked = 0        # сколько заданий засчитано «с подсказкой»
+        self.task_attempts = 0       # неудачных повторов в ТЕКУЩЕМ задании
+        self.task_phase = TASK_ASK if self.tasks_total else ""
+        # что просили повторить (вариант В): правильные куски из разбора
+        self.repeat_expected = []    # type: List[str]
+        self.last_credited = ""      # текст, за который задание уже засчитано
 
     # ---------- свойства ----------
     @property
@@ -240,8 +343,30 @@ class LessonSession:
 
     @property
     def should_finish(self) -> bool:
-        """Пора завершать (набрано достаточно реплик)."""
-        return self.replies >= self.reply_target
+        """Пора завершать: все задания сданы ИЛИ набран лимит реплик.
+
+        Лимит реплик остаётся СТРАХОВКОЙ: если ученик так и не смог
+        повторить (или модель ведёт урок мимо заданий), занятие всё равно
+        закроется, а не повиснет навсегда.
+        """
+        return self.all_tasks_done or self.replies >= self.reply_target
+
+    @property
+    def has_tasks(self) -> bool:
+        """Урок считается по ЗАДАНИЯМ (а не по репликам)."""
+        return self.tasks_total > 0
+
+    @property
+    def all_tasks_done(self) -> bool:
+        """Все задания сданы."""
+        return self.has_tasks and self.tasks_done >= self.tasks_total
+
+    @property
+    def task_index(self) -> int:
+        """Номер ТЕКУЩЕГО задания (1..tasks_total); 0 — заданий нет."""
+        if not self.has_tasks:
+            return 0
+        return min(self.tasks_total, self.tasks_done + 1)
 
     @property
     def is_active(self) -> bool:
@@ -300,6 +425,87 @@ class LessonSession:
             self.finished = True
         return self.state()
 
+    # ---------- задания (§36) ----------
+    def expect_repeat(self, corrections) -> List[str]:
+        """Запомнить, что просили повторить, и перейти в фазу «ждём повтор».
+
+        corrections — правильные куски из разбора Аналитика
+        (`errors[].correct`). Пустой список тоже переводит в фазу «ждём
+        повтор»: сравнивать будет нечего (вариант В молчит), но попытки
+        считаются и через MAX_TASK_ATTEMPTS задание засчитается с пометкой.
+        """
+        if not self.is_active or not self.has_tasks:
+            return []
+        items = []                                    # type: List[str]
+        for raw in (corrections or []):
+            text = str(raw or "").strip()
+            if text and text not in items:
+                items.append(text)
+        self.repeat_expected = items
+        self.task_phase = TASK_FIX
+        self.task_attempts = 0
+        return items
+
+    def says_fix(self, student_text: Any) -> bool:
+        """Ученик повторил исправление? Мгновенно, без модели (вариант В)."""
+        if self.task_phase != TASK_FIX:
+            return False
+        return says_fix(student_text, self.repeat_expected)
+
+    def note_task_attempt(self) -> int:
+        """Ещё один неудачный повтор. Возвращает их число в задании."""
+        if self.is_active and self.has_tasks:
+            self.task_attempts += 1
+        return self.task_attempts
+
+    def already_credited(self, student_text: Any) -> bool:
+        """За ЭТУ реплику задание уже засчитали (защита от двойного зачёта).
+
+        Нужна потому, что зачёт приходит ДВАЖДЫ: сразу по тексту (вариант В,
+        до ответа учителя) и позже разбором Аналитика (вариант Б).
+        """
+        return bool(self.last_credited) and _flat(student_text) == self.last_credited
+
+    def credit_task(self, student_text: Any = "", marked: bool = False) -> Dict[str, Any]:
+        """Засчитать ТЕКУЩЕЕ задание и перейти к следующему.
+
+        marked=True — засчитано «с подсказкой»: ученик так и не повторил
+        верно (MAX_TASK_ATTEMPTS попыток), но урок держать открытым нельзя.
+        После последнего задания сессия сразу считается завершённой.
+        """
+        if not self.is_active or not self.has_tasks:
+            return self.state()
+        if self.already_credited(student_text):
+            return self.state()
+        self.tasks_done += 1
+        if marked:
+            self.tasks_marked += 1
+        self.last_credited = _flat(student_text)
+        self.repeat_expected = []
+        self.task_attempts = 0
+        if self.all_tasks_done:
+            self.task_phase = TASK_DONE
+            self.finished = True
+        else:
+            self.task_phase = TASK_ASK
+        return self.state()
+
+    def task_prompt(self) -> Dict[str, Any]:
+        """Что рассказать модели про задания (пусто — заданий нет).
+
+        Словарь уходит в промпт урока (`prompt_builder._lesson_block`).
+        Для экзамена и аудирования он ПУСТОЙ — промпт там прежний.
+        """
+        if not self.has_tasks:
+            return {}
+        return {
+            "tasks_total": self.tasks_total,
+            "tasks_done": self.tasks_done,
+            "task_index": self.task_index,
+            "task_phase": self.task_phase,
+            "repeat_expected": ", ".join(self.repeat_expected),
+        }
+
     def finish(self) -> None:
         """Завершить занятие успешно (дошёл до конца)."""
         self.finished = True
@@ -316,9 +522,15 @@ class LessonSession:
         return "Урок %s · %s" % (self.code, self.title)
 
     def progress_text(self) -> str:
-        """«4/12»."""
-        return "%d/%d" % (self.replies, self.reply_target)
+        """Счётчик для полосы урока: «Задание 2/3» или «4/12».
 
+        Урок с заданиями показывает ЗАДАНИЯ (решение ученика 26.10.2026:
+        задания не должны считаться по репликам). Экзамен, аудирование и
+        урок с LESSON_TASKS = 0 — по-прежнему реплики.
+        """
+        if self.has_tasks:
+            return "Задание %d/%d" % (self.task_index, self.tasks_total)
+        return "%d/%d" % (self.replies, self.reply_target)
     def state(self) -> Dict[str, Any]:
         """Снимок состояния (для колбэков и тестов)."""
         return {
@@ -329,7 +541,12 @@ class LessonSession:
             "title": self.title,
             "replies": self.replies,
             "target": self.reply_target,
-            "hints": self.hints,
+            "tasks_total": self.tasks_total,
+            "tasks_done": self.tasks_done,
+            "tasks_marked": self.tasks_marked,
+            "task_index": self.task_index,
+            "task_phase": self.task_phase,
+            "repeat_expected": list(self.repeat_expected),            "hints": self.hints,
             "mistakes": self.mistakes,
             "exam": self.lesson_type == CHECK,
             "dictionary": allows_dictionary(self.lesson_type),
