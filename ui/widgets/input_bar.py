@@ -288,6 +288,12 @@ class InputBar(ctk.CTkFrame):
                 self.send_btn.configure(state="normal", text=TRANSLATE_TEXT)
             else:
                 self.send_btn.configure(state="disabled", text=LOCK_BUTTON_TEXT)
+        elif has_cyrillic(self._real_text()):
+            # ОБЫЧНЫЙ урок (текст разрешён): русское слово в поле — тоже
+            # просьба о переводе, а не ответ учителю. Кнопка обязана это
+            # показать, иначе ученик видит «Отправить» и не нажимает вовсе
+            # (живая жалоба 26.10.2026: набрал «примерн» и не стал слать).
+            self.send_btn.configure(state="normal", text=TRANSLATE_TEXT)
         else:
             self.send_btn.configure(state="normal", text=SEND_TEXT)
 
@@ -405,10 +411,14 @@ class InputBar(ctk.CTkFrame):
 
     def _on_key_release(self, _event=None):
         """Кнопка следит за кириллицей: есть русское слово — «💡 Перевести».
+
+        Работает в ЛЮБОМ режиме поля: и в уроке «только голосом», и в обычном
+        (там подпись раньше вообще не пересчитывалась — живой баг 26.10.2026).
         """
         self._update_counter()
-        if self._locked:
-            self._apply_state()
+        # Пересчитываем подпись ВСЕГДА: в обычном уроке кнопка тоже обязана
+        # меняться на «💡 Перевести», как только появилась кириллица.
+        self._apply_state()
         return None
 
     def _on_return(self, event):
