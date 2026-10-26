@@ -172,36 +172,115 @@ def changed_share(original, corrected):
 
 # ---------- что показать ученику ----------
 GOOD_NOTE = "\u2705 No grammar mistakes in your description \u2014 nice English!"
+SPOKEN_GOOD = "No grammar mistakes in your description. Nice English!"
+
+
+def spans_for_changes(text, changes):
+    """Где в ТЕКСТЕ УЧЕНИКА стояли неверные куски → [(начало, конец, "err")].
+
+    Нужно, чтобы подсветить ошибки прямо в его реплике (красным). Ищем по
+    СЛОВАМ, без учёта регистра: «Staying» и «staying» — одно и то же.
+    Каждый следующий кусок ищем ПОСЛЕ предыдущего, иначе одинаковые слова
+    красились бы дважды в одном месте.
+    """
+    items = [(m.start(), m.end(), m.group(0).lower())
+             for m in _WORD_RE.finditer(str(text or ""))]
+    if not items:
+        return []
+    spans = []
+    after = 0
+    for change in (changes or ()):
+        target = str((change or {}).get("wrong") or "").strip().lower().split()
+        if not target:
+            continue
+        found = _find_run(items, target, after)
+        if found is None:
+            continue
+        first, last = found
+        spans.append((items[first][0], items[last][1], "err"))
+        after = last + 1
+    return spans
+
+
+def _find_run(items, target, after):
+    """Первое вхождение последовательности слов начиная с номера after."""
+    width = len(target)
+    for start in range(max(0, after), len(items) - width + 1):
+        if all(items[start + k][2] == target[k] for k in range(width)):
+            return start, start + width - 1
+    return None
+
+
+def chat_message(data):
+    """Готовое сообщение для чата: {"text", "lines", "spans", "spoken"}.
+
+    Текст БЕЗ эмодзи в начале: раскраска считается по смещениям, а эмодзи в
+    облачке — картинка и в индексах tk.Text занимает один символ. Цвет и
+    так бросается в глаза, поэтому «\u270f» здесь не нужен.
+
+    spans: исправленный текст — зелёный ("ok"), неверные куски — красный
+    ("err"), верные — зелёный. spoken — что произнести голосом.
+    """
+    data = data or {}
+    empty = {"text": "", "lines": [], "spans": [], "spoken": ""}
+    if not data.get("ok"):
+        return dict(empty)
+    corrected = str(data.get("corrected") or "").strip()
+    changes = data.get("changes") or []
+    if not corrected:
+        return dict(empty)
+    if not changes:
+        return {"text": GOOD_NOTE, "lines": [GOOD_NOTE], "spans": [],
+                "spoken": SPOKEN_GOOD}
+    prefix = "Better: "
+    lines = [prefix + corrected]
+    spans = [(len(prefix), len(prefix) + len(corrected), "ok")]
+    shown = 0
+    for item in changes:
+        if shown >= MAX_NOTES:
+            break
+        wrong = _short(item.get("wrong") or "")
+        right = _short(item.get("right") or "")
+        if wrong and right:
+            line = "\u00b7 %s \u2192 %s" % (wrong, right)
+        elif right:
+            line = "\u00b7 add \u00ab%s\u00bb" % right
+        else:
+            line = "\u00b7 remove \u00ab%s\u00bb" % wrong
+        base = sum(len(x) + 1 for x in lines)
+        lines.append(line)
+        if wrong and right:
+            spans.append((base + 2, base + 2 + len(wrong), "err"))
+            tail_at = base + 2 + len(wrong) + len(" \u2192 ")
+            spans.append((tail_at, tail_at + len(right), "ok"))
+        elif right:
+            at = line.index("\u00ab") + 1
+            spans.append((base + at, base + at + len(right), "ok"))
+        elif wrong:
+            at = line.index("\u00ab") + 1
+            spans.append((base + at, base + at + len(wrong), "err"))
+        shown += 1
+    rest = len(changes) - shown
+    if rest > 0:
+        lines.append("\u00b7 +%d more" % rest)
+    text = "\n".join(lines)
+    return {"text": text, "lines": lines, "spans": spans,
+            "spoken": "Better. %s" % corrected}
 
 
 def report(original, corrected):
-    """Готовый разбор для чата: {"ok", "corrected", "changes", "lines"}.
+    """Готовый разбор для чата: ok / corrected / changes / text / spans.
 
     ok=False — проверку показывать нельзя (модель ответила странно).
-    lines — строки реплики преподавателя (английский, см. §40).
     """
     corrected = clean_corrected(corrected)
     if not is_sane(original, corrected):
-        return {"ok": False, "corrected": corrected, "changes": [], "lines": []}
+        return {"ok": False, "corrected": corrected, "changes": [],
+                "text": "", "lines": [], "spans": [], "spoken": ""}
     changes = word_changes(original, corrected)
-    if not changes:
-        return {"ok": True, "corrected": corrected, "changes": [],
-                "lines": [GOOD_NOTE]}
-    lines = ["\u270f\ufe0f Better: %s" % corrected]
-    for item in changes[:MAX_NOTES]:
-        wrong, right = item["wrong"], item["right"]
-        if wrong and right:
-            lines.append("\u00b7 %s \u2192 %s" % (_short(wrong), _short(right)))
-        elif right:
-            lines.append("\u00b7 add \u00ab%s\u00bb" % _short(right))
-        elif wrong:
-            lines.append("\u00b7 remove \u00ab%s\u00bb" % _short(wrong))
-    rest = len(changes) - MAX_NOTES
-    if rest > 0:
-        lines.append("\u00b7 +%d more" % rest)
-    return {"ok": True, "corrected": corrected, "changes": changes,
-            "lines": lines}
-
+    data = {"ok": True, "corrected": corrected, "changes": changes}
+    data.update(chat_message(data))
+    return data
 
 def analysis_from(report_data):
     """Правки в виде разбора Аналитика — чтобы они попали в профиль.
