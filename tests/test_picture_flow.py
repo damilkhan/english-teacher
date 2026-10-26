@@ -83,6 +83,9 @@ def make_app(level="A2"):
     app._picture_level = types.MethodType(App._picture_level, app)
     app._start_picture_task = types.MethodType(App._start_picture_task, app)
     app._picture_reply = types.MethodType(App._picture_reply, app)
+    # §42: проверка грамматики идёт в фоне и зовёт модель — в этом тесте
+    # её не запускаем (свой тест: tests/test_photo_check.py)
+    app._start_picture_check = lambda text: False
     app._picture_hint = types.MethodType(App._picture_hint, app)
     app._say = lambda *a, **k: app.said.append(a[0] if a else "")
     # 25.10.2026: просьба про фото говорится ПОСЛЕ текущей речи, поэтому
