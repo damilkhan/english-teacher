@@ -241,6 +241,7 @@ class ChatController:
             exam=exam_mode, exam_questions=(exam_mod.QUESTIONS if exam_mode else None),
             hesitation=True,
             word_forms=True,          # lie/lay и прочие слова с двумя значениями
+            logic=True,               # вопрос должен иметь смысл (26.10.2026)
             exam_asked=(self._exam_asked if exam_mode else None))   # повтор — не ошибка
 
         print(f"📤 Язык ответа: {'РУССКИЙ' if lang == 'ru' else 'ENGLISH'}")
@@ -263,6 +264,7 @@ class ChatController:
             exam=exam_mode, exam_questions=(exam_mod.QUESTIONS if exam_mode else None),
             hesitation=True,
             word_forms=True,          # lie/lay и прочие слова с двумя значениями
+            logic=True,               # вопрос должен иметь смысл (26.10.2026)
             exam_asked=(self._exam_asked if exam_mode else None))   # повтор — не ошибка
             ok, raw = self._ask_model(system_prompt, user_text, short_history=True)
         if not ok:

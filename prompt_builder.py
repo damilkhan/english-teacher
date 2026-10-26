@@ -505,7 +505,42 @@ def _word_forms_block(flag):
     """Блок «значения и формы слов». Пусто, если выключен (промпт прежний)."""
     return WORD_FORMS_BLOCK if flag else ""
 
-def build_system_prompt(mode, profile, lang="en", level=None, student=None, context=None, plan=None, lesson=None, now=None, variety=False, english_only=False, words=None, american=False, teacher=None, exam=False, exam_questions=None, hesitation=False, exam_asked=None, word_forms=False):
+# ---------- вопросы «по жизни»: не спрашивать бессмыслицу (26.10.2026) ----------
+# Живой случай: Вербот в уроке про dentist спросил «Do you watch a movie?»
+# (в кабинете стоматолога кино не смотрят), а на поправку ученика ответил
+# двумя извинениями и новой выдумкой «before / after the dentist».
+# Модель маленькая (4B): совсем убрать такие сбои нельзя, но блок сильно
+# уменьшает их — правило простое и проверяемое на каждом вопросе.
+# ВАЖНО: блок включается флагом (как запинки и значения слов) — без флага
+# вывод build_system_prompt прежний байт-в-байт (tests/smoke_test).
+LOGIC_BLOCK = """
+\n\U0001F9E0 THINK BEFORE YOU ASK - A QUESTION MUST MAKE SENSE:
+- Before you ask, check the question against real life and against what the
+  student already said. If the situation is impossible or the answer is
+  obvious, do not ask it - ask something else.
+- Never invent facts about a place or a situation and then ask about them.
+  A dentist's office is not a cinema: "Do you watch a movie at the dentist?"
+  is a bad question.
+- Ask about the student's own life: what they do, how often, with whom, why,
+  how they feel. Never ask about something they cannot know.
+- Build the question on the student's own words: take one word from their
+  answer and go one step further ("I go once a month" - "Who goes with
+  you?"). If you have nothing to build on, ask about their day or plans.
+- ONE question per reply, at the end. Never two questions in a row and never
+  a question inside a question.
+- If the student says your question is silly or wrong: agree in ONE short
+  line ("You're right, that was a silly question."), then ask a better
+  question that follows from what they just said. Do not apologize twice, do
+  not defend the question, do not explain why you asked it.
+"""
+
+
+def _logic_block(flag):
+    """Блок «вопрос должен иметь смысл». Пусто, если выключен (промпт прежний)."""
+    return LOGIC_BLOCK if flag else ""
+
+
+def build_system_prompt(mode, profile, lang="en", level=None, student=None, context=None, plan=None, lesson=None, now=None, variety=False, english_only=False, words=None, american=False, teacher=None, exam=False, exam_questions=None, hesitation=False, exam_asked=None, word_forms=False, logic=False):
     """Собирает system-промпт (персона + профиль ученика).
 
     mode:    'lesson' | 'free'
@@ -538,6 +573,9 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
     hesitation: True → блок про запинки в речи (ученик говорит вслух, повтор — не
              ошибка). False → блок НЕ добавляется (промпт прежний байт-в-байт,
              его сверяет smoke_test).
+    logic:   True → блок «вопрос должен иметь смысл» (не спрашивать
+             бессмыслицу, не выдумывать факты о ситуации). False → блок НЕ
+             добавляется (промпт прежний байт-в-байт, его сверяет smoke_test).
     """
     language_rule = language_instruction(lang)
     # имя преподавателя — одно на весь промпт (персона + строка про ученика)
@@ -590,6 +628,7 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
             + _plan_block(plan) + _knowledge_block(context)
             + _hesitation_block(hesitation)
             + _word_forms_block(word_forms)
+            + _logic_block(logic)
             + _words_block(words)
             + _exam_block(exam, exam_questions, exam_asked))
 
@@ -641,6 +680,11 @@ def clean_response(text):
     text = re.sub(r"`([^`]*)`", r"\1", text)
     text = re.sub(r"(?m)^\s{0,3}#{1,6}\s*", "", text)
     text = re.sub(r"(?m)^\s*[-*•]\s+", "", text)
+    # Курсив ОДНОЙ звёздочкой: модель пишет «*before* you go», и ученик
+    # видел звёздочки в чате (живой скриншот 26.10.2026). В озвучке они
+    # уже снимались (tts._SPEECH_ARTIFACTS_RE), а в тексте — нет.
+    # Берём только пару вокруг слова: «2*3*4» не трогаем.
+    text = re.sub(r"(?<![\w*])\*([^*\n]+?)\*(?![\w*])", r"\1", text)
     text = text.replace("**", "")
     text = re.sub(r'RU$', '', text).strip()
     return text.strip()
