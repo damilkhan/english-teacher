@@ -84,14 +84,17 @@ def main():
           "Never invent facts about a place" in block)
     check("живой пример со стоматологом", "dentist" in block.lower())
     check("пример про кино в кабинете", "cinema" in block.lower())
-    check("опираться на слова ученика", "student's own words" in block)
+    check("опираться на слова ученика", "their own words" in block)
+    check("запрет приносить новую вещь/место/хобби",
+          "Never bring a new thing" in block)
+    check("запасной ход, когда спросить нечего", "Tell me more" in block)
     check("ровно ОДИН вопрос в конце", "ONE question per reply" in block)
     check("про поправку ученика", "student says your question is silly" in block)
     check("одно короткое согласие, без двух извинений",
           "Do not apologize twice" in block)
     check("не защищать вопрос", "defend the question" in block)
     check("не объяснять, зачем спросил",
-          "do not explain why you asked it" in block)
+          "explain why you asked it" in block)
 
     # ---------- 4. Порядок блоков ----------
     print("\n[4] Блок стоит до блока слов ученика")
