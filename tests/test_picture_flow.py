@@ -49,9 +49,10 @@ class FakeChat:
         self.sent = []          # (sender, text)
         self.pictures = []      # пути фото в репликах
 
-    def add_message(self, sender, text, picture=None):
+    def add_message(self, sender, text, picture=None, spans=None):
         self.sent.append((sender, text))
         self.pictures.append(picture)
+        self.spans = spans
         return "msg_%d" % len(self.sent)
 
 
@@ -110,8 +111,12 @@ def test_start():
     path = app.chat.pictures[0]
     check("фото передано в чат", bool(path) and os.path.exists(path), path)
     check("в тексте назван порог", "105" in texts(app)[0], texts(app)[0])
+    # 26.10.2026: задание теперь ОЗВУЧИВАЕТСЯ целиком (раньше звучала только
+    # короткая просьба «Look at the photo…», и у реплики не было значка 🔊).
     check("преподаватель попросил описать по-английски",
-          "describe" in (app.said[-1] or ""), app.said)
+          "describe" in (app.said[-1] or "").lower(), app.said)
+    check("озвучено именно задание (порог назван голосом)",
+          "105" in (app.said[-1] or ""), app.said)
     check("данные задания сохранены", (app._picture or {}).get("threshold") == 105,
           app._picture)
 
