@@ -9,7 +9,8 @@
 # Колбэки (все вызываются в главном потоке через dispatch):
 #   on_started(session)      — занятие началось;
 #   on_reply(state)          — учтена реплика ученика;
-#   on_finished(session)     — занятие завершено (дошёл до лимита);
+#   on_finished(session)     — занятие завершено (дошёл до лимита ИЛИ
+#                              сданы все задания, см. credit_finished);
 #   on_aborted(session)      — ученик вышел раньше (НЕ засчитывается).
 # =========================================================
 
@@ -88,6 +89,20 @@ class LessonController:
         if not self.is_active:
             return None
         self.session.finish()
+        self._emit(self.on_finished, self.session)
+        return self.session
+
+    def credit_finished(self) -> Optional[lesson_mod.LessonSession]:
+        """Сообщить, что занятие закрылось ЗАЧЁТОМ задания (§36).
+
+        От finish() отличается тем, что сессия уже помечена завершённой:
+        lesson.LessonSession.credit_task делает это сам. Но колбэк
+        on_finished всё равно нужен — иначе не покажется итог урока.
+        Повторный вызов после закрытия сессии ничего не показывает:
+        приложение само решает, показывать итог или отложить (§32).
+        """
+        if self.session is None or not self.session.finished:
+            return None
         self._emit(self.on_finished, self.session)
         return self.session
 

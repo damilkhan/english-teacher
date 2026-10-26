@@ -36,6 +36,13 @@ ERROR_TYPES = ("grammar", "vocabulary", "spelling", "pronunciation")
 
 MAX_ERRORS = 5
 MAX_TOPICS = 3
+# Состояние ответа по заданию урока (§36, решение ученика 26.10.2026).
+# Список берём из lesson.py — чтобы в проекте не было двух разных наборов.
+try:
+    from lesson import ANSWER_STATES
+except Exception:                                     # pragma: no cover
+    ANSWER_STATES = ("correct", "needs_fix", "repeat_ok", "unclear")
+ANSWER_UNCLEAR = "unclear"
 MAX_MESSAGE_CHARS = 600
 MAX_REPLY_CHARS = 200
 
@@ -48,8 +55,8 @@ def default_analysis() -> Dict[str, Any]:
         "errors": [],
         "topics": [],
         "note": "",
-        "ok": False,
-        "source": "fallback",
+        "answer_state": ANSWER_UNCLEAR,
+        "ok": False,        "source": "fallback",
     }
 
 
@@ -80,13 +87,21 @@ Rules:
 - The student often writes in RUSSIAN. Analyse ONLY the student's ENGLISH.
   If the message is NOT in English, return "errors": [] (do NOT report Russian
   mistakes as English errors) and do not force status A/P.
+- answer_state: how the message relates to the CURRENT lesson task.
+  "correct"   = the student answered the task and it is fine (no real errors);
+  "needs_fix" = the student tried but there is something to fix;
+  "repeat_ok" = the teacher had asked to repeat a correction and THIS message
+                is that correct repeat (it may be worded differently);
+  "unclear"   = cannot tell (a question, a comment, off-task, or no task).
+- Use "repeat_ok" only when the context below shows the correction that the
+  teacher asked to repeat. Otherwise use one of the other states.
 - topics: up to 3 short topics of the message (for example "travel", "work and study").
 - note: one very short progress note (at most 12 words).
 %(context)s
 Student message: %(message)s
 
 Return ONLY valid JSON, no markdown, in exactly this shape:
-{"move_type": "A", "move_status": "P", "errors": [], "topics": [], "note": ""}
+{"move_type": "A", "move_status": "P", "answer_state": "needs_fix", "errors": [], "topics": [], "note": ""}
 """
 
 _JSON_RE = re.compile(r"\{.*\}", re.S)
@@ -222,10 +237,19 @@ def _normalize_analysis(data: Dict[str, Any]) -> Dict[str, Any]:
     else:
         move_status = raw_status if raw_status in ("A", "P") else "N"
 
+    # §36: что ответ значит для ТЕКУЩЕГО задания урока (не знает — "unclear")
+    answer_state = str(data.get("answer_state") or "").strip().lower()
+    if answer_state not in ANSWER_STATES:
+        answer_state = ANSWER_UNCLEAR
+    # Вопрос и болтовня задание не сдают: «correct» у них не принимаем,
+    # иначе зачёт был бы бесплатным (§36: зачёт только за ОТВЕТ).
+    if move_type != "A" and answer_state == "correct":
+        answer_state = ANSWER_UNCLEAR
+
     return {
         "move_type": move_type,
         "move_status": move_status,
-        "errors": _clean_errors(data.get("errors")),
+        "answer_state": answer_state,        "errors": _clean_errors(data.get("errors")),
         "topics": _clean_topics(data.get("topics")),
         "note": str(data.get("note") or "").strip()[:120],
         "ok": True,
@@ -260,11 +284,18 @@ class Analyst:
         self.temperature = temperature
 
     def analyze(self, student_text: str, teacher_reply: str = "",
-                mode: str = "lesson", level: Optional[str] = None) -> Dict[str, Any]:
-        """Классифицирует реплику ученика. Не падает: при проблеме — дефолт."""
+                mode: str = "lesson", level: Optional[str] = None,
+                expected: str = "") -> Dict[str, Any]:
+        """Классифицирует реплику ученика. Не падает: при проблеме — дефолт.
+
+        expected — исправление, которое преподаватель попросил повторить
+        (§36): по нему Аналитик решает, был ли это ВЕРНЫЙ повтор, даже если
+        ученик сказал ту же мысль другими словами.
+        """
         if not str(student_text or "").strip():
             return default_analysis()
-        raw = self._ask(self.build_prompt(student_text, teacher_reply, level))
+        raw = self._ask(self.build_prompt(student_text, teacher_reply, level,
+                                         expected=expected))
         parsed = parse_analysis(raw)
         if parsed is None:
             _log.warning("Аналитик: ответ модели не разобран — беру нейтральный дефолт")
@@ -278,7 +309,7 @@ class Analyst:
         return parsed
 
     def build_prompt(self, student_text: str, teacher_reply: str = "",
-                     level: Optional[str] = None) -> str:
+                     level: Optional[str] = None, expected: str = "") -> str:
         """Собирает промпт Аналитика (словарь таксономии встроен в текст)."""
         context_parts: List[str] = []
         if level:
@@ -287,6 +318,11 @@ class Analyst:
         if reply:
             context_parts.append("- The teacher's reply (context only): %s"
                                  % reply[:MAX_REPLY_CHARS])
+        # §36: что просили повторить — без этого "repeat_ok" не отличить
+        want = str(expected or "").strip().replace("\n", " ")
+        if want:
+            context_parts.append("- The teacher asked the student to repeat this"
+                                 " correction: \"%s\"" % want[:MAX_REPLY_CHARS])
         context = ("\n" + "\n".join(context_parts) + "\n") if context_parts else ""
         return ANALYST_PROMPT_TEMPLATE % {
             "context": context,

@@ -115,7 +115,11 @@ class ChatController:
             self._exam_asked = None
 
     def set_lesson(self, lesson=None):
-        """Задать идущее занятие (словарь {"title","type","topic"} или None).
+        """Задать идущее занятие (словарь {"title","type","topic","exam"} или None).
+
+        С 26.10.2026 (§36) в словаре могут быть поля заданий: tasks_total,
+        tasks_done, task_index, task_phase, repeat_expected, task_done_now —
+        их читает prompt_builder._task_cycle_block и Аналитик (repeat_expected).
 
         Только влияет на промпт Учителя: логика занятия живёт в app.py и
         lesson.py, контроллер остаётся «переговорщиком» с моделью.
@@ -391,8 +395,12 @@ class ChatController:
             return None
         try:
             level = (user_manager.get_user(self.user_id) or {}).get("level")
+            # §36: что преподаватель попросил повторить — без этого Аналитик
+            # не отличит верный повтор от новой ошибки (вариант Б).
+            expected = str((self._lesson or {}).get("repeat_expected") or "")
             return self.analyst.analyze(user_text, teacher_reply=reply,
-                                        mode=self.mode, level=level)
+                                        mode=self.mode, level=level,
+                                        expected=expected)
         except Exception as exc:
             print(f"⚠️ Аналитик недоступен: {exc}")
             return None
