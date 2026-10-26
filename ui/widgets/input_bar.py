@@ -228,7 +228,7 @@ class InputBar(ctk.CTkFrame):
         color = (self.palette["ok"] if count >= self._counter_total
                  else self.palette["muted"])
         try:
-            label.configure(text="%d из %d" % (count, self._counter_total),
+            label.configure(text="%d of %d" % (count, self._counter_total),
                             fg=color)
             label.place(relx=1.0, rely=1.0, anchor="se", x=-16, y=-8)
             label.lift()
