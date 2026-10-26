@@ -84,6 +84,21 @@ IRREGULAR_PAST = {
     "write": ("wrote",),
 }
 
+# Закрытый список «не то слово»: пары РАЗНЫХ слов, которые похожи по буквам
+# (догадка по difflib отнесла бы их к опечатке). §46: lay -> lie, possible -> possibly.
+WORD_CHOICE_PAIRS = {
+    ("lay", "lie"), ("lie", "lay"),
+    ("possible", "possibly"), ("probable", "probably"),
+    ("say", "tell"), ("tell", "say"),
+    ("do", "make"), ("make", "do"),
+    ("learn", "teach"), ("teach", "learn"),
+    ("lose", "loose"), ("loose", "lose"),
+    ("then", "than"), ("than", "then"),
+    ("its", "it's"), ("it's", "its"),
+    ("affect", "effect"), ("effect", "affect"),
+    ("borrow", "lend"), ("lend", "borrow"),
+}
+
 
 # ---------------------------------------------------------
 # Правило: нормализация и догадка
@@ -135,9 +150,17 @@ def guess_rule(wrong, correct):
     # предлог поменяли на другой предлог
     if removed and added and set(removed) <= PREPOSITIONS and set(added) <= PREPOSITIONS:
         return "preposition"
+    # предлог ПРОПАЛ вместе с лишними словами: one time in month -> once a month
+    if set(removed) & PREPOSITIONS:
+        return "preposition"
 
     if len(removed) == 1 and len(added) == 1:
         old, new = removed[0], added[0]
+        if (old, new) in WORD_CHOICE_PAIRS:
+            return "word_choice"     # lay -> lie: ДРУГОЕ слово, не опечатка
+        # наречие вместо прилагательного: possible -> possibly (НЕ «написание»)
+        if new.endswith("ly") and (new[:-2] == old or new[:-2] + "e" == old):
+            return "word_choice"
         if new in IRREGULAR_PAST.get(old, ()):
             return "past_simple"
         if new == old + "ed" or (old.endswith("e") and new == old + "d"):
@@ -148,8 +171,7 @@ def guess_rule(wrong, correct):
         ratio = difflib.SequenceMatcher(None, old, new).ratio()
         if ratio >= 0.8:
             return "spelling"
-        if ratio >= 0.55:
-            return "word_choice"
+        return "word_choice"         # одно слово заменили другим = «не то слово»
 
     return "other"
 
@@ -202,10 +224,12 @@ def aggregate(rows=None, user_id=None):
                 bucket["last"] = date
 
     out = list(buckets.values())
-    out.sort(key=lambda b: (-b["count"], b["rule"]))
+    # «прочее» — ВСЕГДА последним: это не правило, и вверху таблицы ему не место
+    out.sort(key=lambda b: (b["rule"] == "other", -b["count"], b["rule"]))
     limit = gap_threshold()
     for bucket in out:
-        bucket["is_gap"] = bucket["count"] >= limit
+        # «без правила» пробелом не считается, даже если встречалось 10 раз
+        bucket["is_gap"] = bucket["count"] >= limit and bucket["rule"] != "other"
     return out
 
 
@@ -248,7 +272,7 @@ def prompt_block(user_id=None, limit=None, rows=None):
             "to match this list; a correct sentence stays correct.")
 
 
-def table_rows(user_id=None, limit=8, rows=None):
+def table_rows(user_id=None, limit=10, rows=None):
     """Строки для таблицы «Профиль → Статистика»: [( правило, раз, примеры )]."""
     out = []
     for bucket in aggregate(rows=rows, user_id=user_id):

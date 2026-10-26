@@ -1084,12 +1084,14 @@ class EnglishTeacherApp:
                          text_color=p["text"]).grid(row=line, column=0, sticky="w",
                                                     padx=(0, 10))
             ctk.CTkLabel(grid, text=tally, anchor="w", font=theme.FONT_UI,
-                         text_color=p["warn"] if item.get("gap") else p["text"]
+                         text_color=p["err"] if item.get("gap") else p["text"]
                          ).grid(row=line, column=1, sticky="w", padx=(0, 10))
             ctk.CTkLabel(grid, text=str(item.get("examples") or "—"), anchor="w",
                          justify="left", wraplength=300, font=theme.FONT_UI,
                          text_color=p["muted"]).grid(row=line, column=2, sticky="w")
-        ctk.CTkLabel(box, text="Красный счёт — пробел: правило встречалось 2+ раза.",
+        ctk.CTkLabel(box,
+                     text="Красный счёт — пробел: правило встречалось 2+ раза. "
+                          "«Прочее» пробелом не считается.",
                      anchor="w", justify="left", wraplength=520,
                      font=theme.FONT_UI,
                      text_color=p["muted"]).pack(anchor="w", padx=6, pady=(0, 4))

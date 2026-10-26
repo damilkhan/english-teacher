@@ -7,7 +7,8 @@
 # Что проверяем:
 #   1) normalize_rule: только закрытый список, всё прочее -> other;
 #   2) guess_rule: догадка правила по паре «было -> стало»;
-#   3) aggregate: счёт по правилам, примеры, даты, порог «пробел»;
+#   3) aggregate: счёт по правилам, примеры, даты, порог «пробел»,
+#      «прочее» всегда последним и пробелом не считается;
 #   4) prompt_block: 3 правила, без «other», запрет выдумывать, флаг config;
 #   5) table_rows: подписи по-русски, примеры через «->», лимит строк.
 # =========================================================
@@ -84,6 +85,10 @@ def test_guess():
         ("have usually breakfast", "usually have breakfast", "word_order"),
         ("two book", "two books", "plural"),
         ("normaly", "normally", "spelling"),
+        ("possible", "possibly", "word_choice"),
+        ("go to lay down", "go to lie down", "word_choice"),
+        ("one time in month", "once a month", "preposition"),
+        ("make", "meet", "word_choice"),
         ("go to school", "go to the school", "article"),
         ("I live in Moscow", "I live in Moscow", "other"),
         ("", "books", "other"),
@@ -113,12 +118,20 @@ def test_aggregate():
     article = [b for b in result if b["rule"] == "article"][0]
     check("1 раз = ещё не пробел", article["is_gap"] is False, article)
 
+    check("«прочее» всегда последним",
+          order[-1] == "other", order)
+    other = [b for b in result if b["rule"] == "other"][0]
+    check("«без правила» пробелом не считается", other["is_gap"] is False, other)
+
     old = getattr(config, "GAPS_MIN_COUNT", 2)
     config.GAPS_MIN_COUNT = 1
     try:
         result = gaps.aggregate(rows=SAMPLE)
         check("порог из config работает",
-              all(b["is_gap"] for b in result), result)
+              all(b["is_gap"] for b in result if b["rule"] != "other"), result)
+        check("«прочее» не пробел даже при пороге 1",
+              [b for b in result if b["rule"] == "other"][0]["is_gap"] is False,
+              result)
     finally:
         config.GAPS_MIN_COUNT = old
 
