@@ -9,7 +9,7 @@
 #   2) эталоны для сверки (пример и само слово);
 #   3) «сегодня уже было?» (дата захода в профиле);
 #   4) сборку захода: до 5 созревших слов, порядок, пустой заход;
-#   5) ответы: удачный +1, промах −1, короткий и полный ответ — оба верны;
+#   5) ответы: удачный +1, промах уровень не двигает (решение 53);
 #   6) ОДИН итог на карточку за заход (повтор не двигает уровень);
 #   7) подсказка = промах, «Позже» — без изменений;
 #   8) отметку даты захода в файле прогресса (total_lessons не растёт);
@@ -202,7 +202,7 @@ def test_session():
 # 5. Ответы
 # =========================================================
 def test_answers():
-    print("\n[5] Ответы: +1 за «Похоже», −1 за промах")
+    print("\n[5] Ответы: +1 за «Похоже», промах уровень не двигает")
     cards = make_cards([("ключ", "key", "Open the door with this key.")])
     store = FakeStore(cards)
     ctrl = VocabularyController(store=store, today=D0)
@@ -225,7 +225,7 @@ def test_answers():
     ctrl3.start()
     res = ctrl3.answer("keys")
     check("«keys» вместо «key» → промах", res["status"] == "miss", res)
-    check("уровень 3 → 2", res["level_from"] == 3 and res["level_to"] == 2, res)
+    check("уровень 3 остался 3", res["level_from"] == 3 and res["level_to"] == 3, res)
     check("вердикт «почти/попробуй»", res["verdict"] in ("almost", "off"), res["verdict"])
 
     cards4 = make_cards([("ключ", "key", "Open the door with this key.")])
@@ -264,13 +264,13 @@ def test_one_grade():
     store = FakeStore(cards)
     ctrl = VocabularyController(store=store, today=D0)
     ctrl.start()
-    first = ctrl.answer("keys")           # промах: 3 → 2
-    check("первый промах снизил уровень", first["level_to"] == 2 and first["changed"] is True,
+    first = ctrl.answer("keys")           # промах: уровень не двигается
+    check("первый промах записан, уровень 3 остался", first["level_to"] == 3 and first["changed"] is True,
           first)
     check("по карточке уже есть итог", ctrl.graded() is True)
     second = ctrl.answer("key")           # теперь верно — но уровень не растёт
     check("повторная удачная попытка уровень НЕ поднимает",
-          second["changed"] is False and second["level_to"] == 2, second)
+          second["changed"] is False and second["level_to"] == 3, second)
     check("и в файл второй раз не пишем", len(store.updates) == 1, store.updates)
     check("итог захода: промах 1, удачно 0",
           ctrl.summary()["miss"] == 1 and ctrl.summary()["good"] == 0, ctrl.summary())
@@ -288,11 +288,11 @@ def test_hint_and_skip():
     ctrl.start()
     res = ctrl.reveal()
     check("подсказка показала значение", res["status"] == "hint" and res["en"] == "key", res)
-    check("подсказка снизила уровень 2 → 1",
-          res["level_from"] == 2 and res["level_to"] == 1, res)
+    check("подсказка уровень не снизила",
+          res["level_from"] == 2 and res["level_to"] == 2, res)
     again = ctrl.answer("key")
     check("после подсказки можно повторить вслух без второго итога",
-          again["changed"] is False and again["level_to"] == 1, again)
+          again["changed"] is False and again["level_to"] == 2, again)
 
     cards2 = make_cards([("ключ", "key", "Open the door with this key.")])
     cards2[0]["level"] = 2
@@ -382,7 +382,7 @@ def test_broken():
     ctrl2 = VocabularyController(store=FakeStore(zero), today=D0)
     ctrl2.start()
     res = ctrl2.answer("keys")          # «почти» = промах
-    check("промах с нулевого уровня ниже нуля не падает",
+    check("промах уровень 0 не сдвигает",
           res["level_to"] == 0 and res["changed"] is True, res)
     check("промах посчитан", zero[0]["misses"] == 1, zero[0])
 

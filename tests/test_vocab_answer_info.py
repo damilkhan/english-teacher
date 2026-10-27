@@ -56,11 +56,11 @@ class FakeStore:
         return self.cards
 
     def update_vocabulary_card(self, word, en, success, user_id=None):
-        """Уровень как в профиле: успех +1, промах −1 (не ниже 0)."""
+        """Уровень как в профиле: успех +1, промах уровень не меняет."""
         for card in self.cards:
             if card.get("word") == word and card.get("en") == en:
                 level = int(card.get("level") or 0)
-                card["level"] = max(0, level + (1 if success else -1))
+                card["level"] = min(5, level + 1) if success else level
                 return card
         return None
 

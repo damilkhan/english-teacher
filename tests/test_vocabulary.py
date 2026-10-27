@@ -8,7 +8,7 @@
 #   1) разбор строки переводчика «key — пример»;
 #   2) автозапись: все три значения → три карточки, дубликатов нет;
 #   3) лестницу уровней 0→1→2→3→4→5 и даты 1/3/7/21 день;
-#   4) промах: −1, не ниже 0, спросить завтра;
+#   4) промах: уровень НЕ меняется (решение 53), спросить завтра;
 #   5) выученное слово не спрашиваем и не сбрасываем;
 #   6) «что спросить сегодня»: только созревшие, порядок, лимит 5;
 #   7) сводку для вкладки «Профиль»;
@@ -146,22 +146,20 @@ def test_ladder_up():
 # 4. Промах
 # =========================================================
 def test_miss():
-    print("\n[4] Промах: −1, не ниже 0, спросить завтра")
+    print("\n[4] Промах: уровень НЕ меняется (решение 53), спросить завтра")
     card = vocabulary.new_card("ключ", "key", "Open the door.", today=D0)
     card["level"] = 3
     vocabulary.register_miss(card, today=D0)
-    check("уровень 3 → 2", card["level"] == 2, card["level"])
+    check("уровень 3 остался 3 (промах не понижает)", card["level"] == 3, card["level"])
     check("спросить завтра", card["next_due"] == "2026-10-19", card["next_due"])
     check("промахов 1", card["misses"] == 1, card["misses"])
     card["level"] = 0
     vocabulary.register_miss(card, today=D0)
     check("с нуля ниже не падает", card["level"] == 0, card["level"])
+    check("промахов 2", card["misses"] == 2, card["misses"])
     card["level"] = 5
     vocabulary.register_miss(card, today=D0)
-    check("выученное при промахе падает на 4", card["level"] == 4, card["level"])
-    check("и снова попадает в вопросы",
-          vocabulary.is_learned(card) is False and card["next_due"] == "2026-10-19",
-          card["next_due"])
+    check("выученное промах не разучивает", card["level"] == 5, card["level"])
 
 
 # =========================================================
@@ -285,7 +283,7 @@ def test_store():
               profile_store.vocabulary_cards()[0]["level"] == 1,
               profile_store.vocabulary_cards()[0])
         card = profile_store.update_vocabulary_card("ключ", "key", False)
-        check("промах: уровень снова 0", card and card["level"] == 0, card)
+        check("промах: уровень остался 1", card and card["level"] == 1, card)
         check("чужой карточки нет → None",
               profile_store.update_vocabulary_card("ключ", "dog", True) is None)
         check("файл по-прежнему читается",
