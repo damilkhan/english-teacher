@@ -226,6 +226,25 @@ _STORY_RE = _re.compile(r"\b(story|stories|tale|fairytale|fairy\s*tale|"
                          r"сказк|истори|расскаж|поведа)", _re.IGNORECASE)
 
 
+# Просьба «давай слова / повторим слова» — открыть окно слов, а НЕ урок.
+# Нужны ОБА признака: тема (слова/карточки) И действие (учить/повторить).
+# Иначе одно слово «слово» в поле ввода уходило бы в окно вместо перевода.
+_WORDS_TOPIC_RE = _re.compile(r"\b(words?|vocabulary|word\s*cards?)\b|слов|лексик|"
+                              r"карточк", _re.IGNORECASE)
+_WORDS_ACTION_RE = _re.compile(r"\b(learn|repeat|study|practice|practise|review|revise|"
+                               r"quiz|test)\w*\b|let's|lets|"
+                               r"повтор|уч(и|им|ить)|тренир|занима|давай|"
+                               r"покаж|начн", _re.IGNORECASE)
+
+
+def _asks_for_words(text):
+    """Просит ли ученик позаниматься словами («давай повторим слова»)."""
+    value = str(text or "")
+    if not value.strip():
+        return False
+    return bool(_WORDS_TOPIC_RE.search(value) and _WORDS_ACTION_RE.search(value))
+
+
 def _asks_for_story(text):
     """Просит ли ученик рассказать историю/сказку."""
     return bool(_STORY_RE.search(str(text or "")))
@@ -2626,6 +2645,24 @@ class EnglishTeacherApp:
         print("🎓 Автозапуск урока взведён: следующий — %s" % lesson_id)
         return True
 
+    def _open_words_on_request(self, text) -> bool:
+        """Просьба «давай слова» → окно слов. True — реплику обработали."""
+        if self.lesson.is_active or not self.profile_ready:
+            return False                # в уроке слова спрашивает сама Джейн
+        if not getattr(config, "VOCAB_ENABLED", True):
+            return False
+        if not _asks_for_words(text):
+            return False
+        self.add_message("Вы", text)
+        self.add_message(self.teacher_name,
+                         "📚 Открываю слова: 5 новых по текущей теме и 5 повторов.")
+        try:
+            self.review_vocabulary()
+        except Exception as exc:
+            print("⚠️ Окно слов не открылось: %s" % exc)
+            return False
+        return True
+
     def _maybe_start_auto_lesson(self, text, sender="Вы"):
         """Первая реплика ученика → сразу начинаем следующий урок по карте.
 
@@ -3227,6 +3264,11 @@ class EnglishTeacherApp:
                 self.add_message(self.teacher_name, EXAM_NO_HINT_NOTE)
             return
         self.input_bar.clear_text()
+        # Просьба про слова важнее автозапуска урока: «давай повторим слова»
+        # обязано открыть окно слов, а не начать урок (живой баг 27.10.2026).
+        # Автозапуск при этом НЕ тратится: урок начнётся со следующей реплики.
+        if self._open_words_on_request(text):
+            return
         # Первая реплика запускает урок (ДО переводчика: русское «привет»
         # тоже должно начинать занятие — см. грабли №28)
         if self._maybe_start_auto_lesson(text, "Вы"):
