@@ -1,0 +1,25 @@
+{
+  "hooks": [
+    {
+      "event": "after_tool",
+      "tool": "write_file",
+      "run": "\"C:/Users/damil/AppData/Local/Programs/Python/Python310/python.exe\" .deepcopilot/check_py.py",
+      "on_failure": "inject_error",
+      "timeout_ms": 30000
+    },
+    {
+      "event": "after_tool",
+      "tool": "str_replace_in_file",
+      "run": "\"C:/Users/damil/AppData/Local/Programs/Python/Python310/python.exe\" .deepcopilot/check_py.py",
+      "on_failure": "inject_error",
+      "timeout_ms": 30000
+    },
+    {
+      "event": "after_tool",
+      "tool": "apply_patch",
+      "run": "\"C:/Users/damil/AppData/Local/Programs/Python/Python310/python.exe\" .deepcopilot/check_py.py",
+      "on_failure": "inject_error",
+      "timeout_ms": 30000
+    }
+  ]
+}
