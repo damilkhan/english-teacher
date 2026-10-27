@@ -54,6 +54,7 @@ import theme
 import tts
 import user_manager
 import vocabulary
+import vocab_lines
 from controllers.chat_controller import ChatController
 from controllers.dispatcher import Dispatcher
 from controllers.lesson_controller import LessonController
@@ -2646,7 +2647,13 @@ class EnglishTeacherApp:
         return True
 
     def _open_words_on_request(self, text) -> bool:
-        """Просьба «давай слова» → окно слов. True — реплику обработали."""
+        """Просьба «давай слова» → окно слов. True — реплику обработали.
+
+        Порядок (просьба ученика 27.10.2026): сначала Вербот ОТВЕЧАЕТ
+        по-английски («Okay! Here are your words.») и проговаривает фразу до
+        конца — и только потом открывается окно карточек. Раньше окно
+        появлялось одновременно с репликой, и ответ бота никто не слышал.
+        """
         if self.lesson.is_active or not self.profile_ready:
             return False                # в уроке слова спрашивает сама Джейн
         if not getattr(config, "VOCAB_ENABLED", True):
@@ -2654,14 +2661,45 @@ class EnglishTeacherApp:
         if not _asks_for_words(text):
             return False
         self.add_message("Вы", text)
-        self.add_message(self.teacher_name,
-                         "📚 Открываю слова: 5 новых по текущей теме и 5 повторов.")
-        try:
-            self.review_vocabulary()
-        except Exception as exc:
-            print("⚠️ Окно слов не открылось: %s" % exc)
-            return False
+        line = vocab_lines.pick_open(getattr(self, "_words_line", ""))
+        self._words_line = line          # следующая фраза будет другой
+        mark = self.add_message(self.teacher_name, line)
+        self._open_words_after(line, mark)
         return True
+
+    def _open_words_after(self, line, mark=None):
+        """Проговорить фразу и открыть окно слов, когда речь ДОИГРАЕТ.
+
+        Окно открывается один раз: кто первый — конец озвучки или страховочный
+        таймер VOCAB_OPEN_GUARD_MS (голос при этом не глушится).
+        """
+        state = {"opened": False}
+
+        def _open():
+            if state["opened"]:
+                return
+            state["opened"] = True
+            if mark:
+                # значок 🔊 у реплики — как у обычного ответа Вербот (§43)
+                try:
+                    self.chat_view.enable_replay(mark)
+                except Exception:
+                    pass
+            try:
+                self.review_vocabulary()
+            except Exception as exc:
+                print("⚠️ Окно слов не открылось: %s" % exc)
+
+        def _later():
+            self._dispatch(_open)
+
+        self._say(line, on_done=_later)
+        # Страховка: озвучка зависла — окно всё равно откроется. Обычный путь
+        # (конец фразы, 2-3 с) срабатывает раньше таймера.
+        try:
+            self.window.after(getattr(config, "VOCAB_OPEN_GUARD_MS", 8000), _later)
+        except Exception:
+            pass
 
     def _maybe_start_auto_lesson(self, text, sender="Вы"):
         """Первая реплика ученика → сразу начинаем следующий урок по карте.

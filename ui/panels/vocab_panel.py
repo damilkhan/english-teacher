@@ -29,6 +29,7 @@ import customtkinter as ctk
 
 import theme
 import vocabulary
+import vocab_lines
 
 WIDTH = 560
 HEIGHT = 486
@@ -39,7 +40,10 @@ RECORD_ACTIVE = "🔴  Отпусти — проверить"
 LISTEN_TEXT = "🔊  Послушать"
 HINT_TEXT = "💡  Подсказка"
 LATER_TEXT = "Позже"
+# Главная кнопка одна (просьба ученика 27.10.2026): пока ответа нет — «Запись»,
+# после верного ответа — «Дальше», на последнем слове — «Готово».
 NEXT_TEXT = "Дальше  ▶"
+DONE_TEXT = "Готово  ▶"
 
 
 class VocabPanel(ctk.CTkToplevel):
@@ -50,7 +54,7 @@ class VocabPanel(ctk.CTkToplevel):
                  on_record_stop: Optional[Callable[[], None]] = None,
                  on_say: Optional[Callable[[str], None]] = None,
                  on_finish: Optional[Callable[[dict], None]] = None,
-                 empty_text: str = ""):
+                 empty_text: str = "", lines=None):
         super().__init__(parent)
         self.palette = palette
         self.controller = controller
@@ -60,6 +64,10 @@ class VocabPanel(ctk.CTkToplevel):
         self._on_finish = on_finish
         # что написать, если повторять нечего (окно открыли кнопкой с карты)
         self._empty_text = str(empty_text or "")
+        # фразы Вербота за ЭТОТ заход (похвала, подбадривание) — vocab_lines
+        self._lines = lines if lines is not None else vocab_lines.LinePicker()
+        self._main_mode = "record"   # главная кнопка: запись / дальше / готово
+        self._skip_release = False   # «Дальше» нажали — отпускание не записываем
         self._open = True
         self._answered = False       # по текущему слову уже показан итог
         self._finished = False
@@ -188,14 +196,53 @@ class VocabPanel(ctk.CTkToplevel):
         self.verdict_lbl.configure(text="", text_color=self.palette["text"])
         self.hint_lbl.configure(text="Зажми «Запись», скажи слово — и отпусти.",
                                 text_color=self.palette["muted"])
-        self._set_answer_buttons(True)
+        self._hide_next_button()
+        self._set_main("record")
 
-    def _set_answer_buttons(self, answering: bool) -> None:
-        """Пока ответ не дан — «Дальше» не нужна (она закрывает слово)."""
+    def _set_main(self, mode: str) -> None:
+        """Вид ГЛАВНОЙ кнопки: record / next / done / off.
+
+        Просьба ученика 27.10.2026: две кнопки («Запись» и «Дальше») мешали —
+        после верного ответа та же большая кнопка становится «Дальше ▶»,
+        а на последнем слове — «Готово ▶».
+        """
+        self._main_mode = mode
+        p = self.palette
         try:
-            self.next_btn.configure(state="normal" if not answering else "disabled")
+            if mode in ("next", "done"):
+                self.record_btn.configure(
+                    text=NEXT_TEXT if mode == "next" else DONE_TEXT,
+                    fg_color=p["accent"], hover_color=p["accent_hover"],
+                    state="normal")
+            elif mode == "record":
+                self.record_btn.configure(text=RECORD_TEXT, fg_color=p["accent"],
+                                          hover_color=p["accent_hover"],
+                                          state="normal")
+            else:
+                self.record_btn.configure(text=RECORD_TEXT, state="disabled")
         except Exception:
             pass
+
+    def _pack_next_button(self) -> None:
+        """Показать нижнюю кнопку закрытия (только на итоговых экранах)."""
+        try:
+            self.next_btn.pack(side="right", before=self.later_btn)
+        except Exception:
+            pass
+
+    def _hide_next_button(self) -> None:
+        """В заходе нижняя «Дальше» не нужна: её роль играет главная кнопка."""
+        try:
+            self.next_btn.pack_forget()
+        except Exception:
+            pass
+
+    def _at_last(self) -> bool:
+        """Это последнее слово захода (главная кнопка скажет «Готово»)."""
+        try:
+            return self.controller.position >= self.controller.total
+        except Exception:
+            return False
 
     # -----------------------------------------------------
     # Ответ ученика (текст приходит из распознавания)
@@ -229,14 +276,17 @@ class VocabPanel(ctk.CTkToplevel):
             return
 
         self._answered = True
-        self._set_answer_buttons(False)
         if status == "good":
             self._show_good(result)
         else:
             self._show_miss(result, text)
 
     def _show_good(self, result) -> None:
-        """Удачный ответ: «✅ Похоже!» и уровень +1."""
+        """Удачный ответ: «✅ Похоже!», похвала РАЗНЫМИ фразами, кнопка «Дальше».
+
+        Просьба ученика 27.10.2026: хвалить каждый раз по-новому (одна и та же
+        фраза — не больше двух раз за заход, см. vocab_lines.LinePicker).
+        """
         card = self.controller.current() or {}
         english = card.get("en") or ""
         heard = str(result.get("heard") or "").strip()
@@ -247,12 +297,17 @@ class VocabPanel(ctk.CTkToplevel):
             lines.append("🌟 Слово выучено — больше не спрошу.")
         elif self._level_changed(result):
             lines.append("Уровень %s → %s." % (result.get("level_from"), result.get("level_to")))
+        praise = self._lines.praise()
+        if praise:
+            lines.append(praise)          # видно в окне то же, что звучит
         self._show_lines(lines[0], " ".join(lines[1:]), color_key="ok")
-        self.hint_lbl.configure(text="Нажми «Дальше».", text_color=self.palette["muted"])
-        if self._on_say is not None:
-            # короткая похвала голосом — как в уроке
+        self._set_main("done" if self._at_last() else "next")
+        self.hint_lbl.configure(text="Нажми «Дальше» — или скажи слово ещё раз.",
+                                text_color=self.palette["muted"])
+        if praise and self._on_say is not None:
+            # похвала голосом — как в уроке
             try:
-                self._on_say("Good!")
+                self._on_say(praise)
             except Exception:
                 pass
 
@@ -263,10 +318,19 @@ class VocabPanel(ctk.CTkToplevel):
         lines = [message or "🔁 Попробуй ещё"]
         if self._level_changed(result):
             lines.append("Уровень %s → %s." % (result.get("level_from"), result.get("level_to")))
+        # подбадривание — РЕДКО и не то же самое подряд (просьба ученика)
+        cheer = self._lines.maybe_motivate()
+        if cheer:
+            lines.append(cheer)
         self._show_lines(lines[0], " ".join(lines[1:]), color_key="warn")
         self.hint_lbl.configure(
             text="Можно повторить: 🔊 послушай и скажи ещё раз, или загляни в 💡 Подсказку.",
             text_color=self.palette["muted"])
+        if cheer and self._on_say is not None:
+            try:
+                self._on_say(cheer)
+            except Exception:
+                pass
 
     @staticmethod
     def _level_changed(result) -> bool:
@@ -285,8 +349,20 @@ class VocabPanel(ctk.CTkToplevel):
     # Кнопки
     # -----------------------------------------------------
     def _record(self, pressed: bool) -> None:
-        """Запись «нажать и держать» (как в главном окне)."""
+        """Запись «нажать и держать» (как в главном окне).
+
+        Когда ответ уже дан, эта же кнопка стала «Дальше»/«Готово»: одно
+        нажатие переключает слово (просьба ученика 27.10.2026).
+        """
         if self._finished:
+            return
+        if self._skip_release and not pressed:
+            self._skip_release = False      # это отпускание, а не новое нажатие
+            return
+        if self._main_mode != "record":
+            if pressed:
+                self._skip_release = True
+                self._next()
             return
         callback = self._on_record_start if pressed else self._on_record_stop
         if callback is None:
@@ -299,6 +375,8 @@ class VocabPanel(ctk.CTkToplevel):
     def set_recording(self, recording: bool) -> None:
         """Вид кнопки записи во время записи."""
         p = self.palette
+        if self._main_mode != "record":
+            return              # кнопка сейчас «Дальше»/«Готово» — не перекрашиваем
         try:
             if recording:
                 self.record_btn.configure(text=RECORD_ACTIVE, fg_color=p["record"],
@@ -325,7 +403,6 @@ class VocabPanel(ctk.CTkToplevel):
         if result.get("status") != "hint":
             return
         self._answered = True
-        self._set_answer_buttons(False)
         main = "💡 По-английски: «%s»" % result.get("en", "")
         example = str(result.get("example") or "").strip()
         self._show_lines(main, ("Пример: %s" % example) if example else "", color_key="cyan")
@@ -333,6 +410,8 @@ class VocabPanel(ctk.CTkToplevel):
         if self._level_changed(result):
             note += " Уровень %s → %s." % (result.get("level_from"), result.get("level_to"))
         self.hint_lbl.configure(text=note, text_color=self.palette["muted"])
+        # ответ уже показан — дальше идём той же главной кнопкой
+        self._set_main("done" if self._at_last() else "next")
 
     def _later(self) -> None:
         """«Позже»: без изменений, слово вернётся в следующий раз."""
@@ -359,7 +438,7 @@ class VocabPanel(ctk.CTkToplevel):
             return
         self._finished = True
         p = self.palette
-        self._set_answer_buttons(False)
+        self._set_main("off")
         try:
             self.bar.set(0)
         except Exception:
@@ -378,6 +457,7 @@ class VocabPanel(ctk.CTkToplevel):
         try:
             self.next_btn.configure(text="Понятно", state="normal",
                                     command=self._done)
+            self._pack_next_button()
         except Exception:
             pass
         self.hint_lbl.configure(text="Слова повторяются по лестнице: 1 → 3 → 7 → 21 день.",
@@ -389,7 +469,7 @@ class VocabPanel(ctk.CTkToplevel):
         self._finished = True
         stats = self.controller.summary()
         p = self.palette
-        self._set_answer_buttons(False)
+        self._set_main("off")
         try:
             self.bar.set(1.0)
         except Exception:
@@ -409,6 +489,7 @@ class VocabPanel(ctk.CTkToplevel):
         try:
             self.next_btn.configure(text="Готово", state="normal",
                                     command=self._done)
+            self._pack_next_button()
         except Exception:
             pass
         self.hint_lbl.configure(text="Слова повторяются по лестнице: 1 → 3 → 7 → 21 день.",

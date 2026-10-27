@@ -11,7 +11,9 @@
 #   2) одиночное слово («слово», «flatbread») НЕ считается просьбой;
 #   3) порядок в send_text: проверка слов стоит ДО автозапуска урока;
 #   4) в уроке просьба о словах не перехватывается (там слова ведёт Джейн);
-#   5) без урока просьба открывает окно слов.
+#   5) без урока просьба открывает окно слов — но СНАЧАЛА ответ голосом,
+#      и только после конца речи (страховка — VOCAB_OPEN_GUARD_MS);
+#   6) фраза перед окном меняется от раза к разу.
 # =========================================================
 
 import os
@@ -126,29 +128,107 @@ def test_in_lesson():
     check("в чат ничего не писали", App.messages == [], App.messages)
 
 
-def test_opened():
-    print("\n[5] Без урока просьба открывает окно слов")
-    from ui.app import EnglishTeacherApp
+class Window:
+    """Подделка Tk-окна: после() сразу запоминает отложенный вызов."""
+
+    def __init__(self):
+        self.pending = []
+
+    def after(self, ms, fn=None, *args):
+        self.pending.append((ms, fn))
+        return len(self.pending)
+
+
+class ChatView:
+    def __init__(self):
+        self.replayed = []
+
+    def enable_replay(self, mark):
+        self.replayed.append(mark)
+
+
+def make_app(said=None):
+    """Подделка приложения: помнит реплики, озвучку и отложенные вызовы."""
 
     class App:
         lesson = type("L", (), {"is_active": False})()
         profile_ready = True
         teacher_name = "Verbot"
-        messages = []
-        opened = []
+
+        def __init__(self):
+            self.messages = []
+            self.opened = []
+            self.said = []                 # (текст, колбэк «речь доиграла»)
+            self.window = Window()
+            self.chat_view = ChatView()
 
         def add_message(self, *args, **kwargs):
             self.messages.append(args)
+            return "mark-%d" % len(self.messages)
 
         def review_vocabulary(self):
             self.opened.append(1)
             return "panel"
 
-    app = App()
+        def _say(self, text, on_done=None, **_kw):
+            self.said.append((text, on_done))
+
+        def _dispatch(self, fn):
+            fn()
+
+    # настоящий метод разговора с окном (озвучка → окно), без подделки
+    from ui.app import EnglishTeacherApp
+    App._open_words_after = EnglishTeacherApp._open_words_after
+    return App()
+
+
+def test_opened():
+    print("\n[5] Без урока просьба открывает окно слов")
+    from ui.app import EnglishTeacherApp
+
+    app = make_app()
     result = EnglishTeacherApp._open_words_on_request(app, "давай повторим слова")
     check("вернулось True (реплику обработали)", result is True, result)
-    check("окно слов открыли", app.opened == [1], app.opened)
     check("в чат ушли две строки (моя и ответ)", len(app.messages) == 2, app.messages)
+    check("ответ Вербота — ПО-АНГЛИЙСКИ",
+          app.messages and not any("\u0400" <= ch <= "\u04ff" for ch in str(app.messages[-1][1])),
+          app.messages[-1] if app.messages else None)
+    check("фраза озвучена голосом", len(app.said) == 1, app.said)
+    check("окно НЕ открылось до конца речи", app.opened == [], app.opened)
+    check("есть страховочный таймер", len(app.window.pending) == 1, app.window.pending)
+
+    # «речь доиграла» — только теперь открывается окно
+    said_text, on_done = app.said[0]
+    check("озвучена та же фраза, что в чате",
+          said_text == app.messages[-1][1], (said_text, app.messages[-1][1]))
+    on_done()
+    check("после речи окно слов открыли", app.opened == [1], app.opened)
+    check("у реплики включён значок 🔊", app.chat_view.replayed == ["mark-2"],
+          app.chat_view.replayed)
+
+    # страховка не открывает окно второй раз
+    for _ms, fn in app.window.pending:
+        if fn is not None:
+            fn()
+    check("страховка не открыла окно второй раз", app.opened == [1], app.opened)
+
+
+def test_phrase_varies():
+    print("\n[6] Фраза перед окном меняется от раза к разу")
+    from ui.app import EnglishTeacherApp
+    import vocab_lines
+
+    said = []
+    for _ in range(6):
+        app = make_app()
+        EnglishTeacherApp._open_words_on_request(app, "давай слова")
+        said.append(app.messages[-1][1])
+    check("шесть открытий — не одна и та же фраза",
+          len(set(said)) >= 2, said)
+    check("все фразы из набора OPEN_LINES",
+          all(line in vocab_lines.OPEN_LINES for line in said), said)
+    check("подряд одна и та же не повторяется",
+          all(said[i] != said[i + 1] for i in range(len(said) - 1)), said)
 
 
 def main():
@@ -158,6 +238,7 @@ def main():
     test_order()
     test_in_lesson()
     test_opened()
+    test_phrase_varies()
     print("\n" + "=" * 60)
     if FAILED:
         print("ПРОВАЛОВ: %d" % len(FAILED))
