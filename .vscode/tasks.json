@@ -2,22 +2,66 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "🚀 Запустить сервер",
+            "label": "▶ Запустить Verbot",
+            "detail": "run_teacher.bat: сам поднимает llama-server с --mmproj, пишет логи, не даёт запустить вторую копию",
+            "type": "shell",
+            "command": "run_teacher.bat",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "none",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": true,
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "🐞 Запустить Verbot с логами",
+            "detail": "run_teacher.bat debug — с окном консоли; логи в logs\\app.log и logs\\llama-server.log",
+            "type": "shell",
+            "command": "run_teacher.bat",
+            "args": [
+                "debug"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "none",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "dedicated",
+                "showReuseMessage": true,
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "🚀 Сервер отдельно (для отладки)",
+            "detail": "ТОЧНО как в server_manager.build_args: -c 8192 + --mmproj. Обычно НЕ нужен: launcher поднимает сервер сам",
             "type": "shell",
             "command": "D:\\llama.cpp\\llama-server.exe",
             "args": [
                 "-m",
                 "D:\\EnglishTeacher\\models\\gemma\\Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
                 "-c",
-                "4096",
+                "8192",
                 "--host",
                 "127.0.0.1",
                 "--port",
                 "8080",
-                "--jinja"
+                "--jinja",
+                "--mmproj",
+                "D:\\EnglishTeacher\\models\\gemma\\mmproj-Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-f16.gguf"
             ],
             "options": {
-                "cwd": "D:\\EnglishTeacher"
+                "cwd": "${workspaceFolder}"
             },
             "group": "none",
             "presentation": {
@@ -32,38 +76,26 @@
             "problemMatcher": []
         },
         {
-            "label": "🎤 Запустить преподавателя",
-            "type": "shell",
-            "command": "python",
+            "label": "🧪 Тест: текущий файл (Python 3.10)",
+            "detail": "Гоняет открытый в редакторе tests\\test_*.py интерпретатором 3.10 (в PATH лежит 3.14 без customtkinter)",
+            "type": "process",
+            "command": "C:\\Users\\damil\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
             "args": [
-                "gui.py"
+                "${file}"
             ],
             "options": {
-                "cwd": "D:\\EnglishTeacher"
+                "cwd": "${workspaceFolder}"
             },
-            "group": "none",
+            "group": "test",
             "presentation": {
                 "echo": true,
                 "reveal": "always",
                 "focus": true,
                 "panel": "dedicated",
-                "showReuseMessage": true,
+                "showReuseMessage": false,
                 "clear": true
-            }
-        },
-        {
-            "label": "⚡ Запустить всё (сервер + преподаватель)",
-            "dependsOn": [
-                "🚀 Запустить сервер",
-                "🎤 Запустить преподавателя"
-            ],
-            "dependsOrder": "sequence",
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": true,
-                "panel": "dedicated"
-            }
+            },
+            "problemMatcher": []
         }
     ]
 }

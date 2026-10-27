@@ -26,3 +26,7 @@ _shots/
 data/*
 # но банк слов по уровням — часть проекта (glossary.json остаётся личным)
 !data/words_*.json
+
+
+# логи расширения Deep Copilot в VS Code (машинное, не часть проекта)
+.deep-copilot/
