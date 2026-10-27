@@ -38,6 +38,10 @@ class STTEngine:
         self.hotwords_provider = hotwords_provider
         self.hotwords = str(getattr(config, "STT_HOTWORDS", "") or "")
         self.initial_prompt = ""
+        # Принудительный язык распознавания (None — определять самому).
+        # Нужен в окне повторения слов: там ученик ВСЕГДА говорит по-английски,
+        # и автоопределение на одном коротком слове ошибается (27.10.2026).
+        self.language = None
         self.model = None
         self.error = None
         self._ready = threading.Event()   # загрузка завершилась (успех/ошибка)
@@ -62,6 +66,14 @@ class STTEngine:
             self.hotwords = str(hotwords)
         if initial_prompt is not None:
             self.initial_prompt = str(initial_prompt)
+
+    def set_language(self, language=None):
+        """Задать язык распознавания жёстко ('en', 'ru') или сбросить (None).
+
+        Нужно окну повторения слов: там ученик говорит ТОЛЬКО по-английски,
+        а на одном коротком слове автоопределение языка ошибается.
+        """
+        self.language = str(language) if language else None
 
     def _emit(self, state, message):
         if self.on_state is None:
@@ -147,7 +159,7 @@ class STTEngine:
         """Параметры transcribe() из config — единая точка настройки скорости."""
         beam = int(getattr(config, "STT_BEAM_SIZE", 1) or 1)
         options = {
-            "language": None,           # автоопределение языка
+            "language": self.language,  # None — автоопределение языка
             "beam_size": beam,
             "best_of": max(1, beam),    # нужен только при подборе temp > 0
             "without_timestamps": bool(getattr(config, "STT_WITHOUT_TIMESTAMPS", True)),

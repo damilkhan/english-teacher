@@ -157,6 +157,27 @@ def test_hotwords():
           "hotwords" not in kwargs3 and "initial_prompt" not in kwargs3, kwargs3)
 
 
+def test_forced_language():
+    print("\n[6] Жёсткий английский в окне повторения слов (27.10.2026)")
+    data = pcm(speech_with_silence())
+
+    eng = make_engine()
+    eng.set_language("en")
+    eng.recognize(data)
+    _, kwargs = eng.model.calls[0]
+    check("set_language('en') → language='en' в модель",
+          kwargs.get("language") == "en", kwargs)
+
+    eng.set_language(None)
+    eng.recognize(data)
+    _, kwargs2 = eng.model.calls[1]
+    check("set_language(None) → снова автоопределение",
+          kwargs2.get("language") is None, kwargs2)
+
+    eng.set_language("")
+    check("пустая строка тоже сбрасывает язык", eng.language is None, eng.language)
+
+
 def main():
     print("=" * 60)
     print("Проверка распознавания речи (настройка, без реальной модели)")
@@ -167,6 +188,7 @@ def main():
     test_silence_only()
     test_too_short()
     test_hotwords()
+    test_forced_language()
 
     print("\n" + "=" * 60)
     if FAILED:

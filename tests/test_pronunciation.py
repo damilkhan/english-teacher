@@ -153,6 +153,29 @@ def test_extra_words():
     check("вердикт не «похоже»", r2.verdict != pr.GOOD, (r2.verdict, r2.score))
 
 
+def test_merged_words():
+    print("\n[10] Whisper разрезал слово — это НЕ ошибка (жалоба 27.10.2026)")
+    r = pr.compare("flatbread", "flat bread")
+    check("«flat bread» = «flatbread» → похоже", r.verdict == pr.GOOD,
+          (r.verdict, r.score))
+    check("лишнего слова в подсказке нет", "лишнее" not in r.message, r.message)
+    check("то же в длинной фразе",
+          pr.compare("I like flatbread", "i like flat bread").verdict == pr.GOOD)
+    check("склеивание работает и наоборот",
+          pr.compare("bus stop", "busstop").verdict == pr.GOOD)
+    check("окончание -s не мешает",
+          pr.compare("flatbread", "flat breads").verdict == pr.GOOD)
+    r2 = pr.compare("flatbread", "flatbed")
+    check("«flatbed» — всё-таки не точный ответ", r2.verdict != pr.GOOD,
+          (r2.verdict, r2.score))
+    r3 = pr.compare("flatbread", "flat bread for lunch")
+    check("сказал своё (длинная фраза) — молчим", r3.verdict == pr.UNRELATED,
+          (r3.verdict, r3.score))
+    r4 = pr.compare("Open the door with this key.", "open the door with this cap")
+    check("разные слова по-прежнему «почти»", r4.verdict == pr.ALMOST,
+          (r4.verdict, r4.score))
+
+
 def test_speed():
     print("\n[9] Скорость: сверка не тормозит диалог")
     import time
@@ -177,6 +200,7 @@ def main():
     test_thresholds_from_config()
     test_reference_from_hint()
     test_extra_words()
+    test_merged_words()
     test_speed()
     print("\n" + "=" * 60)
     if FAILED:

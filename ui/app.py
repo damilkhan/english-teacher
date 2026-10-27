@@ -2502,6 +2502,12 @@ class EnglishTeacherApp:
             print("⚠️ Окно повторения не открылось: %s" % exc)
             self.vocab_panel = None
             return None
+        # Пока окно открыто, ученик говорит ТОЛЬКО по-английски: жёсткий язык
+        # спасает короткие слова, где автоопределение ошибается (27.10.2026).
+        try:
+            self.stt.set_language("en")
+        except Exception:
+            pass
         return self.vocab_panel
 
     @staticmethod
@@ -2533,6 +2539,12 @@ class EnglishTeacherApp:
     def _vocab_finished(self, summary):
         """Окно повторения закрылось: обновить «Профиль» и забыть окно."""
         self.vocab_panel = None
+        # В обычном чате язык снова определяем сами (русское слово в поле
+        # должно уходить в перевод, а не в английскую сверку).
+        try:
+            self.stt.set_language(None)
+        except Exception:
+            pass
         print("📚 Повторение закончено: %s" % (summary or {}))
         self._refresh_side_views()
         if self._arm_after_vocab:
@@ -3121,15 +3133,32 @@ class EnglishTeacherApp:
         return state
 
     def _stt_hotwords(self):
-        """Слова-подсказки для Whisper: имя ученика в двух формах.
+        """Слова-подсказки для Whisper: имя ученика и слово из карточки.
 
         Имена — главная «жертва» распознавания («Дамиль» легко услышать как
-        что-то другое). Возвращаем строку через запятую; вызывается из
-        фонового потока распознавания, поэтому только ЧИТАЕМ данные.
+        что-то другое). В окне повторения добавляем ЦЕЛЕВОЕ слово и пример:
+        Whisper режет составные слова («flatbread» слышит как «flat bread»),
+        а с подсказкой он знает, какое слово ждут (замер и жалоба 27.10.2026).
+        Возвращаем строку через запятую; вызывается из фонового потока
+        распознавания, поэтому только ЧИТАЕМ данные.
         """
         u = self.current_user or {}
         parts = [u.get("name"), u.get("name_latin")]
+        card = self._vocab_stt_card()
+        if card:
+            parts.append(card.get("en"))
+            parts.append(card.get("example"))
         return ", ".join(p for p in parts if p)
+
+    def _vocab_stt_card(self):
+        """Карточка, которая сейчас на экране повторения (или None)."""
+        panel = self.vocab_panel
+        if panel is None:
+            return None
+        try:
+            return self.vocab.current()
+        except Exception:
+            return None
 
     def _on_stt_state(self, state, message):
         """Колбэк STTEngine (из фонового потока) → в главный поток."""

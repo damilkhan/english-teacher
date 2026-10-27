@@ -40,6 +40,14 @@ DEFAULT_RELATED = 0.34     # ниже — считаем, что сказано 
 # Посимвольная близость слова → «почти то же слово» (think/sink = 0.67,
 # key/keys = 0.86, cat/dog = 0). Ниже 0.6 — уже другое слово.
 CLOSE_WORD = 0.60
+# СКОЛЬКО ПОХОЖЕ «СКЛЕЕННОЕ» СЛОВО. Whisper режет составные слова:
+# сказанное «flatbread» приходит как «flat bread», и сверка видела ДВА
+# слова («flat» вместо «flatbread» + лишнее «bread») → «🔁 Попробуй ещё»
+# на ПРАВИЛЬНОМ произношении (живая жалоба ученика 27.10.2026).
+# Теперь участок, где слова не совпали, дополнительно склеивается и
+# сравнивается ЦЕЛИКОМ: «flatbread» = «flat bread», «busstop» = «bus stop».
+# 0.85 — чтобы «flatbed» (0.82) осталось НЕ точным ответом.
+MERGED_WORD = 0.85
 
 # Артикли и запинки: их пропуск/появление ошибкой не считаем
 _NOISE = {"a", "an", "the", "um", "uh", "er", "ah", "oh", "hmm", "mm", "eh"}
@@ -130,6 +138,7 @@ class WordDiff:
     reference: Optional[str]
     heard: Optional[str]
     status: str                    # ok | close | miss | missing | extra
+    weight: int = 1                # сколько слов покрыто (склейка = 2 и больше)
 
     @property
     def fixed(self) -> bool:
@@ -207,6 +216,17 @@ def _align(reference: List[str], heard: List[str]) -> List[WordDiff]:
             continue
         ref_part = reference[i1:i2]
         heard_part = heard[j1:j2]
+        # СКЛЕЙКА: участок, где одно слово разъехалось на два (или наоборот),
+        # сравниваем целиком — без пробелов. Совпало почти точно → это НЕ
+        # ошибка произношения, а привычка Whisper резать слова.
+        if tag == "replace" and (len(ref_part) > 1 or len(heard_part) > 1):
+            joined_ref = "".join(ref_part)
+            joined_heard = "".join(heard_part)
+            merged = difflib.SequenceMatcher(None, joined_ref, joined_heard).ratio()
+            if merged >= MERGED_WORD:
+                diffs.append(WordDiff(" ".join(ref_part), " ".join(heard_part),
+                                      "ok", max(len(ref_part), len(heard_part))))
+                continue
         for index in range(max(len(ref_part), len(heard_part))):
             ref_word = ref_part[index] if index < len(ref_part) else None
             heard_word = heard_part[index] if index < len(heard_part) else None
@@ -249,9 +269,9 @@ def compare(reference, heard) -> Report:
     diffs = _align(ref_words, heard_words)
     report.diffs = diffs
 
-    total = sum(1.0 if d.status == "ok" else
+    total = sum(d.weight * (1.0 if d.status == "ok" else
                 0.6 if d.status == "close" else
-                (_word_similarity(d.reference, d.heard) * 0.3 if d.reference and d.heard else 0.0)
+                (_word_similarity(d.reference, d.heard) * 0.3 if d.reference and d.heard else 0.0))
                 for d in diffs)
     scale = max(len(ref_words), len(heard_words)) or 1
     report.score = max(0.0, min(1.0, total / scale))
