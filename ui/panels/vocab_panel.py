@@ -54,7 +54,7 @@ class VocabPanel(ctk.CTkToplevel):
                  on_record_stop: Optional[Callable[[], None]] = None,
                  on_say: Optional[Callable[[str], None]] = None,
                  on_finish: Optional[Callable[[dict], None]] = None,
-                 empty_text: str = "", lines=None):
+                 lines=None):
         super().__init__(parent)
         self.palette = palette
         self.controller = controller
@@ -62,8 +62,6 @@ class VocabPanel(ctk.CTkToplevel):
         self._on_record_stop = on_record_stop
         self._on_say = on_say
         self._on_finish = on_finish
-        # что написать, если повторять нечего (окно открыли кнопкой с карты)
-        self._empty_text = str(empty_text or "")
         # фразы Вербота за ЭТОТ заход (похвала, подбадривание) — vocab_lines
         self._lines = lines if lines is not None else vocab_lines.LinePicker()
         self._main_mode = "record"   # главная кнопка: запись / дальше / готово
@@ -429,10 +427,11 @@ class VocabPanel(ctk.CTkToplevel):
     # Итог
     # -----------------------------------------------------
     def _show_empty(self) -> None:
-        """Повторять нечего: окно объясняет почему и спокойно закрывается.
+        """Страховка: пустое окно больше НЕ показываем (решение 27.10.2026).
 
-        Так кнопка «📚 Повторить слова» работает ВСЕГДА (её смысл — увидеть
-        окно в любой момент), а не молчит, ничего не открывая.
+        Если слов нет, Вербот говорит это голосом и окно не открывает
+        (app._say_words_empty). Внутреннее устройство (норма дня, лестница
+        повторов) ученику не объясняем — тут только короткая заглушка.
         """
         if self._finished:
             return
@@ -443,12 +442,10 @@ class VocabPanel(ctk.CTkToplevel):
             self.bar.set(0)
         except Exception:
             pass
-        self.counter_lbl.configure(text="Повторять нечего")
-        self.word_lbl.configure(text="Пока нечего 📚", text_color=p["text_strong"])
+        self.counter_lbl.configure(text="Нет слов")
+        self.word_lbl.configure(text="—", text_color=p["text_strong"])
         self.example_lbl.configure(text="", text_color=p["muted"])
-        self._show_lines(self._empty_text or "Слов для повторения сейчас нет.",
-                         "Слова копятся сами: переведи слово в чате — "
-                         "и оно придёт сюда.", color_key="muted")
+        self._show_lines("Слов сейчас нет.", "", color_key="muted")
         for btn in (self.record_btn, self.hint_btn, self.later_btn, self.listen_btn):
             try:
                 btn.configure(state="disabled")
@@ -460,8 +457,7 @@ class VocabPanel(ctk.CTkToplevel):
             self._pack_next_button()
         except Exception:
             pass
-        self.hint_lbl.configure(text="Слова повторяются по лестнице: 1 → 3 → 7 → 21 день.",
-                                text_color=p["muted"])
+        self.hint_lbl.configure(text="", text_color=p["muted"])
 
     def _show_result(self) -> None:
         if self._finished:

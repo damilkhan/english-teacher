@@ -335,6 +335,18 @@ def new_per_day() -> int:
         return 5
 
 
+def on_demand_new() -> int:
+    """Сколько НОВЫХ слов дать, когда ученик САМ попросил слова.
+
+    Решение ученика 27.10.2026: просьба не смотрит на норму дня. Обязательный
+    заход (раз в день) даёт new_per_day(), просьба — on_demand_new().
+    """
+    try:
+        return max(0, int(getattr(config, "VOCAB_ON_DEMAND_NEW", 10)))
+    except (TypeError, ValueError):
+        return 10
+
+
 def created_today(cards, today=None) -> int:
     """Сколько карточек ИЗ БАНКА заведено сегодня (норму не превышаем)."""
     day = _iso(_as_date(today))
@@ -416,7 +428,20 @@ def pick_mix(cards, candidates=(), theme="", today=None, new_limit=None):
         room = 0
     if room:
         queue += take(due, room)
-    return queue + fresh, fresh
+    out = queue + fresh
+    # Окно НИКОГДА не больше захода: по просьбе ученика новых может быть 10,
+    # и вместе с корзинами повторов вышло бы 15. Новые важнее повторов (они
+    # уже записаны в профиль — окно обязано их показать), поэтому режем
+    # повторы с конца, а новые — только если их больше размера окна.
+    try:
+        size = int(session_size()) or 0
+    except (TypeError, ValueError):
+        size = 0
+    if size and len(out) > size:
+        extra = len(out) - size
+        queue = queue[:max(0, len(queue) - extra)]
+        out = (queue + fresh)[:size]
+    return out, fresh
 
 
 def stats(cards, today=None) -> dict:

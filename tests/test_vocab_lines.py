@@ -55,7 +55,9 @@ def test_sets():
     print("\n[1] Наборы фраз: английские, разные, без дублей")
     for label, lines in (("OPEN", vocab_lines.OPEN_LINES),
                          ("PRAISE", vocab_lines.PRAISE_LINES),
-                         ("MOTIVATE", vocab_lines.MOTIVATE_LINES)):
+                         ("MOTIVATE", vocab_lines.MOTIVATE_LINES),
+                         ("EMPTY", vocab_lines.EMPTY_LINES),
+                         ("FREE", vocab_lines.FREE_LINES)):
         check("%s: не меньше 6 фраз" % label, len(lines) >= 6, len(lines))
         check("%s: без повторов" % label, len(set(lines)) == len(lines), len(lines))
         check("%s: только по-английски" % label,
@@ -192,6 +194,35 @@ def test_panel_source():
 
 
 # =========================================================
+# 5b. «Слов нет» и «свободное общение»
+# =========================================================
+def test_empty_and_free():
+    print("\n[5b] Фраза «слов нет» и кнопка «Свободное общение»")
+    first = vocab_lines.pick_empty()
+    check("фраза из EMPTY_LINES", first in vocab_lines.EMPTY_LINES, first)
+    same = [vocab_lines.pick_empty(first) for _ in range(20)]
+    check("«слов нет» не повторяется подряд", first not in same, first)
+
+    free = vocab_lines.pick_free()
+    check("фраза из FREE_LINES", free in vocab_lines.FREE_LINES, free)
+    same_free = [vocab_lines.pick_free(free) for _ in range(20)]
+    check("«свободное общение» не повторяется подряд", free not in same_free, free)
+
+    body = read(os.path.join("ui", "app.py"))
+    check("есть фраза «слов нет» вместо пустого окна",
+          "def _say_words_empty(self)" in body)
+    check("фраза берётся из набора", "vocab_lines.pick_empty(" in body)
+    check("старое объяснение про переводчик убрано", "_vocab_empty_note" not in body)
+    check("окно не открывается, если слов нет", "self.vocab.has_material(on_demand=True)" in body)
+
+    panel = read(os.path.join("ui", "panels", "vocab_panel.py"))
+    check("у окна больше нет empty_text", "empty_text" not in panel)
+    check("окно не объясняет лестницу повторов",
+          "1 → 3 → 7 → 21" not in panel.split("def _show_empty")[1][:900]
+          if "def _show_empty" in panel else False)
+
+
+# =========================================================
 # 6. Приложение: ответ голосом ДО окна
 # =========================================================
 def test_app_source():
@@ -216,6 +247,7 @@ def main():
     test_praise()
     test_motivate()
     test_panel_source()
+    test_empty_and_free()
     test_app_source()
     print("\n" + "=" * 60)
     if FAILED:

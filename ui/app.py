@@ -889,6 +889,14 @@ class EnglishTeacherApp:
                                 before=self.chat_view,
                                 on_close=self._pron_forget)
 
+        # ---------- кнопки на старте (решение ученика 27.10.2026) ----------
+        # Пока ученик ничего не сделал, ему не надо угадывать, что писать:
+        # три кнопки прямо в чате. Первое действие — и ряд убирается.
+        self.quick_row = ctk.CTkFrame(self.chat_tab, fg_color="transparent")
+        self.quick_lesson_btn = self._quick_button("🎓  Провести урок", self._quick_lesson)
+        self.quick_words_btn = self._quick_button("📚  Слова", self._quick_words)
+        self.quick_talk_btn = self._quick_button("💬  Свободное общение", self._quick_talk)
+
         self._build_hero()
 
         # Порядок упаковки важен! pack отдаёт место СНАЧАЛА упакованным,
@@ -904,6 +912,11 @@ class EnglishTeacherApp:
         # ---- вкладка «Чат»: нижний ряд прижат к низу, чат растёт ----
         self.bottom_row.pack(side="bottom", fill="x", padx=6,
                              pady=(0, theme.CARD_PAD - 6))
+
+        # стартовые кнопки — НАД полосой ввода. Здесь без before=: chat_view
+        # ещё НЕ упакован (Tk ругается «isn't packed»). Поздняя упаковка снизу
+        # встаёт ВЫШЕ полосы ввода, а чат растягивается над ними обоими.
+        self.quick_row.pack(side="bottom", fill="x", padx=6, pady=(0, 8))
 
         # чат — последним: он и только он растягивается
         self.chat_view.pack(side="top", fill="both", expand=True,
@@ -935,6 +948,93 @@ class EnglishTeacherApp:
         # (иначе, уведя курсор и отпустив вне кнопки, запись зависла бы).
         self.window.bind("<ButtonRelease-1>", self._on_global_release, add="+")
         self._ui_ready = True      # с этого момента реагируем на смену вкладок
+
+    # -----------------------------------------------------
+    # Кнопки на старте: урок / слова / свободное общение
+    # -----------------------------------------------------
+    def _quick_button(self, text, command):
+        """Кнопка стартового ряда: тон кнопки и тонкая рамка, как внизу."""
+        p = self.palette
+        btn = ctk.CTkButton(self.quick_row, text=text, command=command,
+                            width=1, height=34, cursor="hand2",
+                            corner_radius=theme.R["button"],
+                            border_width=1, border_color=p["border"],
+                            fg_color=p["btn"], hover_color=p["btn_hover"],
+                            text_color=p["text"], font=theme.FONT_UI)
+        btn.pack(side="left", padx=(0, 8))
+        return btn
+
+    def _hide_quick(self):
+        """Первое действие ученика — стартовые кнопки больше не нужны."""
+        row = getattr(self, "quick_row", None)
+        if row is None:
+            return
+        try:
+            if row.winfo_manager():
+                row.pack_forget()
+        except Exception:
+            pass
+
+    def _show_quick(self):
+        """Вернуть стартовые кнопки (после «Очистить» чат снова пустой)."""
+        row = getattr(self, "quick_row", None)
+        if row is None:
+            return
+        try:
+            if not row.winfo_manager():
+                # before= обязательно: иначе ряд встанет НИЖЕ полосы ввода
+                row.pack(side="bottom", fill="x", padx=6, pady=(0, 8),
+                         before=self.chat_view)
+        except Exception:
+            pass
+
+    def _quick_lesson(self):
+        """🎓 Провести урок — следующий урок по карте сразу, без реплики."""
+        self._hide_quick()
+        if not self.profile_ready:
+            self.add_message(self.teacher_name, SETUP_HINT)
+            return
+        try:
+            lesson_id = self.progress_map.next_lesson(self._active_profile())
+        except Exception as exc:
+            print("⚠️ Следующий урок не определён: %s" % exc)
+            lesson_id = None
+        if not lesson_id:
+            self.add_message(self.teacher_name, ALL_LESSONS_NOTE)
+            return
+        # ученик выбрал урок сам — автозапуск больше не нужен
+        self._auto_lesson_armed = False
+        self._auto_lesson_used = True
+        self.start_lesson(lesson_id, auto=True)
+
+    def _quick_words(self):
+        """📚 Слова — тот же заход, что и по просьбе словами в чате."""
+        self._hide_quick()
+        if self.lesson.is_active:
+            self.add_message(self.teacher_name,
+                             "⚠️ Сначала заверши урок — слова открою после.")
+            return
+        if not self.profile_ready:
+            self.add_message(self.teacher_name, SETUP_HINT)
+            return
+        if not getattr(config, "VOCAB_ENABLED", True):
+            self.add_message(self.teacher_name, "📚 Повторение слов выключено в настройках.")
+            return
+        self._open_words_now()
+
+    def _quick_talk(self):
+        """💬 Свободное общение — урок НЕ начинаем, просто разговариваем."""
+        self._hide_quick()
+        line = vocab_lines.pick_free(getattr(self, "_free_line", ""))
+        self._free_line = line
+        self._auto_lesson_armed = False      # урок сам не начнётся
+        self._auto_lesson_used = True
+        mark = self.add_message(self.teacher_name, line)
+        try:
+            self.chat_view.enable_replay(mark)
+        except Exception:
+            pass
+        self._say(line)
 
     def _build_character(self, p):
         """Создать робота ПОД чатом, справа от поля ввода и кнопок.
@@ -1534,6 +1634,8 @@ class EnglishTeacherApp:
 
     # ---------- колбэки занятия ----------
     def _on_lesson_started(self, session):
+        # урок пошёл — стартовые кнопки в чате больше не нужны
+        self._hide_quick()
         self.lesson_bar.set_lesson(session.label(),
                                    lesson_mod.type_label(session.lesson_type),
                                    session.progress_text())
@@ -2483,14 +2585,15 @@ class EnglishTeacherApp:
         self.add_message(self.teacher_name, message)
         self._open_vocab_panel()
 
-    def review_vocabulary(self):
+    def review_vocabulary(self, on_demand=True):
         """«📚 Повторить слова» в окне блока: повторение по требованию.
 
         Отличие от автозапуска (maybe_review_vocabulary): НЕ смотрим «сегодня
-        уже повторяли» и «есть ли слова на сегодня» — окно открывается всегда,
-        чтобы его можно было проверить в любой момент. Если повторять нечего,
-        окно само это скажет. Автозапуск урока после такого захода НЕ взводим:
-        ученик пришёл с карты, а не поздоровался в чате.
+        уже повторяли», а новых слов даём порцию по просьбе
+        (on_demand → config.VOCAB_ON_DEMAND_NEW), не глядя на норму дня.
+        Если спрашивать нечего — Вербот говорит это голосом, пустое окно не
+        открывается. Автозапуск урока после такого захода НЕ взводим: ученик
+        пришёл с карты, а не поздоровался в чате.
         """
         if not getattr(config, "VOCAB_ENABLED", True):
             self.add_message(self.teacher_name, "📚 Повторение слов выключено в настройках.")
@@ -2503,30 +2606,30 @@ class EnglishTeacherApp:
         if self.lesson.is_active:
             self.add_message(self.teacher_name, "⚠️ Сначала заверши урок — повторение открою после.")
             return None
-        return self._open_vocab_panel(allow_empty=True)
+        return self._open_vocab_panel(on_demand=on_demand)
 
-    def _open_vocab_panel(self, allow_empty=False):
+    def _open_vocab_panel(self, on_demand=False):
         """Показать окно повторения (модальное, поверх главного окна).
 
-        allow_empty — открыть окно даже без слов (кнопка с карты): тогда оно
-        покажет «повторять нечего» и объяснит почему.
+        on_demand — ученик попросил слова сам: порция новых слов больше и
+        норма дня не смотрится (см. VocabularyController.start). Пустое окно
+        НЕ открывается: если спрашивать нечего, Вербот говорит это голосом.
         """
         try:
-            self.vocab.start()
+            self.vocab.start(on_demand=on_demand)
         except Exception as exc:
             print("⚠️ Заход повторения не собрался: %s" % exc)
             return None
-        if not self.vocab.is_active and not allow_empty:
+        if not self.vocab.is_active:
+            self._say_words_empty()
             return None
-        empty_text = "" if self.vocab.is_active else self._vocab_empty_note()
         try:
             self.vocab_panel = VocabPanel(
                 self.window, self.palette, self.vocab,
                 on_record_start=self._vocab_record_start,
                 on_record_stop=self._vocab_record_stop,
                 on_say=self._say,
-                on_finish=self._vocab_finished,
-                empty_text=empty_text)
+                on_finish=self._vocab_finished)
         except Exception as exc:
             print("⚠️ Окно повторения не открылось: %s" % exc)
             self.vocab_panel = None
@@ -2538,25 +2641,6 @@ class EnglishTeacherApp:
         except Exception:
             pass
         return self.vocab_panel
-
-    @staticmethod
-    def _vocab_empty_note():
-        """Объяснение для окна «повторять нечего» — простыми словами."""
-        try:
-            cards = profile_store.vocabulary_cards()
-        except Exception:
-            cards = []
-        if not cards:
-            return ("В словаре пока пусто. Переведи слово в чате — "
-                    "оно само сюда попадёт.")
-        try:
-            due = vocabulary.due_cards(cards)
-        except Exception:
-            due = []
-        if not due:
-            return ("Сегодня повторять нечего: все слова ждут своего дня "
-                    "(лестница 1 → 3 → 7 → 21 день).")
-        return ""
 
     def _vocab_record_start(self):
         """«Запись» в окне повторения: тот же push-to-talk, что и в чате."""
@@ -2661,11 +2745,40 @@ class EnglishTeacherApp:
         if not _asks_for_words(text):
             return False
         self.add_message("Вы", text)
+        self._hide_quick()               # стартовые кнопки больше не нужны
+        self._open_words_now()
+        return True
+
+    def _open_words_now(self):
+        """Открыть слова по просьбе: сначала фраза голосом, потом карточки.
+
+        Если спрашивать нечего (норма дня выбрана, повторы ещё не созрели),
+        окно НЕ открывается вовсе — Вербот говорит об этом голосом
+        (решение ученика 27.10.2026: пустой карточки больше нет).
+        """
+        if not self.vocab.has_material(on_demand=True):
+            self._say_words_empty()
+            return
         line = vocab_lines.pick_open(getattr(self, "_words_line", ""))
         self._words_line = line          # следующая фраза будет другой
         mark = self.add_message(self.teacher_name, line)
         self._open_words_after(line, mark)
-        return True
+
+    def _say_words_empty(self):
+        """Слов на сегодня нет: говорим об этом голосом и окно не открываем.
+
+        Простыми словами и ТОЛЬКО по-английски — без объяснений внутреннего
+        устройства (норма дня, лестница повторов).
+        """
+        line = vocab_lines.pick_empty(getattr(self, "_words_empty_prev", ""))
+        self._words_empty_prev = line
+        mark = self.add_message(self.teacher_name, line)
+        try:
+            self.chat_view.enable_replay(mark)
+        except Exception:
+            pass
+        self._say(line)
+        return line
 
     def _open_words_after(self, line, mark=None):
         """Проговорить фразу и открыть окно слов, когда речь ДОИГРАЕТ.
@@ -2686,7 +2799,7 @@ class EnglishTeacherApp:
                 except Exception:
                     pass
             try:
-                self.review_vocabulary()
+                self.review_vocabulary(on_demand=True)
             except Exception as exc:
                 print("⚠️ Окно слов не открылось: %s" % exc)
 
@@ -3185,6 +3298,7 @@ class EnglishTeacherApp:
         self._character_state("listening" if recording else "idle")
 
     def _on_recognized(self, text, lang):
+        self._hide_quick()          # сказал голосом — стартовые кнопки ушли
         self.current_lang = lang
         self.chat.set_language(lang)
         # открыто окно повторения — сказанное идёт В НЕГО, а не в чат
@@ -3302,6 +3416,7 @@ class EnglishTeacherApp:
                 self.add_message(self.teacher_name, EXAM_NO_HINT_NOTE)
             return
         self.input_bar.clear_text()
+        self._hide_quick()          # ученик начал сам — стартовые кнопки ушли
         # Просьба про слова важнее автозапуска урока: «давай повторим слова»
         # обязано открыть окно слов, а не начать урок (живой баг 27.10.2026).
         # Автозапуск при этом НЕ тратится: урок начнётся со следующей реплики.
@@ -3564,6 +3679,7 @@ class EnglishTeacherApp:
         # Раньше «Очистить» оставлял пустое окно. Возвращаем приветствие —
         # в нём актуальный уровень, и метка снова известна.
         self._show_greeting()
+        self._show_quick()          # чат снова пустой — стартовые кнопки тут
 
     def _show_panel(self, name):
         """Показать правую панель: только одну из двух."""

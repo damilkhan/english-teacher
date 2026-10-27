@@ -8,12 +8,12 @@
 #   1) метка VOCAB_RESULT не путается с id уроков учебного плана;
 #   2) окно блока: кнопка «Повторить слова» возвращает метку, «Закрыть» — None,
 #      «▶ Начать» по-прежнему возвращает id урока;
-#   3) объяснение «почему повторять нечего» (app._vocab_empty_note);
+#   3) пустого окна больше НЕТ: слов нет — бот говорит это голосом;
 #   4) VocabularyController собирает заход НЕЗАВИСИМО от даты последнего
 #      захода: правило «не чаще раза в день» живёт только в автозапуске;
 #   5) окно с карты открывается даже когда сегодня уже повторяли;
 #   6) заход с карты НЕ взводит автозапуск урока;
-#   7) пустой заход показывает «Повторять нечего», а не висит пустым окном;
+#   7) пустой заход НЕ открывает окно — фраза EMPTY_LINES идёт в чат;
 #   8) клик по точке карты открывает повторение, а не урок (ветвление
 #      on_point_click).
 # =========================================================
@@ -71,7 +71,7 @@ def test_marker():
 
 
 # =========================================================
-# 2. Почему повторять нечего
+# 2. Временный профиль (настоящий профиль ученика не трогаем)
 # =========================================================
 class temp_profile:
     """Временный файл прогресса: настоящий профиль ученика не трогаем."""
@@ -86,25 +86,6 @@ class temp_profile:
 
     def __exit__(self, *exc):
         profile_store.PROFILE_PATH = self.real
-
-
-def test_empty_note():
-    print("\n[2] Объяснение «повторять нечего»")
-    from ui.app import EnglishTeacherApp
-    note = EnglishTeacherApp._vocab_empty_note          # статический метод
-    with temp_profile():
-        check("пустой словарь → «В словаре пока пусто»",
-              "пусто" in note(), note())
-        profile_store.add_vocabulary("ключ", ["key \u2014 Open the door with this key."])
-        check("есть слово на сегодня → объяснять нечего", note() == "", note())
-        path = profile_store.PROFILE_PATH
-        with open(path, "r", encoding="utf-8") as fh:
-            raw = json.load(fh)
-        raw["vocabulary"][0]["next_due"] = "2030-01-01"     # ещё рано
-        with open(path, "w", encoding="utf-8") as fh:
-            json.dump(raw, fh, ensure_ascii=False)
-        check("слова есть, но не созрели → «Сегодня повторять нечего»",
-              "Сегодня повторять нечего" in note(), note())
 
 
 # =========================================================
@@ -179,8 +160,12 @@ def test_window():
     tmp = tempfile.mkdtemp(prefix="et_map_vocab_app_")
     # Банк новых слов (решение 54) здесь выключаем: тест про кнопку карты,
     # иначе в заход честно подмешиваются 5 новых слов текущей темы.
+    # Банк слов здесь выключаем полностью (норма дня И порция по просьбе):
+    # тест про кнопку карты, а не про новые слова из банка.
     saved_new = config.VOCAB_NEW_PER_DAY
+    saved_demand = config.VOCAB_ON_DEMAND_NEW
     config.VOCAB_NEW_PER_DAY = 0
+    config.VOCAB_ON_DEMAND_NEW = 0
     real_dirs = (user_manager.PROFILES_DIR, user_manager.LAST_USER_FILE,
                  profile_store.PROFILE_PATH)
     app = None
@@ -256,27 +241,30 @@ def test_window():
         check("окно закрылось и забыто", app.vocab_panel is None)
         check("заход с карты НЕ взвёл автозапуск урока", not armed, armed)
 
-        print("\n[6] Пустой заход: «Повторять нечего»")
+        print("\n[6] Пустой заход: окна НЕТ, фраза голосом")
+        import vocab_lines
         from controllers.vocabulary_controller import VocabularyController
+        app.vocab_panel = None
         app.vocab = VocabularyController(user_id=(app.current_user or {}).get("id"),
                                          cards=[])
+        said = []
+        app._say = lambda text, **_kw: said.append(text) or True
         panel4 = app.review_vocabulary()
         for _ in range(10):
             app.window.update()
-        check("пустое окно всё равно открылось", panel4 is not None)
-        check("окно сразу показывает итог", panel4 is not None and panel4.finished)
-        check("написано «Повторять нечего»",
-              "Повторять нечего" in panel4.counter_lbl.cget("text"),
-              panel4.counter_lbl.cget("text"))
-        check("кнопка записи выключена", panel4.record_btn.cget("state") == "disabled",
-              panel4.record_btn.cget("state"))
-        check("кнопка закрытия называется «Понятно»",
-              panel4.next_btn.cget("text") == "Понятно", panel4.next_btn.cget("text"))
-        panel4._close()
-        for _ in range(10):
-            app.window.update()
+        check("пустое окно НЕ открылось", panel4 is None, panel4)
+        check("окна на экране нет", app.vocab_panel is None, app.vocab_panel)
+        check("бот сказал фразу из EMPTY_LINES",
+              len(said) == 1 and said[0] in vocab_lines.EMPTY_LINES, said)
+        check("фраза только по-английски",
+              said and not any("\u0400" <= ch <= "\u04ff" for ch in said[0]), said)
+        check("пустого окна с подсказкой больше нет",
+              not hasattr(type(app), "_vocab_empty_note"))
 
         print("\n[7] Клик по точке карты: повторение вместо урока")
+        # клик по карте = ПРОСЬБА ученика: возвращаем порцию новых слов,
+        # иначе открывать было бы нечего (банк в этом тесте выключен)
+        config.VOCAB_ON_DEMAND_NEW = saved_demand
         started = []
         app.start_lesson = lambda lid, pid=None, **kw: started.append(lid)
         BlockPanel.ask = staticmethod(lambda *a, **k: VOCAB_RESULT)
@@ -302,6 +290,7 @@ def test_window():
             pass
         user_manager.PROFILES_DIR, user_manager.LAST_USER_FILE,             profile_store.PROFILE_PATH = real_dirs
         config.VOCAB_NEW_PER_DAY = saved_new
+        config.VOCAB_ON_DEMAND_NEW = saved_demand
         shutil.rmtree(tmp, ignore_errors=True)
 
 
@@ -310,7 +299,6 @@ def main():
     print("Проверка «📚 Повторить слова» в окне блока")
     print("=" * 60)
     test_marker()
-    test_empty_note()
     test_controller_ignores_day()
     test_window()
     print("\n" + "=" * 60)

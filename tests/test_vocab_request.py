@@ -13,7 +13,9 @@
 #   4) в уроке просьба о словах не перехватывается (там слова ведёт Джейн);
 #   5) без урока просьба открывает окно слов — но СНАЧАЛА ответ голосом,
 #      и только после конца речи (страховка — VOCAB_OPEN_GUARD_MS);
-#   6) фраза перед окном меняется от раза к разу.
+#   6) фраза перед окном меняется от раза к разу;
+#   7) если слов нет — окно НЕ открывается, бот говорит фразу EMPTY_LINES
+#      (пустой карточки больше нет, решение ученика 27.10.2026).
 # =========================================================
 
 import os
@@ -147,7 +149,19 @@ class ChatView:
         self.replayed.append(mark)
 
 
-def make_app(said=None):
+class Vocab:
+    """Подделка словаря: есть/нет материал по просьбе."""
+
+    def __init__(self, material=True):
+        self.material = material
+        self.asked = []
+
+    def has_material(self, on_demand=False):
+        self.asked.append(on_demand)
+        return self.material
+
+
+def make_app(material=True):
     """Подделка приложения: помнит реплики, озвучку и отложенные вызовы."""
 
     class App:
@@ -161,12 +175,14 @@ def make_app(said=None):
             self.said = []                 # (текст, колбэк «речь доиграла»)
             self.window = Window()
             self.chat_view = ChatView()
+            self.vocab = Vocab(material)
 
         def add_message(self, *args, **kwargs):
             self.messages.append(args)
             return "mark-%d" % len(self.messages)
 
-        def review_vocabulary(self):
+        def review_vocabulary(self, on_demand=False):
+            self.on_demand = on_demand
             self.opened.append(1)
             return "panel"
 
@@ -176,9 +192,12 @@ def make_app(said=None):
         def _dispatch(self, fn):
             fn()
 
-    # настоящий метод разговора с окном (озвучка → окно), без подделки
+    # настоящие методы (озвучка → окно, фраза «слов нет»), без подделки
     from ui.app import EnglishTeacherApp
     App._open_words_after = EnglishTeacherApp._open_words_after
+    App._open_words_now = EnglishTeacherApp._open_words_now
+    App._say_words_empty = EnglishTeacherApp._say_words_empty
+    App._hide_quick = EnglishTeacherApp._hide_quick
     return App()
 
 
@@ -201,8 +220,12 @@ def test_opened():
     said_text, on_done = app.said[0]
     check("озвучена та же фраза, что в чате",
           said_text == app.messages[-1][1], (said_text, app.messages[-1][1]))
+    check("материал спросили как «по просьбе»", app.vocab.asked == [True],
+          app.vocab.asked)
     on_done()
     check("после речи окно слов открыли", app.opened == [1], app.opened)
+    check("заход собран по просьбе (не по норме дня)",
+          getattr(app, "on_demand", None) is True, getattr(app, "on_demand", None))
     check("у реплики включён значок 🔊", app.chat_view.replayed == ["mark-2"],
           app.chat_view.replayed)
 
@@ -218,15 +241,49 @@ def test_phrase_varies():
     from ui.app import EnglishTeacherApp
     import vocab_lines
 
+    # ОДНО приложение: память о прошлой фразе живёт в нём (app._words_line),
+    # у нового экземпляра её нет — проверка «не подряд» иначе случайна.
     said = []
+    app = make_app()
     for _ in range(6):
-        app = make_app()
         EnglishTeacherApp._open_words_on_request(app, "давай слова")
         said.append(app.messages[-1][1])
     check("шесть открытий — не одна и та же фраза",
           len(set(said)) >= 2, said)
     check("все фразы из набора OPEN_LINES",
           all(line in vocab_lines.OPEN_LINES for line in said), said)
+    check("подряд одна и та же не повторяется",
+          all(said[i] != said[i + 1] for i in range(len(said) - 1)), said)
+
+
+def test_empty():
+    print("\n[7] Слов нет: фраза голосом, окно НЕ открывается")
+    from ui.app import EnglishTeacherApp
+    import vocab_lines
+
+    app = make_app(material=False)
+    result = EnglishTeacherApp._open_words_on_request(app, "давай повторим слова")
+    check("вернулось True (реплику обработали)", result is True, result)
+    check("окно НЕ открывалось", app.opened == [], app.opened)
+    check("нет и страховочного таймера окна", app.window.pending == [],
+          app.window.pending)
+    check("в чат ушли две строки (моя и ответ)", len(app.messages) == 2, app.messages)
+    said_text, on_done = app.said[0]
+    check("фраза из EMPTY_LINES", said_text in vocab_lines.EMPTY_LINES, said_text)
+    check("та же фраза в чате", str(app.messages[-1][1]) == said_text,
+          (app.messages[-1][1], said_text))
+    check("фраза только по-английски",
+          not any("\u0400" <= ch <= "\u04ff" for ch in said_text), said_text)
+    check("озвучка без продолжения (окно не ждём)", on_done is None, on_done)
+
+    # фраза «слов нет» тоже меняется от раза к разу (одно приложение —
+    # только так у него есть память о прошлой фразе)
+    said = []
+    one = make_app(material=False)
+    for _ in range(6):
+        EnglishTeacherApp._open_words_on_request(one, "давай слова")
+        said.append(one.messages[-1][1])
+    check("шесть отказов — не одна и та же фраза", len(set(said)) >= 2, said)
     check("подряд одна и та же не повторяется",
           all(said[i] != said[i + 1] for i in range(len(said) - 1)), said)
 
@@ -239,6 +296,7 @@ def main():
     test_in_lesson()
     test_opened()
     test_phrase_varies()
+    test_empty()
     print("\n" + "=" * 60)
     if FAILED:
         print("ПРОВАЛОВ: %d" % len(FAILED))

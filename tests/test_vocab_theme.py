@@ -353,6 +353,50 @@ def test_next_theme():
           word_bank.theme_queue({}, None, "A2"))
 
 
+# =========================================================
+# 10. Просьба ученика: 10 новых слов, норма дня не смотрится
+# =========================================================
+def test_on_demand():
+    print("\n[10] По просьбе — 10 новых, норма дня не мешает")
+    check("порция из config",
+          vocabulary.on_demand_new() == getattr(config, "VOCAB_ON_DEMAND_NEW", 10),
+          (vocabulary.on_demand_new(), getattr(config, "VOCAB_ON_DEMAND_NEW", None)))
+    check("порция по умолчанию — 10", vocabulary.on_demand_new() == 10,
+          vocabulary.on_demand_new())
+
+    theme = "city/point_1"
+    bank = [fresh(theme, theme, "новое%d" % i, "fresh%d" % i) for i in range(12)]
+    cards = [make_card("старое%d" % i, "old%d" % i, theme=theme) for i in range(5)]
+    queue, new = vocabulary.pick_mix(cards, bank, theme=theme, today=D0,
+                                     new_limit=vocabulary.on_demand_new())
+    check("новых ровно 10", len(new) == 10, len(new))
+    check("окно не больше захода", len(queue) <= vocabulary.session_size(),
+          (len(queue), vocabulary.session_size()))
+    check("все новые попали в окно", all(item in queue for item in new),
+          [i.get("word") for i in new])
+
+    # хранилище, где норма дня уже израсходована (5 новых заведено сегодня)
+    done_today = [fresh(theme, theme, "сегодня%d" % i, "today%d" % i) for i in range(5)]
+    store = FakeStore(cards=done_today, profile={"level_tests": [{"level": "A2"}]})
+    import controllers.vocabulary_controller as vc
+    saved = vc._WORD_MAP
+    vc._WORD_MAP = FakeMap()
+    try:
+        auto = VocabularyController(store=store, today=D0)
+        auto.start()
+        check("автозапуск норму уважает", auto.summary().get("new") == 0, auto.summary())
+
+        ctrl = VocabularyController(store=store, today=D0)
+        ctrl.start(on_demand=True)
+        check("по просьбе новых 10", ctrl.summary().get("new") == 10, ctrl.summary())
+        check("материал есть даже при исчерпанной норме",
+              ctrl.has_material(on_demand=True) is True, "нет")
+        check("а автозапуск при исчерпанной норме молчит",
+              ctrl.has_material() is True, "повторы-то есть")
+    finally:
+        vc._WORD_MAP = saved
+
+
 def main():
     print("=" * 60)
     test_bank()
@@ -363,6 +407,7 @@ def main():
     test_controller_bank()
     test_controller_guard()
     test_next_theme()
+    test_on_demand()
     print("\n" + "=" * 60)
     if FAILED:
         print("ПРОВАЛОВ: %d" % len(FAILED))

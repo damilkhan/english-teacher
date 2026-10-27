@@ -69,20 +69,57 @@ MOTIVATE_LINES = (
     "Almost there. Listen and repeat.",
 )
 
+# --- слов на сегодня нет (просил слова, а показать нечего) ---
+# Решение ученика 27.10.2026: пустой карточки больше НЕТ. Если спрашивать
+# нечего, Вербот просто ГОВОРИТ это голосом, а окно не открывается вовсе.
+# Никаких объяснений внутреннего устройства (норма дня, лестница повторов).
+EMPTY_LINES = (
+    "You know all your words for now. Well done!",
+    "No new words right now. Let's just talk.",
+    "That's all the words for today. Nice work!",
+    "Nothing left to practise right now.",
+    "You've done your words. See you tomorrow!",
+    "We are done with words for today. Great job!",
+)
+
+# --- кнопка «Свободное общение» на старте ---
+FREE_LINES = (
+    "All right! Let's just talk.",
+    "Sure! Let's have a chat.",
+    "Great. Talk to me about anything.",
+    "Okay! No lesson today — just talking.",
+    "Fine! Let's chat about your day.",
+    "Sounds good. I'm listening.",
+)
+
 # Одна и та же фраза — не больше стольких раз за заход.
 MAX_REPEAT = 2
 # Как часто подбадривать на промах (0.35 = примерно каждый третий промах).
 MOTIVATE_CHANCE = 0.35
 
 
+def _pick_not_same(lines, last="", rng=None):
+    """Любая фраза набора, но НЕ та же, что звучала в прошлый раз."""
+    previous = str(last or "")
+    pool = [line for line in lines if line != previous]
+    if not pool:
+        pool = list(lines)
+    return (rng or random).choice(pool)
+
+
 def pick_open(last="", rng=None):
     """Фраза перед окном слов: любая, но НЕ та же, что в прошлый раз."""
-    previous = str(last or "")
-    pool = [line for line in OPEN_LINES if line != previous]
-    if not pool:
-        pool = list(OPEN_LINES)
-    picker = rng or random
-    return picker.choice(pool)
+    return _pick_not_same(OPEN_LINES, last, rng)
+
+
+def pick_empty(last="", rng=None):
+    """«Слов на сегодня нет» — говорим вместо пустого окна карточек."""
+    return _pick_not_same(EMPTY_LINES, last, rng)
+
+
+def pick_free(last="", rng=None):
+    """Фраза для кнопки «Свободное общение»: не та же, что в прошлый раз."""
+    return _pick_not_same(FREE_LINES, last, rng)
 
 
 class LinePicker:

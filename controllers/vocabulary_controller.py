@@ -90,8 +90,13 @@ class VocabularyController:
     # -----------------------------------------------------
     # Заход
     # -----------------------------------------------------
-    def start(self, cards=None) -> List[Dict[str, Any]]:
+    def start(self, cards=None, on_demand=False) -> List[Dict[str, Any]]:
         """Собрать заход: новые слова темы + повторы по корзинам.
+
+        on_demand — ученик ПОПРОСИЛ слова сам (кнопка или фраза в чате):
+        тогда новых слов до config.VOCAB_ON_DEMAND_NEW (10) и норма дня НЕ
+        смотрится. Автозапуск (обязательный заход, раз в день) — on_demand
+        False: не больше config.VOCAB_NEW_PER_DAY новых.
 
         Возвращает очередь (список «снимков» карточек для окна). Новые
         карточки сразу пишутся в профиль — иначе окно покажет слово,
@@ -104,7 +109,11 @@ class VocabularyController:
         source = cards if cards is not None else self._source_cards()
         theme = self._theme() if self._bank_ready() else ""
         candidates = self._new_candidates(theme)
-        left = max(0, vocabulary.new_per_day() - vocabulary.created_today(source, self._today))
+        if on_demand:
+            left = vocabulary.on_demand_new()
+        else:
+            left = max(0, vocabulary.new_per_day()
+                       - vocabulary.created_today(source, self._today))
         queue, fresh = vocabulary.pick_mix(source, candidates, theme=theme,
                                           today=self._today, new_limit=left)
         if fresh:
@@ -168,8 +177,22 @@ class VocabularyController:
         """Тема текущего захода (пусто — банка нет, тема неизвестна)."""
         return getattr(self, "_theme_id", "") or ""
 
-    def has_material(self) -> bool:
-        """Есть ли что спросить: созревшие слова ИЛИ новые из банка."""
+    def _fresh_candidates(self, source, theme) -> List[dict]:
+        """Слова банка, которых ещё НЕТ в профиле (в порядке банка)."""
+        candidates = self._new_candidates(theme)
+        if not candidates:
+            return []
+        known = {vocabulary.card_key(c.get("word"), c.get("en"))
+                 for c in (source or []) if isinstance(c, dict)}
+        return [c for c in candidates
+                if vocabulary.card_key(c.get("word"), c.get("en")) not in known]
+
+    def has_material(self, on_demand=False) -> bool:
+        """Есть ли что спросить: созревшие слова ИЛИ новые из банка.
+
+        on_demand — ученик просил слова сам: тогда новая порция есть, даже
+        если норма дня уже израсходована (решение ученика 27.10.2026).
+        """
         try:
             source = self._source_cards()
             if vocabulary.due_cards(source, today=self._today, limit=0):
@@ -177,8 +200,13 @@ class VocabularyController:
             theme = self._theme() if self._bank_ready() else ""
             if not theme:
                 return False
+            if not self._fresh_candidates(source, theme):
+                return False
+            if on_demand:
+                # порцию по просьбе можно выключить нулём (тесты, настройка)
+                return vocabulary.on_demand_new() > 0
             left = vocabulary.new_per_day() - vocabulary.created_today(source, self._today)
-            return left > 0 and bool(self._new_candidates(theme))
+            return left > 0
         except Exception:
             return False
 
