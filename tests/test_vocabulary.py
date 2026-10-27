@@ -10,7 +10,7 @@
 #   3) лестницу уровней 0→1→2→3→4→5 и даты 1/3/7/21 день;
 #   4) промах: уровень НЕ меняется (решение 53), спросить завтра;
 #   5) выученное слово не спрашиваем и не сбрасываем;
-#   6) «что спросить сегодня»: только созревшие, порядок, лимит 5;
+#   6) «что спросить сегодня»: только созревшие, порядок, лимит из config;
 #   7) сводку для вкладки «Профиль»;
 #   8) запись в файл прогресса: карточки есть, total_lessons НЕ растёт;
 #   9) битые данные не ломают работу.
@@ -183,7 +183,7 @@ def test_learned():
 # 6. Что спросить сегодня
 # =========================================================
 def test_due():
-    print("\n[6] Что спросить сегодня: только созревшие, лимит 5")
+    print("\n[6] Что спросить сегодня: только созревшие, лимит из config")
     cards = []
     for word, en in [("ключ", "key"), ("гайка", "nut"), ("дверь", "door"),
                      ("окно", "window"), ("стол", "table"), ("стул", "chair")]:
@@ -192,9 +192,9 @@ def test_due():
           len(vocabulary.due_cards(cards, today=D0, limit=0)) == 6,
           len(vocabulary.due_cards(cards, today=D0, limit=0)))
     session = vocabulary.due_cards(cards, today=D0)
-    check("за заход берём 5 слов", len(session) == 5, len(session))
-    check("лимит берётся из config (VOCAB_SESSION_SIZE = 5)",
-          config.VOCAB_SESSION_SIZE == vocabulary.session_size() == 5,
+    check("за заход берём не больше лимита", len(session) == min(6, vocabulary.session_size()), len(session))
+    check("лимит берётся из config (VOCAB_SESSION_SIZE)",
+          config.VOCAB_SESSION_SIZE == vocabulary.session_size() == 10,
           (config.VOCAB_SESSION_SIZE, vocabulary.session_size()))
 
     cards[0]["next_due"] = "2026-10-17"      # просрочено на день

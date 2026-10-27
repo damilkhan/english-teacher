@@ -32,6 +32,7 @@ for _stream in (sys.stdout, sys.stderr):
     except Exception:
         pass
 
+import config                                              # noqa: E402
 import vocabulary                                          # noqa: E402
 from controllers.vocabulary_controller import VocabularyController  # noqa: E402
 
@@ -153,7 +154,7 @@ def test_session_day():
 # 4. Сборка захода
 # =========================================================
 def test_session():
-    print("\n[4] Заход: 5 созревших слов")
+    print("\n[3] Заход: все созревшие слова (не больше лимита)")
     cards = make_cards([("ключ", "key", "Open the door with this key."),
                         ("гайка", "nut", "A small nut."),
                         ("дверь", "door", "Close the door."),
@@ -163,7 +164,7 @@ def test_session():
     store = FakeStore(cards)
     ctrl = VocabularyController(store=store, today=D0)
     queue = ctrl.start()
-    check("в заходе 5 слов", len(queue) == 5 and ctrl.total == 5, len(queue))
+    check("в заходе все 6 созревших", len(queue) == 6 and ctrl.total == 6, len(queue))
     check("текущее слово есть", ctrl.current() and ctrl.current()["word"] == "ключ",
           ctrl.current())
     check("номер слова 1", ctrl.position == 1, ctrl.position)
@@ -178,7 +179,7 @@ def test_session():
     while ctrl.next():
         pass
     check("после последнего слова заход закончен", ctrl.is_active is False)
-    check("итог: показано 5", ctrl.summary()["shown"] == 5, ctrl.summary())
+    check("итог: показано 6", ctrl.summary()["shown"] == 6, ctrl.summary())
 
     empty = VocabularyController(store=FakeStore([]), today=D0)
     check("пустой заход: очередь пуста", empty.start() == [] and empty.is_active is False)
@@ -330,6 +331,11 @@ class temp_profile:
 def test_store():
     print("\n[8] Отметка даты захода в профиле")
     import profile_store
+    # банк слов здесь не нужен: тест про запись в файл (слова из профиля).
+    # Иначе окно честно подмешает 5 новых слов текущей темы — и проверка
+    # «заход собрался из профиля» упадёт не по делу.
+    saved_new = config.VOCAB_NEW_PER_DAY
+    config.VOCAB_NEW_PER_DAY = 0
     with temp_profile():
         path = profile_store.PROFILE_PATH
         profile_store.ensure_profile()
@@ -358,6 +364,7 @@ def test_store():
         check("уровень карточки вырос в файле",
               profile_store.vocabulary_cards()[0]["level"] == 1,
               profile_store.vocabulary_cards()[0])
+    config.VOCAB_NEW_PER_DAY = saved_new
 
 
 # =========================================================

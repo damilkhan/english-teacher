@@ -20,6 +20,11 @@
 #     уровень, дальше ученик может повторять для тренировки — уровень
 #     больше не шевелится (иначе выходило бы «−1, потом +1» и лестница
 #     теряла бы смысл);
+#   • новые слова (решение 54): за заход до config.VOCAB_NEW_PER_DAY слов
+#     из ТЕКУЩЕЙ темы (bank data/words_<уровень>.json); тема = первый
+#     несданный блок карты (его «Проверка» не записана как сданная);
+#   • повторы делятся на корзины: текущая тема / пройденные темы /
+#     «трудные» (промахов ≥ 2) — см. vocabulary.pick_mix;
 #   • сказал по-русски — это НЕ ответ: показываем перевод, ждём английский.
 #
 # Сверяем ответ с ДВУМЯ эталонами (пример и само слово) и берём лучший:
@@ -33,6 +38,7 @@ from typing import Any, Dict, List, Optional
 import pronunciation
 import profile_store
 import vocabulary
+import word_bank
 
 # Насколько «хорош» вердикт — чтобы выбрать лучший из нескольких эталонов.
 _VERDICT_RANK = {
@@ -41,6 +47,24 @@ _VERDICT_RANK = {
     pronunciation.OFF: 1,
     pronunciation.UNRELATED: 0,
 }
+
+
+# Карта курса нужна, чтобы найти текущий блок и его «Проверку».
+# Читаем один раз на процесс: файл 50 КБ, но зачем его читать каждый заход.
+_WORD_MAP = None
+
+
+def _word_map():
+    """Карта курса (progress_map.ProgressMap) или None, если не вышло."""
+    global _WORD_MAP
+    if _WORD_MAP is None:
+        try:
+            import progress_map
+            _WORD_MAP = progress_map.ProgressMap()
+        except Exception as exc:
+            print("⚠️ Карта курса не прочитана: %s" % exc)
+            _WORD_MAP = False
+    return _WORD_MAP or None
 
 
 class VocabularyController:
@@ -67,20 +91,103 @@ class VocabularyController:
     # Заход
     # -----------------------------------------------------
     def start(self, cards=None) -> List[Dict[str, Any]]:
-        """Собрать заход: до VOCAB_SESSION_SIZE созревших слов.
+        """Собрать заход: новые слова темы + повторы по корзинам.
 
-        Возвращает очередь (список «снимков» карточек для окна).
+        Возвращает очередь (список «снимков» карточек для окна). Новые
+        карточки сразу пишутся в профиль — иначе окно покажет слово,
+        которого в профиле нет, и ответ некуда будет записать.
         """
         self._index = -1
         self._graded = False
         self._touched = False
-        self._stats = {"shown": 0, "good": 0, "miss": 0, "skipped": 0}
+        self._stats = {"shown": 0, "good": 0, "miss": 0, "skipped": 0, "new": 0}
         source = cards if cards is not None else self._source_cards()
-        due = vocabulary.due_cards(source, today=self._today)
-        self._queue = [self._snapshot(card) for card in due]
+        theme = self._theme() if self._bank_ready() else ""
+        candidates = self._new_candidates(theme)
+        left = max(0, vocabulary.new_per_day() - vocabulary.created_today(source, self._today))
+        queue, fresh = vocabulary.pick_mix(source, candidates, theme=theme,
+                                          today=self._today, new_limit=left)
+        if fresh:
+            self._save_new(fresh)
+        self._queue = [self._snapshot(card) for card in queue]
+        fresh_keys = {vocabulary.card_key(c.get("word"), c.get("en")) for c in fresh}
+        for snap in self._queue:
+            if fresh_keys and vocabulary.card_key(snap.get("word"), snap.get("en")) in fresh_keys:
+                snap["is_new"] = True
         self._stats["shown"] = len(self._queue)
+        self._stats["new"] = len(fresh)
+        self._theme_id = theme
         self._index = 0 if self._queue else -1
         return list(self._queue)
+
+    # -----------------------------------------------------
+    # Тема и банк слов (решение 54)
+    # -----------------------------------------------------
+    def _profile(self) -> dict:
+        """Профиль-прогресс (уровень и сданные проверки). Ошибки → {}."""
+        try:
+            return self.store.load(self.user_id) or {}
+        except Exception:
+            return {}
+
+    def _theme(self) -> str:
+        """Текущая тема: первый несданный блок карты уровня ученика."""
+        try:
+            profile = self._profile()
+            level = word_bank.student_level(profile)
+            return word_bank.current_theme(profile, _word_map(), level)
+        except Exception as exc:
+            print("⚠️ Тема не определена: %s" % exc)
+            return ""
+
+    def _new_candidates(self, theme) -> List[dict]:
+        """Слова текущей темы из банка в виде карточек уровня 0."""
+        if not theme:
+            return []
+        try:
+            level = word_bank.student_level(self._profile())
+            words = word_bank.words_of_theme(level, theme)
+        except Exception as exc:
+            print("⚠️ Банк слов не прочитан: %s" % exc)
+            return []
+        return [vocabulary.card_for_word(item, self._today) for item in words]
+
+    def _save_new(self, fresh) -> None:
+        """Записать новые карточки в профиль (молча, если стор не умеет)."""
+        save = getattr(self.store, "add_vocabulary_cards", None)
+        if not callable(save):
+            return
+        try:
+            save(fresh, self.user_id)
+        except Exception as exc:
+            print("⚠️ Новые слова не записаны: %s" % exc)
+
+    @property
+    def theme(self) -> str:
+        """Тема текущего захода (пусто — банка нет, тема неизвестна)."""
+        return getattr(self, "_theme_id", "") or ""
+
+    def has_material(self) -> bool:
+        """Есть ли что спросить: созревшие слова ИЛИ новые из банка."""
+        try:
+            source = self._source_cards()
+            if vocabulary.due_cards(source, today=self._today, limit=0):
+                return True
+            theme = self._theme() if self._bank_ready() else ""
+            if not theme:
+                return False
+            left = vocabulary.new_per_day() - vocabulary.created_today(source, self._today)
+            return left > 0 and bool(self._new_candidates(theme))
+        except Exception:
+            return False
+
+    def _bank_ready(self) -> bool:
+        """Банк слов работает, только если стор умеет сохранять карточки.
+
+        Это защита: тестовые подделки профиля (только чтение) не должны
+        молча заводить новые слова, которых потом некуда записать.
+        """
+        return callable(getattr(self.store, "add_vocabulary_cards", None))
 
     def _source_cards(self) -> List[dict]:
         if self._cards is not None:
@@ -90,7 +197,6 @@ class VocabularyController:
         except Exception as exc:
             print("⚠️ Слова не прочитаны: %s" % exc)
             return []
-
     @staticmethod
     def _snapshot(card) -> Dict[str, Any]:
         """Что нужно окну: только данные, без связи с файлом."""
@@ -101,6 +207,8 @@ class VocabularyController:
             "gap": vocabulary.example_with_gap(card),
             "level": vocabulary.level_of(card),
         }
+
+
 
     # -----------------------------------------------------
     # Текущая карточка

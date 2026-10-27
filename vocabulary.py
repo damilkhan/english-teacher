@@ -12,6 +12,7 @@
 #   example  — пример из переводчика («Open the door with this key.»);
 #   level    — ступень 0..5 (5 = выучено, больше не спрашиваем);
 #   next_due — когда спросить в следующий раз («ГГГГ-ММ-ДД»);
+#   theme    — тема-блок карты («city/point_1»), если слово из банка;
 #   created / last_ok / hits / misses — статистика.
 #
 # ЛЕСТНИЦА (интервалы в INTERVALS_DAYS):
@@ -37,6 +38,9 @@ LEARNED = 5                       # с этой ступени слово «вы
 MISS_DELAY_DAYS = 1               # промах → спросить завтра
 # Индекс = уровень. 0 дней у новой карточки: её можно спросить уже сегодня.
 INTERVALS_DAYS = (0, 1, 3, 7, 21, None)
+
+HARD_MISSES = 2                   # столько промахов — слово «трудное»
+SESSION_PLAN = {"theme": 3, "passed": 1, "hard": 1}   # + новые (config)
 
 _CYR_RE = re.compile(r"[\u0400-\u04FF]")
 _NUMBERING_RE = re.compile(r"^\s*(\d+[.)]|[-*\u2022])\s*")
@@ -294,6 +298,125 @@ def session_size() -> int:
         return max(1, int(getattr(config, "VOCAB_SESSION_SIZE", 5)))
     except (TypeError, ValueError):
         return 5
+
+# ---------------------------------------------------------
+# Заход по плану (решение 54): новые слова темы + корзины повтора
+# ---------------------------------------------------------
+# 5 новых + 5 повторов = 10 мест. Повторы делятся так: 3 из текущей темы,
+# 1 из пройденных тем (освежить память), 1 из «трудных» (промахов ≥ 2).
+# Пустая корзина место не теряет — его добирают другие созревшие карточки.
+def plan() -> dict:
+    """Сколько повторов каждой корзины (config.VOCAB_MIX, иначе SESSION_PLAN)."""
+    raw = getattr(config, "VOCAB_MIX", None)
+    if not isinstance(raw, dict):
+        raw = SESSION_PLAN
+    out = {}
+    for key, default in SESSION_PLAN.items():
+        try:
+            out[key] = max(0, int(raw.get(key, default)))
+        except (TypeError, ValueError):
+            out[key] = default
+    return out
+
+
+def hard_misses() -> int:
+    """Со скольких промахов слово считается «трудным»."""
+    try:
+        return max(1, int(getattr(config, "VOCAB_HARD_MISSES", HARD_MISSES)))
+    except (TypeError, ValueError):
+        return HARD_MISSES
+
+
+def new_per_day() -> int:
+    """Сколько новых слов давать за день (config.VOCAB_NEW_PER_DAY)."""
+    try:
+        return max(0, int(getattr(config, "VOCAB_NEW_PER_DAY", 5)))
+    except (TypeError, ValueError):
+        return 5
+
+
+def created_today(cards, today=None) -> int:
+    """Сколько карточек ИЗ БАНКА заведено сегодня (норму не превышаем)."""
+    day = _iso(_as_date(today))
+    count = 0
+    for card in (cards or []):
+        if not isinstance(card, dict):
+            continue
+        if str(card.get("source") or "") != "bank":
+            continue
+        if str(card.get("created") or "") == day:
+            count += 1
+    return count
+
+
+def card_for_word(item, today=None) -> dict:
+    """Слово из банка (ru/en/example/theme) → новая карточка уровня 0."""
+    item = item or {}
+    card = new_card(item.get("ru"), item.get("en"), item.get("example") or "", today)
+    card["theme"] = str(item.get("theme") or "").strip()
+    card["source"] = "bank"
+    return card
+
+
+def pick_mix(cards, candidates=(), theme="", today=None, new_limit=None):
+    """Собрать заход: повторы по корзинам, затем новые слова.
+
+    candidates — готовые карточки из банка (порядок банка); дубликаты уже
+    заведённых слов отбрасываются по паре «слово + значение».
+    new_limit — сколько новых можно завести сегодня (None → new_per_day()).
+
+    Возвращает (очередь карточек, НОВЫЕ карточки для записи в профиль).
+    """
+    day = _as_date(today)
+    theme = str(theme or "").strip()
+    existing = [c for c in (cards or [])
+                if isinstance(c, dict) and not is_learned(c)
+                and str(c.get("en") or "").strip()]
+    known = {card_key(c.get("word"), c.get("en")) for c in existing}
+    fresh = []
+    for item in (candidates or []):
+        if not isinstance(item, dict):
+            continue
+        key = card_key(item.get("word"), item.get("en"))
+        if not str(item.get("en") or "").strip() or key in known:
+            continue
+        known.add(key)
+        fresh.append(item)
+    if new_limit is None:
+        new_limit = new_per_day()
+    fresh = fresh[:max(0, _int(new_limit))]
+
+    due = [c for c in existing if _due_date(c) <= day]
+    due.sort(key=lambda c: (_due_date(c), level_of(c), str(c.get("created") or "")))
+    used = set()
+
+    def take(bucket, count):
+        out = []
+        for card in bucket:
+            if len(out) >= count:
+                break
+            key = card_key(card.get("word"), card.get("en"))
+            if key in used:
+                continue
+            used.add(key)
+            out.append(card)
+        return out
+
+    quotas = plan()
+    queue = []
+    queue += take([c for c in due if theme and str(c.get("theme") or "") == theme],
+                  quotas["theme"])
+    queue += take([c for c in due if str(c.get("theme") or "") != theme],
+                  quotas["passed"])
+    queue += take([c for c in due if _int(c.get("misses")) >= hard_misses()],
+                  quotas["hard"])
+    try:
+        room = max(0, session_size() - len(fresh) - len(queue))
+    except (TypeError, ValueError):
+        room = 0
+    if room:
+        queue += take(due, room)
+    return queue + fresh, fresh
 
 
 def stats(cards, today=None) -> dict:

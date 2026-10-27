@@ -471,6 +471,40 @@ def add_vocabulary(word, meanings, user_id=None):
     return added
 
 
+def add_vocabulary_cards(cards, user_id=None):
+    """Записать в прогресс ГОТОВЫЕ карточки (слова из банка уровней).
+
+    Дубликаты (то же слово + то же значение) не добавляются: если слово уже
+    есть в профиле, оно не сбрасывается. Пишем через _write — это не занятие,
+    total_lessons расти не должен.
+    Возвращает список реально добавленных карточек.
+    """
+    profile = load(user_id)
+    stored = profile.get("vocabulary")
+    if not isinstance(stored, list):
+        stored = []
+    existing = {vocabulary.card_key(c.get("word"), c.get("en"))
+                for c in stored if isinstance(c, dict)}
+    added = []
+    for card in (cards or []):
+        if not isinstance(card, dict):
+            continue
+        if not str(card.get("en") or "").strip():
+            continue
+        key = vocabulary.card_key(card.get("word"), card.get("en"))
+        if key in existing:
+            continue
+        stored.append(dict(card))
+        existing.add(key)
+        added.append(stored[-1])
+    if not added:
+        return []
+    vocabulary.trim(stored, getattr(config, "VOCAB_MAX_CARDS", 500))
+    profile["vocabulary"] = stored
+    _write(profile, progress_path(user_id))
+    return added
+
+
 def update_vocabulary_card(word, en, success, user_id=None):
     """Отметить ответ по карточке: успех (GOOD) или промах.
 

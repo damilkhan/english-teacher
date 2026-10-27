@@ -2443,15 +2443,24 @@ class EnglishTeacherApp:
             return
         due = vocabulary.due_cards(cards)
         if not due:
-            return                      # повторять нечего — и строки в чат нет
+            # Новые слова темы тоже материал: банк может дать 5 слов даже
+            # когда повторять пока нечего (решение 54).
+            try:
+                if not self.vocab.has_material():
+                    return              # ни повторов, ни новых — строки в чат нет
+            except Exception:
+                return
         ready, _message = self._microphone_ready()
         if not ready:
             if self.stt_state == "loading":
                 self._vocab_wanted = True    # начнём, когда Whisper будет готов
             return
         self._vocab_wanted = False
-        self.add_message(self.teacher_name,
-                         "📚 Давай повторим %s." % ru_text.words(len(due)))
+        if due:
+            message = "📚 Давай повторим %s." % ru_text.words(len(due))
+        else:
+            message = "📚 Сегодня новые слова по текущей теме."
+        self.add_message(self.teacher_name, message)
         self._open_vocab_panel()
 
     def review_vocabulary(self):

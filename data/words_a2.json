@@ -1,0 +1,924 @@
+{
+  "version": 1,
+  "level": "A2",
+  "themes": {
+    "city/point_1": [
+      {
+        "ru": "встречаться",
+        "en": "meet",
+        "example": "Shall we meet at six?"
+      },
+      {
+        "ru": "время",
+        "en": "time",
+        "example": "Do you have time on Friday?"
+      },
+      {
+        "ru": "свободный",
+        "en": "free",
+        "example": "I'm free after six."
+      },
+      {
+        "ru": "занятой",
+        "en": "busy",
+        "example": "Sorry, I'm busy tonight."
+      },
+      {
+        "ru": "рано",
+        "en": "early",
+        "example": "I can come early."
+      },
+      {
+        "ru": "поздно",
+        "en": "late",
+        "example": "Please don't be late."
+      },
+      {
+        "ru": "договариваться",
+        "en": "arrange",
+        "example": "Let's arrange a meeting."
+      },
+      {
+        "ru": "соглашаться",
+        "en": "agree",
+        "example": "We agreed on Friday."
+      },
+      {
+        "ru": "отменять",
+        "en": "cancel",
+        "example": "I have to cancel our plan."
+      },
+      {
+        "ru": "переносить",
+        "en": "postpone",
+        "example": "Can we postpone it to Sunday?"
+      },
+      {
+        "ru": "ждать",
+        "en": "wait",
+        "example": "I'll wait for you at the cafe."
+      },
+      {
+        "ru": "приходить",
+        "en": "arrive",
+        "example": "I'll arrive at seven."
+      },
+      {
+        "ru": "уходить",
+        "en": "leave",
+        "example": "I must leave at nine."
+      },
+      {
+        "ru": "вместе",
+        "en": "together",
+        "example": "Let's go there together."
+      },
+      {
+        "ru": "план",
+        "en": "plan",
+        "example": "What's the plan for tonight?"
+      },
+      {
+        "ru": "час",
+        "en": "hour",
+        "example": "Give me one hour, please."
+      },
+      {
+        "ru": "минута",
+        "en": "minute",
+        "example": "I'll be there in ten minutes."
+      },
+      {
+        "ru": "скоро",
+        "en": "soon",
+        "example": "See you soon."
+      },
+      {
+        "ru": "суббота",
+        "en": "Saturday",
+        "example": "Are you free on Saturday?"
+      },
+      {
+        "ru": "вечер",
+        "en": "evening",
+        "example": "Let's meet in the evening."
+      }
+    ],
+    "city/point_2": [
+      {
+        "ru": "меню",
+        "en": "menu",
+        "example": "Could I see the menu, please?"
+      },
+      {
+        "ru": "заказывать",
+        "en": "order",
+        "example": "I'd like to order soup."
+      },
+      {
+        "ru": "официант",
+        "en": "waiter",
+        "example": "The waiter brought the menu."
+      },
+      {
+        "ru": "счёт",
+        "en": "bill",
+        "example": "Can we have the bill, please?"
+      },
+      {
+        "ru": "столик",
+        "en": "table",
+        "example": "A table for two, please."
+      },
+      {
+        "ru": "ужин",
+        "en": "dinner",
+        "example": "We had dinner at eight."
+      },
+      {
+        "ru": "обед",
+        "en": "lunch",
+        "example": "Lunch is at one o'clock."
+      },
+      {
+        "ru": "завтрак",
+        "en": "breakfast",
+        "example": "I have breakfast at home."
+      },
+      {
+        "ru": "вода",
+        "en": "water",
+        "example": "A glass of water, please."
+      },
+      {
+        "ru": "хлеб",
+        "en": "bread",
+        "example": "This bread is very fresh."
+      },
+      {
+        "ru": "суп",
+        "en": "soup",
+        "example": "The soup is hot."
+      },
+      {
+        "ru": "салат",
+        "en": "salad",
+        "example": "I'll take a green salad."
+      },
+      {
+        "ru": "мясо",
+        "en": "meat",
+        "example": "I don't eat meat."
+      },
+      {
+        "ru": "рыба",
+        "en": "fish",
+        "example": "The fish is delicious."
+      },
+      {
+        "ru": "сладкий",
+        "en": "sweet",
+        "example": "This cake is too sweet."
+      },
+      {
+        "ru": "соль",
+        "en": "salt",
+        "example": "Pass me the salt, please."
+      },
+      {
+        "ru": "перец",
+        "en": "pepper",
+        "example": "There is pepper in the soup."
+      },
+      {
+        "ru": "чаевые",
+        "en": "tip",
+        "example": "We left a tip for the waiter."
+      },
+      {
+        "ru": "вкусный",
+        "en": "tasty",
+        "example": "The pasta was really tasty."
+      },
+      {
+        "ru": "голодный",
+        "en": "hungry",
+        "example": "I'm hungry after work."
+      }
+    ],
+    "city/point_3": [
+      {
+        "ru": "деньги",
+        "en": "money",
+        "example": "I don't have much money today."
+      },
+      {
+        "ru": "цена",
+        "en": "price",
+        "example": "What's the price of this bag?"
+      },
+      {
+        "ru": "стоить",
+        "en": "cost",
+        "example": "How much does it cost?"
+      },
+      {
+        "ru": "покупать",
+        "en": "buy",
+        "example": "I want to buy a new coat."
+      },
+      {
+        "ru": "продавать",
+        "en": "sell",
+        "example": "They sell fresh fruit here."
+      },
+      {
+        "ru": "платить",
+        "en": "pay",
+        "example": "Can I pay by card?"
+      },
+      {
+        "ru": "наличные",
+        "en": "cash",
+        "example": "I only have cash."
+      },
+      {
+        "ru": "карта",
+        "en": "card",
+        "example": "My card doesn't work."
+      },
+      {
+        "ru": "скидка",
+        "en": "discount",
+        "example": "Is there a discount today?"
+      },
+      {
+        "ru": "дешёвый",
+        "en": "cheap",
+        "example": "This phone is cheap but good."
+      },
+      {
+        "ru": "дорогой",
+        "en": "expensive",
+        "example": "That watch is too expensive."
+      },
+      {
+        "ru": "чек",
+        "en": "receipt",
+        "example": "Keep the receipt, please."
+      },
+      {
+        "ru": "магазин",
+        "en": "store",
+        "example": "The store is open till nine."
+      },
+      {
+        "ru": "касса",
+        "en": "checkout",
+        "example": "Please pay at the checkout."
+      },
+      {
+        "ru": "размер",
+        "en": "size",
+        "example": "Do you have a bigger size?"
+      },
+      {
+        "ru": "примерочная",
+        "en": "fitting room",
+        "example": "The fitting room is over there."
+      },
+      {
+        "ru": "корзина",
+        "en": "basket",
+        "example": "I took a basket at the door."
+      },
+      {
+        "ru": "сдача",
+        "en": "change",
+        "example": "Here is your change."
+      },
+      {
+        "ru": "банк",
+        "en": "bank",
+        "example": "I need to go to the bank."
+      },
+      {
+        "ru": "монета",
+        "en": "coin",
+        "example": "I found a coin on the street."
+      }
+    ],
+    "city/point_4": [
+      {
+        "ru": "сравнивать",
+        "en": "compare",
+        "example": "Let's compare these two phones."
+      },
+      {
+        "ru": "лучше",
+        "en": "better",
+        "example": "This one is better for me."
+      },
+      {
+        "ru": "хуже",
+        "en": "worse",
+        "example": "The weather is worse today."
+      },
+      {
+        "ru": "лучший",
+        "en": "best",
+        "example": "It's the best cafe in town."
+      },
+      {
+        "ru": "худший",
+        "en": "worst",
+        "example": "That was the worst day of the week."
+      },
+      {
+        "ru": "больше",
+        "en": "more",
+        "example": "I need more time."
+      },
+      {
+        "ru": "меньше",
+        "en": "less",
+        "example": "This bag costs less."
+      },
+      {
+        "ru": "такой же",
+        "en": "same",
+        "example": "We have the same car."
+      },
+      {
+        "ru": "разный",
+        "en": "different",
+        "example": "They are very different."
+      },
+      {
+        "ru": "похожий",
+        "en": "similar",
+        "example": "These two jackets are similar."
+      },
+      {
+        "ru": "дешевле",
+        "en": "cheaper",
+        "example": "The bus is cheaper than a taxi."
+      },
+      {
+        "ru": "быстрее",
+        "en": "faster",
+        "example": "The train is faster than the bus."
+      },
+      {
+        "ru": "медленнее",
+        "en": "slower",
+        "example": "Walking is slower, but nice."
+      },
+      {
+        "ru": "высокий",
+        "en": "tall",
+        "example": "My brother is very tall."
+      },
+      {
+        "ru": "низкий",
+        "en": "low",
+        "example": "The table is too low."
+      },
+      {
+        "ru": "тяжёлый",
+        "en": "heavy",
+        "example": "This box is heavy."
+      },
+      {
+        "ru": "лёгкий",
+        "en": "light",
+        "example": "My backpack is light."
+      },
+      {
+        "ru": "удобный",
+        "en": "comfortable",
+        "example": "This chair is very comfortable."
+      },
+      {
+        "ru": "популярный",
+        "en": "popular",
+        "example": "This song is popular now."
+      },
+      {
+        "ru": "чем",
+        "en": "than",
+        "example": "She is taller than me."
+      }
+    ],
+    "city/point_5": [
+      {
+        "ru": "опыт",
+        "en": "experience",
+        "example": "I have experience with children."
+      },
+      {
+        "ru": "когда-либо",
+        "en": "ever",
+        "example": "Have you ever been to London?"
+      },
+      {
+        "ru": "никогда",
+        "en": "never",
+        "example": "I have never tried sushi."
+      },
+      {
+        "ru": "уже",
+        "en": "already",
+        "example": "I have already finished."
+      },
+      {
+        "ru": "ещё не",
+        "en": "yet",
+        "example": "I haven't eaten yet."
+      },
+      {
+        "ru": "только что",
+        "en": "just",
+        "example": "He has just called me."
+      },
+      {
+        "ru": "пробовать",
+        "en": "try",
+        "example": "I want to try this dish."
+      },
+      {
+        "ru": "побывать",
+        "en": "visit",
+        "example": "I have visited three countries."
+      },
+      {
+        "ru": "путешествовать",
+        "en": "travel",
+        "example": "I love to travel by train."
+      },
+      {
+        "ru": "за границей",
+        "en": "abroad",
+        "example": "She has never worked abroad."
+      },
+      {
+        "ru": "самолёт",
+        "en": "plane",
+        "example": "The plane leaves at noon."
+      },
+      {
+        "ru": "билет",
+        "en": "ticket",
+        "example": "I bought two tickets."
+      },
+      {
+        "ru": "страна",
+        "en": "country",
+        "example": "Which country do you want to see?"
+      },
+      {
+        "ru": "город",
+        "en": "city",
+        "example": "This city is very old."
+      },
+      {
+        "ru": "гора",
+        "en": "mountain",
+        "example": "We have climbed a mountain."
+      },
+      {
+        "ru": "море",
+        "en": "sea",
+        "example": "I have swum in the sea."
+      },
+      {
+        "ru": "удивительный",
+        "en": "amazing",
+        "example": "The view was amazing."
+      },
+      {
+        "ru": "скучный",
+        "en": "boring",
+        "example": "The film was boring."
+      },
+      {
+        "ru": "удивиться",
+        "en": "be surprised",
+        "example": "I was surprised by the price."
+      },
+      {
+        "ru": "рассказывать",
+        "en": "tell",
+        "example": "Tell me about your trip."
+      }
+    ],
+    "city/point_6": [
+      {
+        "ru": "правило",
+        "en": "rule",
+        "example": "Read the rule first."
+      },
+      {
+        "ru": "должен",
+        "en": "must",
+        "example": "You must show your passport."
+      },
+      {
+        "ru": "нужно",
+        "en": "need",
+        "example": "I need to be there at nine."
+      },
+      {
+        "ru": "нельзя",
+        "en": "not allowed",
+        "example": "Smoking is not allowed here."
+      },
+      {
+        "ru": "разрешать",
+        "en": "allow",
+        "example": "They allow dogs in the park."
+      },
+      {
+        "ru": "запрещать",
+        "en": "forbid",
+        "example": "The rules forbid it."
+      },
+      {
+        "ru": "можно",
+        "en": "may",
+        "example": "May I come in?"
+      },
+      {
+        "ru": "обязанность",
+        "en": "duty",
+        "example": "It's my duty to check it."
+      },
+      {
+        "ru": "закон",
+        "en": "law",
+        "example": "The law says no parking here."
+      },
+      {
+        "ru": "штраф",
+        "en": "fine",
+        "example": "You have to pay a fine."
+      },
+      {
+        "ru": "тишина",
+        "en": "silence",
+        "example": "Please keep silence in the hall."
+      },
+      {
+        "ru": "курить",
+        "en": "smoke",
+        "example": "You can't smoke inside."
+      },
+      {
+        "ru": "парковать",
+        "en": "park",
+        "example": "You may park behind the house."
+      },
+      {
+        "ru": "вход",
+        "en": "entrance",
+        "example": "The entrance is on the left."
+      },
+      {
+        "ru": "выход",
+        "en": "exit",
+        "example": "Where is the exit?"
+      },
+      {
+        "ru": "опасный",
+        "en": "dangerous",
+        "example": "It's dangerous to swim here."
+      },
+      {
+        "ru": "осторожный",
+        "en": "careful",
+        "example": "Be careful with the door."
+      },
+      {
+        "ru": "подпись",
+        "en": "signature",
+        "example": "We need your signature here."
+      },
+      {
+        "ru": "документ",
+        "en": "document",
+        "example": "Bring your documents tomorrow."
+      },
+      {
+        "ru": "очередь",
+        "en": "line",
+        "example": "There is a long line here."
+      }
+    ],
+    "city/point_7": [
+      {
+        "ru": "компьютер",
+        "en": "computer",
+        "example": "My computer is very slow."
+      },
+      {
+        "ru": "телефон",
+        "en": "phone",
+        "example": "My phone is out of battery."
+      },
+      {
+        "ru": "интернет",
+        "en": "internet",
+        "example": "The internet is down again."
+      },
+      {
+        "ru": "сайт",
+        "en": "website",
+        "example": "This website is easy to use."
+      },
+      {
+        "ru": "пароль",
+        "en": "password",
+        "example": "I forgot my password."
+      },
+      {
+        "ru": "файл",
+        "en": "file",
+        "example": "Send me the file, please."
+      },
+      {
+        "ru": "загружать",
+        "en": "download",
+        "example": "I downloaded a new app."
+      },
+      {
+        "ru": "сохранять",
+        "en": "save",
+        "example": "Save your work every minute."
+      },
+      {
+        "ru": "удалять",
+        "en": "delete",
+        "example": "Don't delete this photo."
+      },
+      {
+        "ru": "кнопка",
+        "en": "button",
+        "example": "Press the green button."
+      },
+      {
+        "ru": "экран",
+        "en": "screen",
+        "example": "The screen is too bright."
+      },
+      {
+        "ru": "зарядка",
+        "en": "charger",
+        "example": "Where is my charger?"
+      },
+      {
+        "ru": "батарея",
+        "en": "battery",
+        "example": "The battery lasts two days."
+      },
+      {
+        "ru": "приложение",
+        "en": "app",
+        "example": "This app helps me learn words."
+      },
+      {
+        "ru": "сообщение",
+        "en": "message",
+        "example": "I got your message."
+      },
+      {
+        "ru": "звонить",
+        "en": "call",
+        "example": "Call me after the meeting."
+      },
+      {
+        "ru": "включать",
+        "en": "turn on",
+        "example": "Turn on the light, please."
+      },
+      {
+        "ru": "выключать",
+        "en": "turn off",
+        "example": "Turn off your phone here."
+      },
+      {
+        "ru": "сломанный",
+        "en": "broken",
+        "example": "My charger is broken."
+      },
+      {
+        "ru": "обновлять",
+        "en": "update",
+        "example": "I update the app every month."
+      }
+    ],
+    "city/point_8": [
+      {
+        "ru": "работа",
+        "en": "job",
+        "example": "I like my new job."
+      },
+      {
+        "ru": "работодатель",
+        "en": "employer",
+        "example": "My employer pays on time."
+      },
+      {
+        "ru": "коллега",
+        "en": "colleague",
+        "example": "My colleague speaks English."
+      },
+      {
+        "ru": "начальник",
+        "en": "boss",
+        "example": "The boss is in a meeting."
+      },
+      {
+        "ru": "зарплата",
+        "en": "salary",
+        "example": "The salary is good for this city."
+      },
+      {
+        "ru": "отпуск",
+        "en": "vacation",
+        "example": "I'm on vacation next week."
+      },
+      {
+        "ru": "собрание",
+        "en": "meeting",
+        "example": "The meeting starts at ten."
+      },
+      {
+        "ru": "проект",
+        "en": "project",
+        "example": "We finished the project on time."
+      },
+      {
+        "ru": "отчёт",
+        "en": "report",
+        "example": "I sent the report yesterday."
+      },
+      {
+        "ru": "срок",
+        "en": "deadline",
+        "example": "The deadline is Friday."
+      },
+      {
+        "ru": "нанимать",
+        "en": "hire",
+        "example": "They hired two new people."
+      },
+      {
+        "ru": "увольняться",
+        "en": "quit",
+        "example": "He quit his job last month."
+      },
+      {
+        "ru": "собеседование",
+        "en": "interview",
+        "example": "My interview is tomorrow."
+      },
+      {
+        "ru": "опыт работы",
+        "en": "work experience",
+        "example": "I have five years of work experience."
+      },
+      {
+        "ru": "офис",
+        "en": "office",
+        "example": "Our office is near the river."
+      },
+      {
+        "ru": "клиент",
+        "en": "client",
+        "example": "The client wants a cheaper price."
+      },
+      {
+        "ru": "задача",
+        "en": "task",
+        "example": "This task is easy for me."
+      },
+      {
+        "ru": "отвечать за",
+        "en": "be responsible for",
+        "example": "I am responsible for the budget."
+      },
+      {
+        "ru": "повышение",
+        "en": "promotion",
+        "example": "She got a promotion in May."
+      },
+      {
+        "ru": "переработка",
+        "en": "overtime",
+        "example": "I worked overtime this week."
+      }
+    ],
+    "city/point_9": [
+      {
+        "ru": "история",
+        "en": "story",
+        "example": "Tell me the whole story."
+      },
+      {
+        "ru": "вдруг",
+        "en": "suddenly",
+        "example": "Suddenly the phone rang."
+      },
+      {
+        "ru": "пока",
+        "en": "while",
+        "example": "I was cooking while he was sleeping."
+      },
+      {
+        "ru": "вчера",
+        "en": "yesterday",
+        "example": "Yesterday I met my friend."
+      },
+      {
+        "ru": "прошлой ночью",
+        "en": "last night",
+        "example": "Last night I was walking home."
+      },
+      {
+        "ru": "шум",
+        "en": "noise",
+        "example": "I heard a strange noise."
+      },
+      {
+        "ru": "кричать",
+        "en": "shout",
+        "example": "Someone was shouting outside."
+      },
+      {
+        "ru": "плакать",
+        "en": "cry",
+        "example": "The baby was crying all night."
+      },
+      {
+        "ru": "смеяться",
+        "en": "laugh",
+        "example": "Everybody was laughing."
+      },
+      {
+        "ru": "улыбаться",
+        "en": "smile",
+        "example": "She was smiling at me."
+      },
+      {
+        "ru": "падать",
+        "en": "fall",
+        "example": "I was running and fell down."
+      },
+      {
+        "ru": "ломать",
+        "en": "break",
+        "example": "He broke the cup."
+      },
+      {
+        "ru": "терять",
+        "en": "lose",
+        "example": "I lost my keys yesterday."
+      },
+      {
+        "ru": "находить",
+        "en": "find",
+        "example": "I found a wallet on the street."
+      },
+      {
+        "ru": "убегать",
+        "en": "run away",
+        "example": "The dog was running away."
+      },
+      {
+        "ru": "драться",
+        "en": "fight",
+        "example": "Two boys were fighting in the yard."
+      },
+      {
+        "ru": "сцена",
+        "en": "scene",
+        "example": "It was a scary scene."
+      },
+      {
+        "ru": "конец",
+        "en": "end",
+        "example": "At the end we all laughed."
+      },
+      {
+        "ru": "начало",
+        "en": "beginning",
+        "example": "The beginning of the film is slow."
+      },
+      {
+        "ru": "помнить",
+        "en": "remember",
+        "example": "I remember that evening very well."
+      }
+    ]
+  }
+}

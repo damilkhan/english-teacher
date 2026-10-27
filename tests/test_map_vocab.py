@@ -36,6 +36,7 @@ for _stream in (sys.stdout, sys.stderr):
     except Exception:
         pass
 
+import config                                               # noqa: E402
 import profile_store                                        # noqa: E402
 import user_manager                                         # noqa: E402
 from progress_map import ProgressMap                         # noqa: E402
@@ -176,6 +177,10 @@ def _build_app(tmp):
 def test_window():
     print("\n[4] Кнопки окна блока")
     tmp = tempfile.mkdtemp(prefix="et_map_vocab_app_")
+    # Банк новых слов (решение 54) здесь выключаем: тест про кнопку карты,
+    # иначе в заход честно подмешиваются 5 новых слов текущей темы.
+    saved_new = config.VOCAB_NEW_PER_DAY
+    config.VOCAB_NEW_PER_DAY = 0
     real_dirs = (user_manager.PROFILES_DIR, user_manager.LAST_USER_FILE,
                  profile_store.PROFILE_PATH)
     app = None
@@ -296,6 +301,7 @@ def test_window():
         except Exception:
             pass
         user_manager.PROFILES_DIR, user_manager.LAST_USER_FILE,             profile_store.PROFILE_PATH = real_dirs
+        config.VOCAB_NEW_PER_DAY = saved_new
         shutil.rmtree(tmp, ignore_errors=True)
 
 
