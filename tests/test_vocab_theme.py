@@ -10,7 +10,8 @@
 #   5) пустая корзина место не теряет, дубликатов нет, новые — в конце;
 #   6) норма новых слов в день: заведённые сегодня вычитаются;
 #   7) контроллер: слова из банка пишутся в профиль, окно их показывает;
-#   8) защита: подделка профиля без записи карточек новых слов не заводит.
+#   8) защита: подделка профиля без записи карточек новых слов не заводит;
+#   9) добор новых слов из следующего блока, когда в текущем кончились.
 # =========================================================
 
 import os
@@ -333,6 +334,25 @@ def test_controller_guard():
         vc._WORD_MAP = saved
 
 
+# =========================================================
+# 9. Добор новых слов из следующей темы
+# =========================================================
+def test_next_theme():
+    print("\n[9] Добор: слова текущей темы, потом следующей")
+    wordmap = FakeMap()
+    queue = word_bank.theme_queue({}, wordmap, "A2")
+    check("очередь тем начинается с текущей", queue[:2] == ["city/point_1", "city/point_2"], queue)
+    check("в очереди больше одной темы", len(queue) >= 2, queue)
+
+    real = word_bank.words_for_new({}, FakeMap(), "A2")
+    themes = {w.get("theme") for w in real}
+    check("words_for_new берёт слова с темой", all(t for t in themes), themes)
+    check("слов хватает на день новинок", len(real) >= 5, len(real))
+
+    check("пустая карта → пустая очередь", word_bank.theme_queue({}, None, "A2") == [],
+          word_bank.theme_queue({}, None, "A2"))
+
+
 def main():
     print("=" * 60)
     test_bank()
@@ -342,6 +362,7 @@ def main():
     test_daily_norm()
     test_controller_bank()
     test_controller_guard()
+    test_next_theme()
     print("\n" + "=" * 60)
     if FAILED:
         print("ПРОВАЛОВ: %d" % len(FAILED))

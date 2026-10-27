@@ -141,12 +141,13 @@ class VocabularyController:
             return ""
 
     def _new_candidates(self, theme) -> List[dict]:
-        """Слова текущей темы из банка в виде карточек уровня 0."""
+        """Слова для новых карточек: текущая тема, при нехватке — следующая."""
         if not theme:
             return []
         try:
-            level = word_bank.student_level(self._profile())
-            words = word_bank.words_of_theme(level, theme)
+            profile = self._profile()
+            level = word_bank.student_level(profile)
+            words = word_bank.words_for_new(profile, _word_map(), level)
         except Exception as exc:
             print("⚠️ Банк слов не прочитан: %s" % exc)
             return []

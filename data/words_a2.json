@@ -919,6 +919,924 @@
         "en": "remember",
         "example": "I remember that evening very well."
       }
+    ],
+    "mountain/point_1": [
+      {
+        "ru": "путешествие",
+        "en": "trip",
+        "example": "Our trip was long but fun."
+      },
+      {
+        "ru": "бронировать",
+        "en": "book",
+        "example": "I want to book a room for two nights."
+      },
+      {
+        "ru": "отель",
+        "en": "hotel",
+        "example": "The hotel is near the beach."
+      },
+      {
+        "ru": "номер",
+        "en": "room",
+        "example": "The room has a nice view."
+      },
+      {
+        "ru": "багаж",
+        "en": "luggage",
+        "example": "My luggage is very heavy."
+      },
+      {
+        "ru": "паспорт",
+        "en": "passport",
+        "example": "Show your passport, please."
+      },
+      {
+        "ru": "рейс",
+        "en": "flight",
+        "example": "Our flight is at six in the morning."
+      },
+      {
+        "ru": "аэропорт",
+        "en": "airport",
+        "example": "The airport is far from the city."
+      },
+      {
+        "ru": "вокзал",
+        "en": "train station",
+        "example": "The train station is next to the park."
+      },
+      {
+        "ru": "поезд",
+        "en": "train",
+        "example": "The train leaves in ten minutes."
+      },
+      {
+        "ru": "гид",
+        "en": "guide",
+        "example": "The guide told us many stories."
+      },
+      {
+        "ru": "экскурсия",
+        "en": "tour",
+        "example": "We took a tour around the old town."
+      },
+      {
+        "ru": "страховка",
+        "en": "insurance",
+        "example": "Travel insurance is a good idea."
+      },
+      {
+        "ru": "виза",
+        "en": "visa",
+        "example": "I need a visa for this country."
+      },
+      {
+        "ru": "граница",
+        "en": "border",
+        "example": "We crossed the border at night."
+      },
+      {
+        "ru": "бронь",
+        "en": "reservation",
+        "example": "I have a reservation for tonight."
+      },
+      {
+        "ru": "вылет",
+        "en": "departure",
+        "example": "The departure is delayed."
+      },
+      {
+        "ru": "прилёт",
+        "en": "arrival",
+        "example": "Our arrival time is two o'clock."
+      },
+      {
+        "ru": "чемодан",
+        "en": "suitcase",
+        "example": "My suitcase is broken."
+      },
+      {
+        "ru": "турист",
+        "en": "tourist",
+        "example": "Many tourists come here in summer."
+      }
+    ],
+    "mountain/point_2": [
+      {
+        "ru": "проблема",
+        "en": "problem",
+        "example": "We have a small problem here."
+      },
+      {
+        "ru": "жалоба",
+        "en": "complaint",
+        "example": "I want to make a complaint."
+      },
+      {
+        "ru": "жаловаться",
+        "en": "complain",
+        "example": "He complained about the noise."
+      },
+      {
+        "ru": "сломаться",
+        "en": "break down",
+        "example": "Our car broke down on the road."
+      },
+      {
+        "ru": "потерянный",
+        "en": "lost",
+        "example": "My lost bag was found."
+      },
+      {
+        "ru": "ошибка",
+        "en": "mistake",
+        "example": "There is a mistake in the bill."
+      },
+      {
+        "ru": "задержка",
+        "en": "delay",
+        "example": "Sorry for the delay."
+      },
+      {
+        "ru": "шумный",
+        "en": "noisy",
+        "example": "The street is very noisy at night."
+      },
+      {
+        "ru": "грязный",
+        "en": "dirty",
+        "example": "The room was dirty."
+      },
+      {
+        "ru": "холодный",
+        "en": "cold",
+        "example": "The water is too cold."
+      },
+      {
+        "ru": "горячий",
+        "en": "hot",
+        "example": "The soup is very hot."
+      },
+      {
+        "ru": "не работает",
+        "en": "doesn't work",
+        "example": "The lamp doesn't work."
+      },
+      {
+        "ru": "вернуть",
+        "en": "return",
+        "example": "I want to return this jacket."
+      },
+      {
+        "ru": "обменять",
+        "en": "exchange",
+        "example": "Can I exchange this shirt?"
+      },
+      {
+        "ru": "извинение",
+        "en": "apology",
+        "example": "Please accept my apology."
+      },
+      {
+        "ru": "менеджер",
+        "en": "manager",
+        "example": "The manager will help you."
+      },
+      {
+        "ru": "ремонт",
+        "en": "repair",
+        "example": "The repair takes two days."
+      },
+      {
+        "ru": "недоразумение",
+        "en": "misunderstanding",
+        "example": "It was just a misunderstanding."
+      },
+      {
+        "ru": "сердитый",
+        "en": "angry",
+        "example": "The client was angry."
+      },
+      {
+        "ru": "решать",
+        "en": "solve",
+        "example": "We solved the problem quickly."
+      }
+    ],
+    "mountain/point_3": [
+      {
+        "ru": "совет",
+        "en": "advice",
+        "example": "Thanks for your advice."
+      },
+      {
+        "ru": "советовать",
+        "en": "recommend",
+        "example": "I recommend this restaurant."
+      },
+      {
+        "ru": "предлагать",
+        "en": "suggest",
+        "example": "I suggest we take a taxi."
+      },
+      {
+        "ru": "следует",
+        "en": "should",
+        "example": "You should see a doctor."
+      },
+      {
+        "ru": "лучше бы",
+        "en": "had better",
+        "example": "You had better hurry."
+      },
+      {
+        "ru": "почему бы не",
+        "en": "why not",
+        "example": "Why not ask her?"
+      },
+      {
+        "ru": "попробуй",
+        "en": "try it",
+        "example": "Try it, it's delicious."
+      },
+      {
+        "ru": "идея",
+        "en": "idea",
+        "example": "That's a great idea."
+      },
+      {
+        "ru": "мнение",
+        "en": "opinion",
+        "example": "In my opinion, it's too far."
+      },
+      {
+        "ru": "помогать",
+        "en": "help",
+        "example": "Let me help you with the bags."
+      },
+      {
+        "ru": "может быть",
+        "en": "maybe",
+        "example": "Maybe he is right."
+      },
+      {
+        "ru": "уверен",
+        "en": "sure",
+        "example": "I'm sure you can do it."
+      },
+      {
+        "ru": "сомневаться",
+        "en": "doubt",
+        "example": "I doubt it will work."
+      },
+      {
+        "ru": "беречь",
+        "en": "take care",
+        "example": "Take care of your health."
+      },
+      {
+        "ru": "выбирать",
+        "en": "choose",
+        "example": "You can choose any colour."
+      },
+      {
+        "ru": "вариант",
+        "en": "option",
+        "example": "We have two options."
+      },
+      {
+        "ru": "плюс",
+        "en": "advantage",
+        "example": "The price is a big advantage."
+      },
+      {
+        "ru": "минус",
+        "en": "disadvantage",
+        "example": "The only disadvantage is the noise."
+      },
+      {
+        "ru": "предупреждать",
+        "en": "warn",
+        "example": "I warned him about the road."
+      },
+      {
+        "ru": "советовать подождать",
+        "en": "advise to wait",
+        "example": "I advise you to wait."
+      }
+    ],
+    "mountain/point_4": [
+      {
+        "ru": "возможно",
+        "en": "possibly",
+        "example": "Could you possibly help me?"
+      },
+      {
+        "ru": "невозможно",
+        "en": "impossible",
+        "example": "It's impossible to finish today."
+      },
+      {
+        "ru": "вероятно",
+        "en": "probably",
+        "example": "He is probably at home."
+      },
+      {
+        "ru": "может",
+        "en": "might",
+        "example": "It might rain later."
+      },
+      {
+        "ru": "способный",
+        "en": "able",
+        "example": "She is able to swim fast."
+      },
+      {
+        "ru": "умение",
+        "en": "skill",
+        "example": "Speaking is a useful skill."
+      },
+      {
+        "ru": "шанс",
+        "en": "chance",
+        "example": "You have a good chance."
+      },
+      {
+        "ru": "уверенность",
+        "en": "confidence",
+        "example": "Practice gives you confidence."
+      },
+      {
+        "ru": "зависеть",
+        "en": "depend",
+        "example": "It depends on the weather."
+      },
+      {
+        "ru": "условие",
+        "en": "condition",
+        "example": "The conditions are difficult."
+      },
+      {
+        "ru": "если",
+        "en": "if",
+        "example": "If you come, call me."
+      },
+      {
+        "ru": "наверняка",
+        "en": "definitely",
+        "example": "I will definitely come."
+      },
+      {
+        "ru": "вряд ли",
+        "en": "unlikely",
+        "example": "It's unlikely he will come."
+      },
+      {
+        "ru": "разрешение",
+        "en": "permission",
+        "example": "I need permission to leave."
+      },
+      {
+        "ru": "запрещено",
+        "en": "forbidden",
+        "example": "It is forbidden to fish here."
+      },
+      {
+        "ru": "свобода",
+        "en": "freedom",
+        "example": "Freedom is important for me."
+      },
+      {
+        "ru": "выбор",
+        "en": "choice",
+        "example": "The choice is yours."
+      },
+      {
+        "ru": "удача",
+        "en": "luck",
+        "example": "Good luck with your test!"
+      },
+      {
+        "ru": "риск",
+        "en": "risk",
+        "example": "It's not worth the risk."
+      },
+      {
+        "ru": "готовый",
+        "en": "ready",
+        "example": "Are you ready to start?"
+      }
+    ],
+    "mountain/point_5": [
+      {
+        "ru": "предпочитать",
+        "en": "prefer",
+        "example": "I prefer tea to coffee."
+      },
+      {
+        "ru": "нравиться",
+        "en": "like",
+        "example": "I like this song."
+      },
+      {
+        "ru": "любить",
+        "en": "love",
+        "example": "I love warm evenings."
+      },
+      {
+        "ru": "не нравиться",
+        "en": "dislike",
+        "example": "I dislike cold weather."
+      },
+      {
+        "ru": "хотеть",
+        "en": "want",
+        "example": "I want to learn Spanish."
+      },
+      {
+        "ru": "желание",
+        "en": "wish",
+        "example": "My wish is to travel more."
+      },
+      {
+        "ru": "вкус",
+        "en": "taste",
+        "example": "This tea has a strange taste."
+      },
+      {
+        "ru": "стиль",
+        "en": "style",
+        "example": "I like your style."
+      },
+      {
+        "ru": "скучать",
+        "en": "miss",
+        "example": "I miss my family."
+      },
+      {
+        "ru": "интересоваться",
+        "en": "be interested in",
+        "example": "I'm interested in art."
+      },
+      {
+        "ru": "увлекаться",
+        "en": "be into",
+        "example": "He is into old cars."
+      },
+      {
+        "ru": "обычный",
+        "en": "usual",
+        "example": "It's my usual morning walk."
+      },
+      {
+        "ru": "особенный",
+        "en": "special",
+        "example": "Today is a special day."
+      },
+      {
+        "ru": "любимый",
+        "en": "favorite",
+        "example": "What's your favorite season?"
+      },
+      {
+        "ru": "раздражать",
+        "en": "annoy",
+        "example": "Loud music annoys me."
+      },
+      {
+        "ru": "терпеть",
+        "en": "stand",
+        "example": "I can't stand waiting."
+      },
+      {
+        "ru": "предпочтение",
+        "en": "preference",
+        "example": "Do you have any preferences?"
+      },
+      {
+        "ru": "подходить",
+        "en": "suit",
+        "example": "This colour suits you."
+      },
+      {
+        "ru": "решение",
+        "en": "decision",
+        "example": "It was a hard decision."
+      },
+      {
+        "ru": "нравится больше",
+        "en": "like more",
+        "example": "I like pizza more than pasta."
+      }
+    ],
+    "mountain/point_6": [
+      {
+        "ru": "место",
+        "en": "place",
+        "example": "This place is very quiet."
+      },
+      {
+        "ru": "район",
+        "en": "area",
+        "example": "Our area is close to the river."
+      },
+      {
+        "ru": "улица",
+        "en": "street",
+        "example": "The street is full of shops."
+      },
+      {
+        "ru": "площадь",
+        "en": "square",
+        "example": "There is a fountain in the square."
+      },
+      {
+        "ru": "мост",
+        "en": "bridge",
+        "example": "The bridge is very old."
+      },
+      {
+        "ru": "парк",
+        "en": "park",
+        "example": "We walked in the park all evening."
+      },
+      {
+        "ru": "здание",
+        "en": "building",
+        "example": "This building is 100 years old."
+      },
+      {
+        "ru": "тихий",
+        "en": "quiet",
+        "example": "It's a quiet little town."
+      },
+      {
+        "ru": "оживлённый",
+        "en": "lively",
+        "example": "The centre is lively at night."
+      },
+      {
+        "ru": "современный",
+        "en": "modern",
+        "example": "The museum is modern and bright."
+      },
+      {
+        "ru": "старый",
+        "en": "old",
+        "example": "I love old streets."
+      },
+      {
+        "ru": "чистый",
+        "en": "clean",
+        "example": "The station is clean and warm."
+      },
+      {
+        "ru": "красивый",
+        "en": "beautiful",
+        "example": "The view is beautiful."
+      },
+      {
+        "ru": "многолюдный",
+        "en": "crowded",
+        "example": "The market is crowded on Sunday."
+      },
+      {
+        "ru": "вид",
+        "en": "view",
+        "example": "The window view is great."
+      },
+      {
+        "ru": "рядом",
+        "en": "near",
+        "example": "The beach is near our hotel."
+      },
+      {
+        "ru": "далеко",
+        "en": "far",
+        "example": "The airport is very far."
+      },
+      {
+        "ru": "центр",
+        "en": "center",
+        "example": "We live in the center of the town."
+      },
+      {
+        "ru": "окрестности",
+        "en": "surroundings",
+        "example": "Let's walk around the surroundings."
+      },
+      {
+        "ru": "достопримечательность",
+        "en": "sight",
+        "example": "This church is a famous sight."
+      }
+    ],
+    "mountain/point_7": [
+      {
+        "ru": "спорт",
+        "en": "sport",
+        "example": "I play sport three times a week."
+      },
+      {
+        "ru": "тренировка",
+        "en": "workout",
+        "example": "My workout takes an hour."
+      },
+      {
+        "ru": "тренироваться",
+        "en": "train",
+        "example": "He trains every morning."
+      },
+      {
+        "ru": "бегать",
+        "en": "run",
+        "example": "I run in the park after work."
+      },
+      {
+        "ru": "плавать",
+        "en": "swim",
+        "example": "She swims on Fridays."
+      },
+      {
+        "ru": "велосипед",
+        "en": "bicycle",
+        "example": "My bicycle is new."
+      },
+      {
+        "ru": "команда",
+        "en": "team",
+        "example": "Our team won the match."
+      },
+      {
+        "ru": "играть",
+        "en": "play",
+        "example": "Do you play football?"
+      },
+      {
+        "ru": "выигрывать",
+        "en": "win",
+        "example": "I hope we win today."
+      },
+      {
+        "ru": "проигрывать",
+        "en": "lose",
+        "example": "We lost by one point."
+      },
+      {
+        "ru": "результат",
+        "en": "result",
+        "example": "The result was two to one."
+      },
+      {
+        "ru": "мышца",
+        "en": "muscle",
+        "example": "My muscles hurt today."
+      },
+      {
+        "ru": "устать",
+        "en": "get tired",
+        "example": "I get tired very fast."
+      },
+      {
+        "ru": "сильный",
+        "en": "strong",
+        "example": "He is very strong."
+      },
+      {
+        "ru": "здоровье",
+        "en": "health",
+        "example": "Sport is good for your health."
+      },
+      {
+        "ru": "зал",
+        "en": "gym",
+        "example": "The gym is open till ten."
+      },
+      {
+        "ru": "растяжка",
+        "en": "stretching",
+        "example": "Stretching helps after running."
+      },
+      {
+        "ru": "матч",
+        "en": "match",
+        "example": "The match starts at seven."
+      },
+      {
+        "ru": "болеть",
+        "en": "hurt",
+        "example": "My knee hurts a little."
+      },
+      {
+        "ru": "отдыхать",
+        "en": "rest",
+        "example": "Rest for ten minutes."
+      }
+    ],
+    "mountain/point_8": [
+      {
+        "ru": "новости",
+        "en": "news",
+        "example": "I watch the news every evening."
+      },
+      {
+        "ru": "газета",
+        "en": "newspaper",
+        "example": "My father reads a newspaper."
+      },
+      {
+        "ru": "журнал",
+        "en": "magazine",
+        "example": "This magazine is about travel."
+      },
+      {
+        "ru": "передача",
+        "en": "show",
+        "example": "My favorite show starts now."
+      },
+      {
+        "ru": "сериал",
+        "en": "series",
+        "example": "I'm watching a long series."
+      },
+      {
+        "ru": "сюжет",
+        "en": "plot",
+        "example": "The plot was very simple."
+      },
+      {
+        "ru": "актёр",
+        "en": "actor",
+        "example": "My favorite actor plays here."
+      },
+      {
+        "ru": "режиссёр",
+        "en": "director",
+        "example": "The director is very young."
+      },
+      {
+        "ru": "мультфильм",
+        "en": "cartoon",
+        "example": "Kids love this cartoon."
+      },
+      {
+        "ru": "концерт",
+        "en": "concert",
+        "example": "We went to a concert on Friday."
+      },
+      {
+        "ru": "выступление",
+        "en": "performance",
+        "example": "The performance was wonderful."
+      },
+      {
+        "ru": "реклама",
+        "en": "advertisement",
+        "example": "There is too much advertisement here."
+      },
+      {
+        "ru": "подписка",
+        "en": "subscription",
+        "example": "I cancelled my subscription."
+      },
+      {
+        "ru": "канал",
+        "en": "channel",
+        "example": "Change the channel, please."
+      },
+      {
+        "ru": "зритель",
+        "en": "viewer",
+        "example": "Viewers love this programme."
+      },
+      {
+        "ru": "захватывающий",
+        "en": "exciting",
+        "example": "It's an exciting story."
+      },
+      {
+        "ru": "смешной",
+        "en": "funny",
+        "example": "This film is really funny."
+      },
+      {
+        "ru": "грустный",
+        "en": "sad",
+        "example": "The ending was sad."
+      },
+      {
+        "ru": "обсуждать",
+        "en": "discuss",
+        "example": "Let's discuss it tomorrow."
+      },
+      {
+        "ru": "смотреть онлайн",
+        "en": "watch online",
+        "example": "I watch films online."
+      }
+    ],
+    "mountain/point_9": [
+      {
+        "ru": "при условии",
+        "en": "as long as",
+        "example": "You can go, as long as you call me."
+      },
+      {
+        "ru": "тогда",
+        "en": "then",
+        "example": "If it rains, then we stay home."
+      },
+      {
+        "ru": "случиться",
+        "en": "happen",
+        "example": "If something happens, call me."
+      },
+      {
+        "ru": "дождь",
+        "en": "rain",
+        "example": "If it rains, we'll take a taxi."
+      },
+      {
+        "ru": "погода",
+        "en": "weather",
+        "example": "The weather is great today."
+      },
+      {
+        "ru": "опоздать",
+        "en": "be late",
+        "example": "If you are late, we'll wait."
+      },
+      {
+        "ru": "успевать",
+        "en": "make it",
+        "example": "I'll try to make it."
+      },
+      {
+        "ru": "напомнить",
+        "en": "remind",
+        "example": "Remind me, please."
+      },
+      {
+        "ru": "приглашать",
+        "en": "invite",
+        "example": "If I win, I'll invite you."
+      },
+      {
+        "ru": "согласиться",
+        "en": "accept",
+        "example": "If he accepts, we start tomorrow."
+      },
+      {
+        "ru": "отказаться",
+        "en": "refuse",
+        "example": "She refused to come."
+      },
+      {
+        "ru": "обещать",
+        "en": "promise",
+        "example": "I promise I will call."
+      },
+      {
+        "ru": "если не",
+        "en": "unless",
+        "example": "We won't go unless she comes."
+      },
+      {
+        "ru": "получится",
+        "en": "works out",
+        "example": "If it works out, we'll be happy."
+      },
+      {
+        "ru": "планы",
+        "en": "plans",
+        "example": "What are your plans for Sunday?"
+      },
+      {
+        "ru": "будущее",
+        "en": "future",
+        "example": "Nobody knows the future."
+      },
+      {
+        "ru": "надеяться",
+        "en": "hope",
+        "example": "I hope you can come."
+      },
+      {
+        "ru": "конечно",
+        "en": "certainly",
+        "example": "Certainly, I will help you."
+      },
+      {
+        "ru": "потом",
+        "en": "later",
+        "example": "I'll call you later."
+      },
+      {
+        "ru": "сразу",
+        "en": "right away",
+        "example": "I'll do it right away."
+      }
     ]
   }
 }

@@ -204,6 +204,41 @@ def current_theme(profile, wordmap, level=None, path=None) -> str:
     return ""
 
 
+def theme_queue(profile, wordmap, level=None, limit=3) -> List[str]:
+    """Темы по порядку курса, начиная с текущей: [текущая, следующая, …].
+
+    Нужно для добора новых слов: в блоке ~20 слов, а при 5 новых в день это
+    4 дня — меньше, чем живёт тема. Когда слова текущей темы кончились,
+    берём слова следующего блока того же уровня (ученик их всё равно скоро
+    начнёт), а не выдумываем и не молчим.
+    """
+    current = current_theme(profile, wordmap, level, path=None)
+    if not current or wordmap is None:
+        return []
+    order: List[str] = []
+    for loc_id in (wordmap.location_ids() or []):
+        try:
+            points = wordmap.points_of(loc_id)
+        except Exception:
+            continue
+        for point in points:
+            point_id = str((point or {}).get("id") or "").strip()
+            if point_id:
+                order.append(point_id)
+    if current not in order:
+        return [current]
+    start = order.index(current)
+    return order[start:start + max(1, int(limit or 1))]
+
+
+def words_for_new(profile, wordmap, level=None, path=None, limit=3) -> List[dict]:
+    """Слова для новых карточек: текущая тема, затем следующие (добор)."""
+    out: List[dict] = []
+    for theme in theme_queue(profile, wordmap, level, limit):
+        for item in words_of_theme(level or student_level(profile), theme, path):
+            out.append(item)
+    return out
+
 def theme_title(wordmap, point_id) -> str:
     """Название блока для интерфейса («Making Arrangements»)."""
     if wordmap is None:
