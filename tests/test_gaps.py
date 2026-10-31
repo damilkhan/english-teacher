@@ -12,7 +12,8 @@
 #   4) prompt_block: 3 правила, без «other», запрет выдумывать, флаг config;
 #   5) table_rows: подписи по-русски, примеры через «->», лимит строк;
 #   7) pick_rule/rule_fits: ярлык модели берём, только если он ВОЗМОЖЕН (§55);
-#   8) _with_origin: экзамен/урок попадают в source/lesson (§55).
+#   8) _with_origin: экзамен/урок попадают в source/lesson (§55);
+#   9) top_pair: пара для дрилла урока (§55).
 # =========================================================
 
 import os
@@ -158,6 +159,53 @@ def test_origin():
     check("готовые поля не перетираются",
           keep.get("exam") is True and keep.get("lesson") == "city/9.9", keep)
 
+def test_top_pair():
+    print("\n[9] Пара для дрилла: самая частая ПОДТВЕРЖДЁННАЯ (§55)")
+    check("пустая база -> None", gaps.top_pair(rows=[]) is None)
+    # «прочее» парой для дрилла не становится, даже если записей много
+    many_other = rows(*[("other", "a b c", "a d c", "2026-10-0%d" % (i + 1))
+                        for i in range(5)])
+    check("только «прочее» -> None", gaps.top_pair(rows=many_other) is None,
+          gaps.top_pair(rows=many_other))
+    # правило НЕ пробел (один раз) -> пары нет: случайный промах не дрилл
+    once = rows(("word_order", "have usually breakfast", "usually have breakfast",
+                 "2026-10-01"))
+    check("одного раза мало", gaps.top_pair(rows=once) is None)
+    base = rows(
+        ("word_choice", "go to lay down", "go to lie down", "2026-10-02"),
+        ("word_choice", "in the movie", "a movie", "2026-10-03"),
+        ("word_choice", "eaten", "ate", "2026-10-04"),
+        ("word_choice", "possible", "possibly", "2026-10-05"),
+        ("past_simple", "go", "went", "2026-10-06"),
+        ("past_simple", "go", "went", "2026-10-07"),
+    )
+    pair = gaps.top_pair(rows=base)
+    check("пара найдена", isinstance(pair, dict), pair)
+    check("правило пробела (word_choice чаще)",
+          (pair or {}).get("rule") == "word_choice", pair)
+    check("взята ФРАЗА, а не одно слово",
+          (pair or {}).get("correct") == "go to lie down", pair)
+    check("записано, что ученик сказал",
+          (pair or {}).get("wrong") == "go to lay down", pair)
+    check("счёт правила в паре", (pair or {}).get("count") == 4, pair)
+    check("подпись по-русски непустая", bool((pair or {}).get("label")))
+    # слишком длинную фразу для повтора не берём (max_words=8)
+    long_only = rows(*[("word_order", "i listen to music when i to drive",
+                        "I listen to music when I drive a car when I go to work",
+                        "2026-10-0%d" % (i + 1)) for i in range(2)])
+    check("длинная фраза не берётся", gaps.top_pair(rows=long_only) is None,
+          gaps.top_pair(rows=long_only))
+    # если фраза длинная, но есть короткая — берём короткую
+    mixed = rows(
+        ("word_order", "i listen to music when i to drive",
+         "I listen to music when I drive a car when I go to work", "2026-10-01"),
+        ("word_order", "have usually breakfast", "usually have breakfast", "2026-10-02"),
+    )
+    short = gaps.top_pair(rows=mixed)
+    check("из длинных и коротких берётся короткая",
+          (short or {}).get("correct") == "usually have breakfast", short)
+    # выключение дрилла флагом — отдельная проверка в test_lesson_drill
+
 def test_aggregate():
     print("\n[3] aggregate")
     result = gaps.aggregate(rows=SAMPLE)
@@ -292,6 +340,7 @@ def main():
     test_guess()
     test_pick_rule()
     test_origin()
+    test_top_pair()
     test_aggregate()
     test_prompt_block()
     test_table_rows()

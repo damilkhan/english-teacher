@@ -88,6 +88,10 @@ except Exception:                                     # pragma: no cover
 TASK_ASK = "ask"
 TASK_FIX = "fix"
 TASK_DONE = "done"
+# §55 (31.10.2026): первое задание урока — ДРИЛЛ по ПРОШЛОЙ ошибке ученика.
+# От «fix» отличается только тем, КТО попросил повтор: там ошибка случилась
+# сейчас, здесь — пара «было -> стало» взята из базы ошибок (gaps.top_pair).
+TASK_DRILL = "drill"
 
 # Что вернул Аналитик про ответ ученика (вариант Б, §36).
 ANSWER_CORRECT = "correct"      # ответ по заданию и без реальных ошибок
@@ -99,6 +103,10 @@ ANSWER_STATES = (ANSWER_CORRECT, ANSWER_NEEDS_FIX, ANSWER_REPEAT_OK,
 
 # Насколько похожим должен быть повтор (вариант В, без модели).
 REPEAT_RATIO = 0.80
+# §55: дрилл по ПРОШЛОЙ ошибке строже. «go to lay down» и «go to lie down»
+# отличаются одной буквой (похожесть 0.87), поэтому обычный порог засчитывал
+# бы ученику сам его старый неверный вариант.
+DRILL_RATIO = 0.95
 
 
 # =========================================================
@@ -334,6 +342,9 @@ class LessonSession:
         # что просили повторить (вариант В): правильные куски из разбора
         self.repeat_expected = []    # type: List[str]
         self.last_credited = ""      # текст, за который задание уже засчитано
+        # §55: материал дрилла (что ученик сказал раньше и как надо)
+        self.drill_wrong = ""
+        self.drill_correct = ""
 
     # ---------- свойства ----------
     @property
@@ -461,6 +472,25 @@ class LessonSession:
         return self.state()
 
     # ---------- задания (§36) ----------
+    def start_drill(self, wrong, correct) -> bool:
+        """Первое задание урока = ДРИЛЛ по прошлой ошибке ученика (§55).
+
+        Материал готовый: пара «было -> стало» из базы ошибок
+        (gaps.top_pair). Модель ничего не придумывает — она только просит
+        повторить. Зачёт по тексту (says_fix), как в фазе «fix», поэтому
+        ложных зачётов нет. Урок остаётся про свою тему: дрилл занимает
+        ТОЛЬКО первое из трёх заданий.
+        """
+        want = str(correct or "").strip()
+        if not want or not self.is_active or not self.has_tasks:
+            return False
+        self.drill_wrong = str(wrong or "").strip()
+        self.drill_correct = want
+        self.repeat_expected = [want]
+        self.task_phase = TASK_DRILL
+        self.task_attempts = 0
+        return True
+
     def expect_repeat(self, corrections) -> List[str]:
         """Запомнить, что просили повторить, и перейти в фазу «ждём повтор».
 
@@ -483,8 +513,21 @@ class LessonSession:
 
     def says_fix(self, student_text: Any) -> bool:
         """Ученик повторил исправление? Мгновенно, без модели (вариант В)."""
-        if self.task_phase != TASK_FIX:
+        if self.task_phase not in (TASK_FIX, TASK_DRILL):
             return False
+        if self.task_phase == TASK_DRILL and self.drill_correct:
+            # §55: фраза должна совпасть почти точно, а СТАРАЯ ошибка в
+            # сказанном не должна звучать (иначе дрилл засчитывает сам промах)
+            said = _flat(student_text)
+            want = _flat(self.drill_correct)
+            wrong = _flat(self.drill_wrong)
+            if not said:
+                return False
+            if want in said:
+                return True
+            if wrong and wrong in said:
+                return False
+            return difflib.SequenceMatcher(None, said, want).ratio() >= DRILL_RATIO
         return says_fix(student_text, self.repeat_expected)
 
     def note_task_attempt(self) -> int:
@@ -518,6 +561,8 @@ class LessonSession:
         self.last_credited = _flat(student_text)
         self.repeat_expected = []
         self.task_attempts = 0
+        self.drill_wrong = ""
+        self.drill_correct = ""
         if self.all_tasks_done:
             self.task_phase = TASK_DONE
             self.finished = True
@@ -557,13 +602,17 @@ class LessonSession:
         """
         if not self.has_tasks:
             return {}
-        return {
+        payload = {
             "tasks_total": self.tasks_total,
             "tasks_done": self.tasks_done,
             "task_index": self.task_index,
             "task_phase": self.task_phase,
             "repeat_expected": ", ".join(self.repeat_expected),
         }
+        # §55: в фазе дрилла промпту нужно, ЧТО ученик сказал неправильно
+        if self.task_phase == TASK_DRILL and self.drill_wrong:
+            payload["drill_wrong"] = self.drill_wrong
+        return payload
 
     def finish(self) -> None:
         """Завершить занятие успешно (дошёл до конца)."""

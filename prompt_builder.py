@@ -297,6 +297,7 @@ def _task_cycle_block(lesson):
     index = max(1, min(total, index))
     phase = str(lesson.get("task_phase") or "").strip().lower()
     expected = str(lesson.get("repeat_expected") or "").strip()
+    drill_wrong = str(lesson.get("drill_wrong") or "").strip()
     last = index >= total
     if phase == "done":
         line = ("All %d tasks are done. Confirm the last answer, praise it in ONE"
@@ -312,6 +313,16 @@ def _task_cycle_block(lesson):
                 " corrected version first. Do not start a new task and do NOT ask"
                 " anything else in that reply: just wait for the repeat."
                 % (index, total))
+    elif phase == "drill":
+        # §55: первое задание — повтор ПРОШЛОЙ ошибки. Материал пришёл из
+        # базы ошибок (gaps.top_pair), модель его не придумывает: задача —
+        # одной строкой попросить сказать правильно и ждать.
+        said = drill_wrong or "something wrong"
+        line = ("Task %d of %d is a REPEAT DRILL from an earlier lesson: the student"
+                " once said \"%s\". In ONE short line remind them of it and ask them"
+                " to say it correctly now; if they cannot, give the correct version"
+                " yourself. Do NOT give any other task in this reply."
+                % (index, total, said))
     elif lesson.get("lesson_closing"):
         line = ("Task %d of %d. This is the LAST reply of the lesson: confirm the"
                 " student's answer and praise it in ONE short line. Do NOT ask any"
@@ -329,7 +340,8 @@ def _task_cycle_block(lesson):
     else:
         line = ("You are on task %d of %d: give it now, or wait for the"
                 " student's answer if you already gave it." % (index, total))
-    rules = "" if (phase in ("done", "fix") or lesson.get("lesson_closing") or last) else TASK_RULES
+    rules = "" if (phase in ("done", "fix", "drill") or lesson.get("lesson_closing")
+                   or last) else TASK_RULES
     return TASK_CYCLE_TEMPLATE.format(total=total, line=line, rules=rules)
 
 

@@ -1445,6 +1445,9 @@ class EnglishTeacherApp:
         if session is None:
             return None
 
+        # §55: первое задание — повтор ПРОШЛОЙ ошибки (если пробел есть)
+        self._start_mistake_drill(session)
+
         # 🧪 ТЕСТ (временный): флаг-файл ставит урок на последний шаг
         if self._test_tail_flag():
             self._jump_to_lesson_tail(session)
@@ -2039,6 +2042,38 @@ class EnglishTeacherApp:
         self._sync_lesson_prompt(closing=True)
         return True
 
+    def _start_mistake_drill(self, session):
+        """§55: первое задание урока — дрилл по ПРОШЛОЙ ошибке ученика.
+
+        Материал берём из базы ошибок (gaps.top_pair): пара «было -> стало»
+        уже встретилась минимум дважды. Модель ничего не выдумывает, зачёт
+        идёт по тексту (lesson.says_fix), как в фазе «fix». Экзамен и
+        аудирование дрилл НЕ получают: там промпт прежний.
+        """
+        if not getattr(config, "LESSON_MISTAKE_DRILL", True):
+            return False
+        if session is None or not session.has_tasks:
+            return False
+        try:
+            if (lesson_mod.is_check_lesson(session.lesson_type)
+                    or lesson_mod.is_story_lesson(session.lesson_type)):
+                return False
+        except Exception:
+            return False
+        try:
+            pair = gaps.top_pair((self.current_user or {}).get("id"))
+        except Exception as exc:
+            print("⚠️ Дрилл по ошибке не собран: %s" % exc)
+            return False
+        if not pair:
+            return False
+        if not session.start_drill(pair.get("wrong"), pair.get("correct")):
+            return False
+        print("🎯 Дрилл по прошлой ошибке: %r -> %r (%s, раз: %s)"
+              % (pair.get("wrong"), pair.get("correct"),
+                 pair.get("label"), pair.get("count")))
+        return True
+
     def _credit_task_by_text(self, text):
         """Вариант В: ученик ПОВТОРИЛ исправление — засчитать задание сразу.
 
@@ -2118,7 +2153,7 @@ class EnglishTeacherApp:
         if session.already_credited(text):
             return False          # этот же ответ уже засчитан по тексту (В)
         state = str(result.get("answer_state") or "").strip().lower()
-        if session.task_phase == lesson_mod.TASK_FIX:
+        if session.task_phase in (lesson_mod.TASK_FIX, lesson_mod.TASK_DRILL):
             if state == lesson_mod.ANSWER_REPEAT_OK:
                 return self._credit_task(session, text, marked=False)
             if session.note_task_attempt() >= lesson_mod.MAX_TASK_ATTEMPTS:

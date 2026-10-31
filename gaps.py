@@ -303,6 +303,53 @@ def aggregate(rows=None, user_id=None):
     return out
 
 
+def top_pair(user_id=None, rows=None, min_words=2, max_words=8):
+    """Самая частая ПОДТВЕРЖДЁННАЯ пара «было -> стало» для дрилла (§55).
+
+    Возвращает {"rule", "label", "wrong", "correct", "count"} или None.
+
+    Почему так осторожно:
+      * «прочее» не берём — там свалка, учить по ней нечему;
+      * правило должно быть ПРОБЕЛОМ (>= GAPS_MIN_COUNT повторов), иначе
+        первый же случайный промах стал бы первым заданием урока;
+      * пара должна быть фразой (2..8 слов): повторить «went» вместо «go»
+        ученик сможет, но это дрилл на одно слово, а не на речь.
+    """
+    data = stats_store.rows(user_id) if rows is None else (rows or [])
+    counts = {}                  # правило -> сколько раз встретилось
+    pairs = {}                   # правило -> [(слов, дата, было, стало)]
+    for row in data:
+        if not isinstance(row, dict):
+            continue
+        rule = normalize_rule(row.get("rule"))
+        counts[rule] = counts.get(rule, 0) + 1
+        wrong = str(row.get("wrong") or "").strip()
+        correct = str(row.get("correct") or "").strip()
+        if not wrong or not correct:
+            continue
+        size = len(_words(correct))
+        if size < min_words or size > max_words:
+            continue
+        pairs.setdefault(rule, []).append((size, str(row.get("date") or ""),
+                                           wrong, correct))
+
+    limit = gap_threshold()
+    best = None                  # (сколько раз, правило, было, стало)
+    for rule in sorted(pairs, key=lambda r: (-counts.get(r, 0), r)):
+        if rule == "other" or counts.get(rule, 0) < limit:
+            continue
+        # внутри правила — фраза подлиннее (ближе к живой речи), потом свежая
+        _size, _date, wrong, correct = sorted(
+            pairs[rule], key=lambda it: (-it[0], it[1]))[0]
+        best = (counts[rule], rule, wrong, correct)
+        break
+    if best is None:
+        return None
+    count, rule, wrong, correct = best
+    return {"rule": rule, "label": RULE_RU.get(rule, rule), "wrong": wrong,
+            "correct": correct, "count": count}
+
+
 def _example_text(pairs, limit=1):
     """Одна-две пары «было → стало» строкой для промпта."""
     parts = []
