@@ -2101,6 +2101,10 @@ class EnglishTeacherApp:
         except Exception as exc:
             print("⚠️ Зачёт задания не получился: %s" % exc)
             return False
+        print("✅ Задание засчитано: %d/%d%s (реплика: %.60r)"
+              % (session.tasks_done, session.tasks_total,
+                 " с подсказкой" if getattr(session, "tasks_marked", 0) else "",
+                 text or ""))
         self._sync_lesson_prompt(just_credited=True)
         try:
             self.lesson_bar.set_progress(session.progress_text())
@@ -2115,6 +2119,8 @@ class EnglishTeacherApp:
         if getattr(self, "_speech_busy", False):
             # преподаватель ещё говорит: итог ждёт конца озвучки
             self._reply_in_flight = True
+        print("🏁 Все задания сданы — закрываю урок (ждём речь: %s)"
+              % bool(getattr(self, "_speech_busy", False)))
         self.lesson.credit_finished()
 
     def _credit_rest_tasks(self, session):
@@ -2153,8 +2159,21 @@ class EnglishTeacherApp:
         if session.already_credited(text):
             return False          # этот же ответ уже засчитан по тексту (В)
         state = str(result.get("answer_state") or "").strip().lower()
+        errors = result.get("errors") or []
+        # §36/§55: замер 31.10.2026 (живой урок 2.1): ученик повторил фразу
+        # ВЕРНО, модель похвалила («you repeated it perfectly»), а задание
+        # осталось открытым — Аналитик вернул needs_fix из-за заглавной буквы.
+        # Ученик ждал итог, которого не будет. Правило: разбор НЕ нашёл
+        # ошибок → задание сдано, каким бы ни был answer_state (кроме
+        # unclear: «не понял, ответ ли это»).
+        no_errors = not errors and state != lesson_mod.ANSWER_UNCLEAR
+        print("🎯 Задание %d/%d: фаза=%s состояние=%s ошибок=%d -> %s"
+              % (session.task_index, session.tasks_total, session.task_phase,
+                 state or "-", len(errors),
+                 "зачёт" if (state == lesson_mod.ANSWER_REPEAT_OK or no_errors)
+                 else "ждём повтор"))
         if session.task_phase in (lesson_mod.TASK_FIX, lesson_mod.TASK_DRILL):
-            if state == lesson_mod.ANSWER_REPEAT_OK:
+            if state == lesson_mod.ANSWER_REPEAT_OK or no_errors:
                 return self._credit_task(session, text, marked=False)
             if session.note_task_attempt() >= lesson_mod.MAX_TASK_ATTEMPTS:
                 # ученик так и не повторил верно: засчитываем С ПОМЕТКОЙ,
@@ -2162,9 +2181,8 @@ class EnglishTeacherApp:
                 return self._credit_task(session, text, marked=True)
             return False
         # фаза «первый ответ»: либо задание сдано, либо просим повторить
-        if state == lesson_mod.ANSWER_CORRECT:
+        if state == lesson_mod.ANSWER_CORRECT or no_errors:
             return self._credit_task(session, text, marked=False)
-        errors = result.get("errors") or []
         corrections = [item.get("correct") for item in errors
                        if isinstance(item, dict)]
         if state == lesson_mod.ANSWER_NEEDS_FIX or corrections:
@@ -3529,6 +3547,9 @@ class EnglishTeacherApp:
         session = getattr(self, "_deferred_finish", None)
         if session is None:
             return
+        print("⏳ Отложенный итог: речь занята=%s, ждать ещё %.0f с"
+              % (bool(getattr(self, "_speech_busy", False)),
+                 max(0.0, self._speech_wait_left())))
         # Страховочный таймер мог сработать РАНЬШЕ, чем доиграла реплика
         # (до первого звука бывает 10 с, плюс сам ответ). Пока Вербот
         # говорит, итог не показываем — иначе похвала глушит речь на

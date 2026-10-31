@@ -11,7 +11,8 @@
 #   4) экзамен и аудирование дрилл НЕ получают;
 #   5) промпт урока знает про дрилл и не теряет ветку закрытия урока;
 #   6) окно: метод есть, вызывается на старте урока, фаза учтена;
-#   7) флаг config.LESSON_MISTAKE_DRILL выключает дрилл.
+#   7) флаг config.LESSON_MISTAKE_DRILL выключает дрилл;
+#   8) разбор БЕЗ ошибок засчитывает задание в любой фазе (§36, живой баг 31.10).
 # =========================================================
 
 import os
@@ -197,6 +198,104 @@ def test_flag_and_picker():
         config.LESSON_MISTAKE_DRILL = keep_flag
 
 
+class _FakeBar:
+    def set_progress(self, text):
+        pass
+
+
+class _FakeCtrl:
+    """Подделка контроллера занятия: одна сессия без Tk."""
+
+    def __init__(self, session):
+        self.session = session
+        self.on_finished = []
+
+    def current(self):
+        return self.session
+
+    def credit_finished(self):
+        self.on_finished.append(self.session)
+
+
+class _FakeApp:
+    """Подделка окна: только то, что нужно _task_from_analysis."""
+
+    def __init__(self, session):
+        self.current_user = {"id": 1}
+        self.lesson = _FakeCtrl(session)
+        self.lesson_bar = _FakeBar()
+        self._lesson_payload = None
+        self.chat = None
+        self._last_student_text = ""
+        self._speech_busy = False
+        self._reply_in_flight = False
+
+
+def test_no_errors_credits():
+    print("\n[8] Разбор без ошибок засчитывает задание (живой баг 31.10.2026)")
+    from ui.app import EnglishTeacherApp
+    # Подделка окна не наследует методы класса — привязываем руками (грабля §53)
+    _FakeApp._credit_task = EnglishTeacherApp._credit_task
+    _FakeApp._sync_lesson_prompt = EnglishTeacherApp._sync_lesson_prompt
+    _FakeApp._close_lesson_after_credit = EnglishTeacherApp._close_lesson_after_credit
+
+    def make(phase, expected=None):
+        session = new_session()
+        session.task_phase = phase
+        if expected:
+            session.repeat_expected = [expected]
+        return session
+
+    # фаза «ждём повтор», ученик повторил верно, ошибок нет, но Аналитик
+    # из-за заглавной буквы вернул needs_fix — задание обязано засчитаться
+    session = make(lesson_mod.TASK_FIX, "milk with bread for dinner")
+    app = _FakeApp(session)
+    app._last_student_text = "i like to eat milk with bread for dinner"
+    result = {"ok": True, "answer_state": "needs_fix", "errors": []}
+    check("needs_fix без ошибок -> зачёт",
+          EnglishTeacherApp._task_from_analysis(app, result) is True)
+    check("задание сдано", session.tasks_done == 1, session.tasks_done)
+
+    session = make(lesson_mod.TASK_FIX, "milk with bread for dinner")
+    app = _FakeApp(session)
+    app._last_student_text = "hello"
+    unclear = {"ok": True, "answer_state": "unclear", "errors": []}
+    check("unclear без ошибок -> НЕ зачёт",
+          EnglishTeacherApp._task_from_analysis(app, unclear) is False)
+    check("непонятный ответ считается попыткой", session.task_attempts == 1,
+          session.task_attempts)
+
+    # настоящая ошибка по-прежнему НЕ засчитывается
+    session = make(lesson_mod.TASK_FIX, "milk with bread for dinner")
+    app = _FakeApp(session)
+    app._last_student_text = "milk with bread"
+    bad = {"ok": True, "answer_state": "needs_fix",
+           "errors": [{"wrong": "for dinner milk", "correct": "milk for dinner"}]}
+    check("ошибка в разборе -> НЕ зачёт",
+          EnglishTeacherApp._task_from_analysis(app, bad) is False)
+    check("попытка повтора посчитана", session.task_attempts == 1,
+          session.task_attempts)
+
+    # дрилл: та же логика
+    session = make(lesson_mod.TASK_DRILL, "go to lie down")
+    session.drill_wrong, session.drill_correct = WRONG, RIGHT
+    app = _FakeApp(session)
+    app._last_student_text = "go to lie down"
+    check("дрилл: верно и без ошибок -> зачёт",
+          EnglishTeacherApp._task_from_analysis(app, result) is True)
+
+    # третье задание зачётом закрывает урок
+    session = new_session()
+    session.tasks_done = session.tasks_total - 1
+    session.task_phase = lesson_mod.TASK_FIX
+    session.repeat_expected = ["go to lie down"]
+    app = _FakeApp(session)
+    app._last_student_text = "go to lie down"
+    EnglishTeacherApp._task_from_analysis(app, {"ok": True, "errors": []})
+    check("последнее задание закрыло урок", session.finished is True)
+    check("итог урока вызван", len(app.lesson.on_finished) == 1,
+          len(app.lesson.on_finished))
+
 def main():
     test_start_drill()
     test_credit_by_text()
@@ -205,6 +304,7 @@ def main():
     test_prompt()
     test_window()
     test_flag_and_picker()
+    test_no_errors_credits()
     print("\n" + ("ВСЁ ПРОЙДЕНО" if not FAILED else "ПРОВАЛЕНО: %d" % len(FAILED)))
     for name in FAILED:
         print("  - " + name)
