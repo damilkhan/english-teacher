@@ -442,11 +442,27 @@ class ChatController:
             print(f"⚠️ Аналитик недоступен: {exc}")
             return None
 
+    def _with_origin(self, analysis):
+        """Отметить, ОТКУДА пришла ошибка: экзамен или обычный урок (§55).
+
+        record_analysis умеет писать source/lesson, но поля никто не заполнял:
+        у всех 27 записей стояло source=chat, lesson=''. Из-за этого нельзя
+        было сказать «на экзамене по такому-то уроку сломал вот это».
+        """
+        data = dict(analysis or {})
+        lesson = self._lesson if isinstance(self._lesson, dict) else {}
+        if not data.get("exam") and lesson.get("exam"):
+            data["exam"] = True
+        if not str(data.get("lesson") or "").strip():
+            data["lesson"] = str(lesson.get("lesson_id") or "")
+        return data
+
     def _record(self, user_text, response, analysis):
         """Прогресс: есть разбор Аналитика → структурно, иначе — прежняя эвристика."""
         if analysis and analysis.get("ok"):
             try:
-                return profile_store.record_analysis(analysis, user_text, response, self.user_id)
+                return profile_store.record_analysis(
+                    self._with_origin(analysis), user_text, response, self.user_id)
             except Exception as exc:
                 print(f"⚠️ Запись разбора не удалась: {exc}")
         return profile_store.record_from_dialogue(user_text, response, self.user_id)

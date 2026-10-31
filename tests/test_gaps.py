@@ -10,7 +10,9 @@
 #   3) aggregate: счёт по правилам, примеры, даты, порог «пробел»,
 #      «прочее» всегда последним и пробелом не считается;
 #   4) prompt_block: 3 правила, без «other», запрет выдумывать, флаг config;
-#   5) table_rows: подписи по-русски, примеры через «->», лимит строк.
+#   5) table_rows: подписи по-русски, примеры через «->», лимит строк;
+#   7) pick_rule/rule_fits: ярлык модели берём, только если он ВОЗМОЖЕН (§55);
+#   8) _with_origin: экзамен/урок попадают в source/lesson (§55).
 # =========================================================
 
 import os
@@ -28,6 +30,7 @@ for _stream in (sys.stdout, sys.stderr):
 
 import config                     # noqa: E402
 import gaps                       # noqa: E402
+from controllers.chat_controller import ChatController   # noqa: E402
 
 FAILED = []
 
@@ -101,6 +104,60 @@ def test_guess():
 # =========================================================
 # 3. Агрегация
 # =========================================================
+def test_pick_rule():
+    print("\n[7] Ярлык модели только если он ВОЗМОЖЕН (§55)")
+    # Живой случай 31.10.2026: орфография «sily → silly» получила ярлык
+    # «артикль». Артиклей в правке нет — значит ярлык невозможен.
+    check("sily -> silly: article не проходит проверку",
+          not gaps.rule_fits("article", "sily", "silly"))
+    check("sily -> silly: итог = spelling",
+          gaps.pick_rule("sily", "silly", "article") == "spelling",
+          gaps.pick_rule("sily", "silly", "article"))
+    check("in -> to: preposition возможен",
+          gaps.rule_fits("preposition", "in", "to"))
+    check("in -> to: ярлык модели остаётся",
+          gaps.pick_rule("in", "to", "preposition") == "preposition")
+    check("survive -> survival: verb_form возможен",
+          gaps.rule_fits("verb_form", "survive", "survival"))
+    check("loves -> love: verb_form остаётся",
+          gaps.pick_rule("loves", "love", "verb_form") == "verb_form")
+    check("порядок слов не отбираем у модели",
+          gaps.pick_rule("have usually breakfast", "usually have breakfast",
+                         "word_order") == "word_order")
+    check("long rewrite: word_choice остаётся",
+          gaps.pick_rule("in the movie", "a movie", "word_choice") == "word_choice")
+    check("past_simple без формы прошедшего не проходит",
+          not gaps.rule_fits("past_simple", "go", "goes"))
+    check("past_simple с went проходит",
+          gaps.rule_fits("past_simple", "go", "went"))
+    check("article с артиклем проходит",
+          gaps.rule_fits("article", "for the rest", "for rest"))
+    check("слово модели пустое -> догадка",
+          gaps.pick_rule("eat", "ate", "") == "past_simple")
+    check("слово модели other -> догадка",
+          gaps.pick_rule("eat", "ate", "other") == "past_simple")
+    check("невозможный ярлык + догадка other -> ярлык остаётся",
+          gaps.pick_rule("go to lay down", "go to lie down", "preposition")
+          == "word_choice")
+
+
+def test_origin():
+    print("\n[8] Откуда ошибка: экзамен / урок (§55)")
+    chat = ChatController(llm=None, user_id=1)
+    plain = chat._with_origin({"ok": True})
+    check("без урока источник пустой", not plain.get("exam") and not plain.get("lesson"))
+    chat.set_lesson({"title": "Экзамен", "exam": True, "lesson_id": "city/1.4"})
+    exam = chat._with_origin({"ok": True})
+    check("экзамен отмечен", exam.get("exam") is True, exam)
+    check("id урока записан", exam.get("lesson") == "city/1.4", exam)
+    chat.set_lesson({"title": "In the city", "exam": False, "lesson_id": "city/1.1"})
+    lesson = chat._with_origin({"ok": True})
+    check("обычный урок не экзамен", not lesson.get("exam"), lesson)
+    check("id обычного урока записан", lesson.get("lesson") == "city/1.1", lesson)
+    keep = chat._with_origin({"ok": True, "exam": True, "lesson": "city/9.9"})
+    check("готовые поля не перетираются",
+          keep.get("exam") is True and keep.get("lesson") == "city/9.9", keep)
+
 def test_aggregate():
     print("\n[3] aggregate")
     result = gaps.aggregate(rows=SAMPLE)
@@ -233,6 +290,8 @@ def test_role_flags():
 def main():
     test_normalize()
     test_guess()
+    test_pick_rule()
+    test_origin()
     test_aggregate()
     test_prompt_block()
     test_table_rows()

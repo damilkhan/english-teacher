@@ -177,6 +177,76 @@ def guess_rule(wrong, correct):
 
 
 # ---------------------------------------------------------
+# Ярлык модели: возможен ли он для ЭТОЙ правки
+# ---------------------------------------------------------
+def _only(words, pool):
+    """Все слова из списка входят в набор (и список не пустой)."""
+    return bool(words) and set(words) <= pool
+
+
+def rule_fits(rule, wrong, correct):
+    """Может ли правило `rule` вообще объяснить эту правку.
+
+    Модель называет правило уверенно, но иногда мимо: «sily → silly»
+    (орфография) получила ярлык article, хотя артиклей в правке нет вовсе —
+    такой ярлык физически невозможен. Пусть решает догадка, а не он.
+
+    Правила-«свалки» (other) и порядок слов сюда не относятся: за них
+    отвечает вызывающий код, для word_order структурной проверки нет.
+    """
+    was, now = _words(wrong), _words(correct)
+    if not was or not now or was == now:
+        return False
+    removed, added = _diff(was, now)
+    changed = len(removed) + len(added)
+
+    if rule == "article":
+        return ((not added or _only(added, ARTICLES))
+                and (not removed or _only(removed, ARTICLES)))
+    if rule == "aux_verb":
+        return ((not added or _only(added, AUX_WORDS))
+                and (not removed or _only(removed, AUX_WORDS)))
+    if rule == "preposition":
+        return ((not added or _only(added, PREPOSITIONS))
+                and (not removed or _only(removed, PREPOSITIONS)))
+    if rule == "word_order":
+        return True                  # перестановку по словам не проверить
+    if rule in ("spelling", "verb_form", "plural", "past_simple", "word_choice"):
+        if rule == "verb_form" and removed == ["to"] and not added:
+            return True              # i must to say -> I must say
+        if changed > 2 or len(removed) != 1 or len(added) != 1:
+            return rule == "word_choice" and changed <= 4
+        old, new = removed[0], added[0]
+        if rule == "spelling":
+            return difflib.SequenceMatcher(None, old, new).ratio() >= 0.75
+        if rule == "past_simple":
+            return new in IRREGULAR_PAST.get(old, ()) or new == old + "ed" \
+                or (old.endswith("e") and new == old + "d")
+        if rule == "plural":
+            return new.endswith("s") or old.endswith("s")
+        return True                  # word_choice / verb_form — слово заменили
+    return False
+
+
+def pick_rule(wrong, correct, model_rule=None):
+    """Итоговое правило ошибки: ярлык модели, если он возможен, иначе догадка.
+
+    С 31.10.2026 (§55): раньше правило брали у модели как есть, и в базе
+    лежало `article | sily → silly`. Адаптивный урок по такому ярлыку учил
+    бы не тому, поэтому невозможный ярлык заменяется догадкой по паре слов.
+    """
+    rule = normalize_rule(model_rule)
+    has_model = bool(str(model_rule or "").strip()) and rule != "other"
+    if has_model and rule_fits(rule, wrong, correct):
+        return rule
+    guess = guess_rule(wrong, correct)
+    if has_model:
+        # догадка тоже не разобралась — оставляем слово модели как есть
+        return rule if guess == "other" else guess
+    return guess
+
+
+# ---------------------------------------------------------
 # Агрегация
 # ---------------------------------------------------------
 def gap_threshold():

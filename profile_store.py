@@ -262,12 +262,12 @@ def record_analysis(analysis, user_text, jane_response="", user_id=None):
         wrong = str(err.get("wrong") or "")[:80]
         correct = str(err.get("correct") or "")[:80]
         note = str(err.get("note") or "")[:80]
-        # §46: правило из ЗАКРЫТОГО списка. Правила нет (правки из описания
-        # фото, старые записи) — берём догадку по паре слов, чтобы запись
-        # не свалилась в «прочее» навсегда.
-        rule = gaps.normalize_rule(err.get("rule"))
-        if not str(err.get("rule") or "").strip():
-            rule = gaps.guess_rule(wrong, correct)
+        # §46: правило из ЗАКРЫТОГО списка. §55 (31.10.2026): слово модели
+        # проверяем на ВОЗМОЖНОСТЬ (gaps.rule_fits). Был случай
+        # `article | sily → silly` — артиклей в правке нет, ярлык невозможен;
+        # теперь такой ярлык заменяется догадкой по паре слов. Правила нет
+        # (правки из описания фото, старые записи) — тоже догадка.
+        rule = gaps.pick_rule(wrong, correct, err.get("rule"))
         profile["mistakes"][etype].append({
             "date": now,
             "user_text": (user_text or "")[:100],

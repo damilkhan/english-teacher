@@ -1459,7 +1459,9 @@ class EnglishTeacherApp:
 
         lesson_payload = {"title": data.get("title"), "type": data.get("type"),
                           "topic": data.get("topic"), "task": data.get("task"),
-                          "exam": bool(data.get("check"))}
+                          "exam": bool(data.get("check")),
+                          # §55: id урока нужен, чтобы ошибка знала, ГДЕ случилась
+                          "lesson_id": str(data.get("id") or "")}
         # §36: без заданий task_prompt() пустой — словарь экзамена и
         # аудирования не меняется ни на байт.
         lesson_payload.update(session.task_prompt())
