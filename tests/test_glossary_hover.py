@@ -116,9 +116,10 @@ root.withdraw()                     # окно не мешает, виджеты
 palette = theme.DARK
 
 dict_gloss = glossary.Glossary(llm=None, path=os.path.join(ROOT, "logs", "_hover_tmp.json"))
-dict_gloss.add(glossary.parse_items(
-    '{"items":[{"en":"Look forward to","ru":"с нетерпением ждать","phrase":true},'
-    '{"en":"there","ru":"там","phrase":false}]}'))
+dict_gloss.add_chunks("Look forward to seeing you there!", [
+    ["Look forward to", "с нетерпением ждать"],
+    ["seeing you", "видеть тебя"],
+    ["there", "там"]])
 before = dict_gloss.stats["requests"]
 
 chat = ChatView(root, palette,

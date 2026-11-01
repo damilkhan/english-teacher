@@ -1,21 +1,24 @@
-"""GLOSSARY.PY — подсказки-переводы к словам в репликах Вербота.
+"""GLOSSARY.PY — подсказки-переводы КУСКАМИ ПО СМЫСЛУ (03.11.2026).
 
-Зачем: ученик наводит курсор на английское слово в чате и видит короткий
-русский перевод. Устойчивые выражения (look forward to, nice to meet you)
-переводятся ОДНИМ куском по смыслу, а не тремя словами по отдельности.
+Зачем переделали. Пословный перевод давал бред: в реплике «Would you like a
+table by the window?» наведение на слово показывало «Было бы ты хотеть а стол
+у окна (определенный) окно». Решение ученика 03.11.2026: переводить КУСКАМИ
+ПО СМЫСЛУ — [Would you like] хотели бы вы [a table] столик [by the window] у
+окна. Длина куска НЕ ограничена: её решает смысл, а не число слов.
 
 Как устроено (производительность — главное):
-  * модель зовётся ТОЛЬКО из prime() — один раз на реплику, в фоне;
-  * наведение курсора модель не трогает вообще: lookup() читает словарь
-    в памяти (микросекунды);
-  * всё выученное лежит в data/glossary.json и живёт между занятиями:
-    повторная реплика стоит ноль запросов к модели;
-  * модуль без Tk, без потоков: очередь и «паузы» — забота вызывающего кода.
+  * модель режет реплику на куски и переводит каждый кусок ЦЕЛИКОМ;
+  * КОД проверяет, что куски покрывают ВСЕ слова реплики по порядку. Не
+    покрыли → один повтор, потом отказ: лучше пусто, чем бред;
+  * наведение курсора модель не трогает вообще: lookup() читает готовый
+    разбор из памяти (микросекунды);
+  * разбор лежит в data/glossary.json и живёт между занятиями: повторная
+    реплика стоит ноль запросов;
+  * пока реплика не разобрана — подсказки НЕТ (пословного бреда не бывает);
+  * модуль без Tk, без потоков: очередь и паузы — забота вызывающего кода.
 
 Замер 25.10.2026 (Gemma-4-E4B, 10 реплик): разбор реплики 2.9–10.1 с
-(среднее 5.0 с), 8 из 10 ответов годны сразу, 1 из 5 требует повтора из-за
-битого JSON. Жёсткая схема (json_schema) даёт 15.8–25.4 с — ОТКАЗ, слишком
-медленно.
+(среднее 5.0 с). Жёсткая схема (json_schema) — 15.8–25.4 с, отказ.
 """
 
 from __future__ import annotations
@@ -32,87 +35,45 @@ _log = logging.getLogger(__name__)
 
 GLOSSARY_PATH = os.path.join(config.BASE_DIR, "data", "glossary.json")
 
-# Сколько слов максимум может занимать одно устойчивое выражение.
-# Замер 25.10.2026: при свободе модель склеивала «look forward to seeing you
-# there» (6 слов) и «your umbrella» — подсказка на слове показывала целую
-# фразу. Поэтому максимум 4 слова и запрет притяжательных ниже.
-MAX_PHRASE_WORDS = 4
-
-# Притяжательное + существительное — НЕ устойчивое выражение ("your umbrella").
-_POSSESSIVE = {"my", "your", "his", "her", "its", "our", "their",
-              "mine", "yours", "ours", "theirs"}
-
-# ── ФОРМУЛА ИСКЛЮЧЕНИЯ: когда фразу НЕЛЬЗЯ переводить «по смыслу» ──────────
-# Контекст решает, поэтому решает не модель, а простая таблица (решение
-# ученика 25.10.2026). Ключ — фраза (нормализованные слова), значение —
-# список правил. Правило срабатывает, когда рядом стоит слово-переключатель:
-#   "before" — слово ПЕРЕД фразой (любое из набора),
-#   "after"  — слово ПОСЛЕ фразы,
-#   "ru"     — что показать вместо смысла фразы (None — переводим слово).
-# Пример: "It's great to SEE YOU today" — это не прощание: перед фразой
-# стоит "to", значит переводим «видеть тебя», а не «Увидимся».
-# Новую беду лечим ОДНОЙ строкой здесь, кода больше не трогаем.
-PHRASE_OVERRIDES = {
-    ("see", "you"): [
-        {"before": {"to", "good", "great", "nice", "glad", "happy", "lovely",
-                    "pleased", "want", "wanna", "let", "let's"},
-         "ru": "видеть тебя"},
-        # "I'll see you at six" — это уже прощание/договорённость, смысл верный
-    ],
-}
-
-# Склейка «местоимение + глагол» (you tell, you can't do, you learn) — это НЕ
-# устойчивое выражение, а обычный кусок предложения (поймано 25.10.2026:
-# в словаре лежало «you tell» → «ты сказать»). Такие фразы не берём.
-_PRONOUN_START = {"i", "you", "he", "she", "it", "we", "they",
-                  "me", "him", "her", "us", "them"}
-# ...кроме настоящих разговорных оборотов — они начинаются с местоимения.
-_GLUE_KEEP = {
-    ("i", "mean"), ("i", "think"), ("i", "guess"), ("i", "see"),
-    ("you", "know"), ("you", "know", "what"), ("it", "depends"),
-    ("never", "mind"),
-}
-
-# Токен: буквы + внутренний апостроф (don't, I'm, let's, o'clock).
-# Русские буквы сюда НЕ попадают: кириллицу в чате не переводим.
+# Слово: буквы, внутри апостроф (don't, I'd, let's).
 WORD_RE = re.compile(r"[A-Za-z]+(?:['\u2019][A-Za-z]+)*")
 
-# Просьба к модели. Отдельный мини-промпт: базовый промпт урока не тронут.
+# ── Промпт. Главное правило — 3: кусок переводится ЦЕЛИКОМ по смыслу, ─────
+# ── а не слово за словом. Пункт 4 снимает ЛЮБОЙ предел длины.        ─────
 _SYSTEM = (
-    "You build a bilingual glossary for a Russian-speaking learner of English "
-    "(level A2).\n"
+    "You split an English sentence into MEANING CHUNKS and translate each "
+    "chunk into Russian for a Russian-speaking learner (level A2).\n"
     'Return ONLY compact JSON on one line: '
-    '{"items":[{"en":"word","ru":"перевод","phrase":false}]}\n'
+    '{"chunks":[{"en":"Would you like","ru":"хотели бы вы"}]}\n'
     "Rules:\n"
-    "1. Include EVERY word of the sentence, in order of appearance (repeats once).\n"
-    "2. 'ru' is a SHORT literal translation of that word, 1-2 words, no "
-    "explanations, in Russian.\n"
-    "3. If words form a set phrase, idiom or phrasal verb (look forward to, "
-    "nice to meet you, how are you, I'd rather, as soon as, well done, "
-    "take the bus), make ONE item for that phrase ONLY: en = exactly those "
-    "words, phrase = true, ru = its MEANING (look forward to -> с нетерпением "
-    "ждать).\n"+
-    "3a. A phrase is at most 4 words. Never glue the rest of the sentence to "
-    "it (NOT \"look forward to seeing you there\").\n"+
-    "3b. A possessive or article with a noun is NOT a phrase (your umbrella = "
-    "two separate words).\n"+
-    "3c. A subject with its verb is NOT a phrase: \"you tell\", \"you can't do\", "
-    "\"you learn\", \"you usually do\" are separate words of a normal sentence. "
-    "Phrases are only idioms, phrasal verbs, greetings and fixed expressions.\n"
-    "4. Do NOT add separate items for words already inside a phrase item.\n"
-    "5. Contractions (I'm, don't, let's) are ONE word.\n"
-    "6. No markdown, no comments, no extra keys."
+    "1. Chunks go in text order and cover EVERY word of the sentence exactly "
+    "once: nothing skipped, nothing repeated, nothing added.\n"
+    "2. 'en' is copied EXACTLY from the sentence — same words, same order, "
+    "same spelling.\n"
+    "3. Translate each chunk AS A WHOLE by its meaning, the way a Russian "
+    "person says it. NEVER word-by-word: \"Would you like\" -> хотели бы вы "
+    "(NOT \"было бы ты хотеть\"), \"by the window\" -> у окна (NOT \"у окно\"), "
+    "\"a table\" -> столик (NOT \"а стол\").\n"
+    "4. Chunk length is decided by MEANING, not by a word count: one word "
+    "(table -> столик), several words (by the window -> у окна) or a long "
+    "phrase (I'd like to book a table for two -> я хотел бы забронировать "
+    "столик на двоих) are all fine.\n"
+    "5. 'ru' is natural spoken Russian: no brackets, no explanations, no "
+    "grammar notes, no variants like \"a / b\".\n"
+    "6. Do not leave an article or preposition alone as its own chunk — glue "
+    "it to the noun or phrase it belongs to.\n"
+    "7. No markdown, no comments, no extra keys."
 )
 
-_MAX_TOKENS = 1200          # замер: 700 мало — JSON обрывался
-_TEMPERATURE = 0.2
+_MAX_TOKENS = 700           # перевода кусков хватает с запасом
+_TEMPERATURE = 0.0          # «en» должно совпасть с репликой буква в букву
 
 
 # ---------------------------------------------------------
 # Токены и ключи
 # ---------------------------------------------------------
 def normalize(word: str) -> str:
-    """Ключ словаря: нижний регистр, «ёлочка» → обычный апостроф, без знаков."""
+    """Ключ слова: нижний регистр, «ёлочка» → обычный апостроф, без знаков."""
     text = str(word or "").replace("\u2019", "'").replace("\u02bc", "'")
     return text.strip().strip(".,!?;:\"'()[]{}—–-").lower()
 
@@ -131,6 +92,11 @@ def tokenize(sentence: str) -> list:
     return out
 
 
+def sentence_key(sentence: str) -> str:
+    """Ключ реплики в кэше: её слова через пробел («would you like a table»)."""
+    return " ".join(t["key"] for t in tokenize(sentence))
+
+
 def _locate(sentence: str, index: int):
     """(все токены, номер токена под символом index | None)."""
     tokens = tokenize(sentence)
@@ -146,74 +112,158 @@ def word_at(sentence: str, index: int):
     return None if pos is None else tokens[pos]
 
 
-def phrase_override(tokens, pos, size):
-    """Правило из формулы исключения для фразы tokens[pos:pos+size] или None."""
-    keys = tuple(t["key"] for t in tokens[pos:pos + size])
-    rules = PHRASE_OVERRIDES.get(keys)
-    if not rules:
-        return None
-    before = tokens[pos - 1]["key"] if pos > 0 else ""
-    after = tokens[pos + size]["key"] if pos + size < len(tokens) else ""
-    for rule in rules:
-        if "before" in rule and before not in rule["before"]:
+# ---------------------------------------------------------
+# Разбор ответа модели и проверка покрытия
+# ---------------------------------------------------------
+def parse_chunks(raw: str) -> list:
+    """Достаёт куски из ответа модели: [["Would you like","хотели бы вы"], …].
+
+    Битый JSON, ограждение ```json, пояснения — переживаем. Мусор → [].
+    """
+    text = str(raw or "").strip()
+    if not text:
+        return []
+    text = re.sub(r"^```(?:json)?|```$", "", text, flags=re.M).strip()
+    data = None
+    try:
+        data = json.loads(text)
+    except ValueError:
+        match = re.search(r"\{.*\}", text, re.S)
+        if match:
+            try:
+                data = json.loads(match.group(0))
+            except ValueError:
+                data = None
+    if not isinstance(data, dict):
+        return []
+    items = data.get("chunks")
+    if not isinstance(items, list):
+        return []
+    out = []
+    for item in items:
+        if not isinstance(item, dict):
             continue
-        if "after" in rule and after not in rule["after"]:
-            continue
-        return rule
-    return None
+        en = " ".join(str(item.get("en") or "").split())
+        ru = " ".join(str(item.get("ru") or "").split())
+        if en and ru:
+            out.append([en, ru])
+    return out
 
 
-def is_glued_phrase(keys):
-    """Склеена ли «фраза» из обычных слов предложения (you tell, you learn)."""
-    keys = tuple(keys)
-    if len(keys) < 2 or keys[0] not in _PRONOUN_START:
-        return False
-    return keys not in _GLUE_KEEP
+def bounds_of(sentence: str, chunks) -> list:
+    """Куски с ПОЗИЦИЯМИ в реплике или [] — если покрытие не сходится.
+
+    Проверка железная и без модели: складываем слова кусков подряд и
+    сравниваем со словами реплики. Не совпало хотя бы одно слово (или
+    остались лишние) — разбор негоден, подсказки не будет.
+    """
+    text = str(sentence or "")
+    tokens = tokenize(text)
+    if not tokens or not chunks:
+        return []
+    out = []
+    pos = 0
+    for pair in chunks:
+        try:
+            en, ru = str(pair[0]), str(pair[1])
+        except (TypeError, IndexError, ValueError):
+            return []
+        keys = [t["key"] for t in tokenize(en)]
+        if not keys:
+            return []
+        part = tokens[pos:pos + len(keys)]
+        if [t["key"] for t in part] != keys:
+            return []
+        out.append({
+            # «en» берём ИЗ РЕПЛИКИ: регистр и знаки как у неё
+            "en": text[part[0]["start"]:part[-1]["end"]],
+            "ru": ru,
+            "start": part[0]["start"],
+            "end": part[-1]["end"],
+            "n": len(keys),
+        })
+        pos += len(keys)
+    if pos != len(tokens):
+        return []                 # остались непокрытые слова
+    return out
+
+
+# Служебные слова не могут быть куском В ОДИНОЧКУ: артикль или предлог,
+# оторванный от существительного, — это и есть пословный перевод («а стол»,
+# «у окно»). Такие куски считаем браком и просим модель заново.
+_ALONE_BAD = {"a", "an", "the", "of", "to", "in", "on", "at", "by", "for",
+              "with", "from", "and", "or", "some", "any"}
+
+
+def looks_word_by_word(chunks) -> bool:
+    """Похоже ли на перевод слово-в-слово (брак, который не показываем)."""
+    for pair in chunks:
+        try:
+            en, ru = str(pair[0]), str(pair[1])
+        except (TypeError, IndexError):
+            return True
+        keys = [t["key"] for t in tokenize(en)]
+        if len(keys) == 1 and keys[0] in _ALONE_BAD:
+            return True
+        if normalize(ru) == normalize(en):
+            return True          # «table» -> «table» — это не перевод
+    return False
+
+
+def covers(sentence: str, chunks) -> bool:
+    """Куски покрывают реплику целиком и по порядку? (проверка кодом)"""
+    return bool(bounds_of(sentence, chunks))
 
 
 # ---------------------------------------------------------
 # Словарь
 # ---------------------------------------------------------
 class Glossary:
-    """Словарь переводов: слова + устойчивые выражения, с файловым кэшем."""
+    """Подсказки-переводы: разбор реплики на куски, с файловым кэшем."""
 
     def __init__(self, llm=None, path: str = None, autosave: bool = True) -> None:
         self.llm = llm
         self.path = path or GLOSSARY_PATH
         self.autosave = autosave
-        self.words = {}          # key -> ru
-        self.phrases = {}        # (key, key, …) -> ru
+        self.chunks = {}         # ключ реплики -> [["Would you like","хотели бы вы"], …]
+        self._bounds = {}        # ключ реплики -> готовые позиции (кэш в памяти)
         self.stats = {"requests": 0, "failed": 0, "retries": 0,
-                      "hits": 0, "misses": 0, "rejected": 0, "overrides": 0}
+                      "hits": 0, "misses": 0, "rejected": 0}
         self._lock = threading.Lock()
         self.load()
 
     # ---------- файл ----------
     def load(self) -> bool:
-        """Читает кэш с диска. Битый/отсутствующий файл — не ошибка."""
+        """Читает кэш с диска. Битый/отсутствующий файл — не ошибка.
+
+        Старый формат (пословные «words»/«phrases») НЕ используется: именно
+        он давал перевод слово за словом. Файл не падает, он игнорируется.
+        """
         try:
             with open(self.path, "r", encoding="utf-8") as f:
                 data = json.load(f)
         except (OSError, ValueError):
             return False
-        words = data.get("words") or {}
-        phrases = data.get("phrases") or {}
-        self.words = {str(k): str(v) for k, v in words.items() if k and v}
-        self.phrases = {}
-        if isinstance(phrases, dict):
-            for key, value in phrases.items():
-                parts = tuple(p for p in str(key).split("|") if p)
-                if len(parts) >= 2 and value:
-                    self.phrases[parts] = str(value)
+        chunks = data.get("chunks") if isinstance(data, dict) else None
+        self.chunks = {}
+        if isinstance(chunks, dict):
+            for key, value in chunks.items():
+                pairs = []
+                if isinstance(value, list):
+                    for item in value:
+                        if isinstance(item, dict):
+                            item = [item.get("en"), item.get("ru")]
+                        if isinstance(item, (list, tuple)) and len(item) >= 2:
+                            en, ru = str(item[0] or ""), str(item[1] or "")
+                            if en and ru:
+                                pairs.append([en, ru])
+                if pairs and str(key).strip():
+                    self.chunks[str(key)] = pairs
         return True
 
     def save(self) -> bool:
         """Пишет кэш на диск (атомарно: temp + replace)."""
-        payload = {
-            "words": dict(sorted(self.words.items())),
-            "phrases": {"|".join(k): v
-                        for k, v in sorted(self.phrases.items())},
-        }
+        payload = {"chunks": {k: self.chunks[k] for k in sorted(self.chunks)}}
         folder = os.path.dirname(self.path)
         try:
             if folder:
@@ -228,81 +278,60 @@ class Glossary:
             return False
 
     # ---------- чтение (дёшево, без модели) ----------
+    def bounds(self, sentence: str) -> list:
+        """Позиции кусков для реплики (из кэша в памяти или с проверкой)."""
+        key = sentence_key(sentence)
+        if not key:
+            return []
+        ready = self._bounds.get(key)
+        if ready is not None:
+            return ready
+        stored = self.chunks.get(key)
+        if not stored:
+            return []
+        out = bounds_of(sentence, stored)
+        if out:
+            self._bounds[key] = out
+        return out
+
     def lookup(self, sentence: str, index: int):
         """Что показать при наведении на символ index.
 
-        Возвращает {"en","ru","start","end","phrase"} или None.
-        Модель НЕ вызывается: только словарь в памяти.
+        Возвращает {"en","ru","word","start","end","phrase"} или None.
+        Модель НЕ вызывается: только готовый разбор в памяти.
+
+        «en» — весь КУСОК (его подсвечиваем и переводим), «word» — слово под
+        курсором (его произносим по клику, решение ученика 03.11.2026).
         """
-        tokens, pos = _locate(sentence, index)
+        text = str(sentence or "")
+        tokens, pos = _locate(text, index)
         if pos is None:
             return None
-        token = tokens[pos]
-
-        # 1) устойчивое выражение — самое длинное совпадение
-        longest = min(MAX_PHRASE_WORDS, len(tokens) - pos)
-        for size in range(longest, 1, -1):
-            keys = tuple(t["key"] for t in tokens[pos:pos + size])
-            ru = self.phrases.get(keys)
-            if not ru:
-                continue
-            rule = phrase_override(tokens, pos, size)
-            if rule is not None:
-                # контекст важнее смысла: «great to see you» — не прощание
-                self.stats["overrides"] += 1
-                ru = rule.get("ru")
-                if not ru:
-                    continue          # правило велит переводить слово по слову
-            self.stats["hits"] += 1
-            return {"en": " ".join(t["word"] for t in tokens[pos:pos + size]),
-                    "ru": ru, "phrase": True,
-                    "start": tokens[pos]["start"],
-                    "end": tokens[pos + size - 1]["end"]}
-
-        # 2) отдельное слово
-        ru = self.words.get(token["key"])
-        if ru:
-            self.stats["hits"] += 1
-            return {"en": token["word"], "ru": ru, "phrase": False,
-                    "start": token["start"], "end": token["end"]}
-
-        # 3) слово входит в выражение ГЛУБЖЕ (курсор на 2-м слове фразы)
-        for keys, value in self.phrases.items():
-            for offset in range(len(keys)):
-                if pos - offset >= 0 and tuple(
-                        t["key"] for t in tokens[pos - offset:pos - offset + len(keys)]
-                ) == keys:
-                    first, last = pos - offset, pos - offset + len(keys) - 1
-                    rule = phrase_override(tokens, first, len(keys))
-                    if rule is not None:
-                        self.stats["overrides"] += 1
-                        value = rule.get("ru")
-                        if not value:
-                            continue      # правило велит переводить слово по слову
-                    self.stats["hits"] += 1
-                    return {"en": " ".join(t["word"] for t in tokens[first:last + 1]),
-                            "ru": value, "phrase": True,
-                            "start": tokens[first]["start"],
-                            "end": tokens[last]["end"]}
+        items = self.bounds(text)
+        if not items:
+            self.stats["misses"] += 1
+            return None
+        for item in items:
+            if item["start"] <= index < item["end"]:
+                self.stats["hits"] += 1
+                return {"en": item["en"], "ru": item["ru"],
+                        "word": tokens[pos]["word"],
+                        "phrase": item["n"] > 1,
+                        "start": item["start"], "end": item["end"]}
         self.stats["misses"] += 1
         return None
 
     def known(self, sentence: str) -> bool:
-        """Все слова реплики уже есть в словаре? Тогда модель не нужна."""
-        for token in tokenize(sentence):
-            if token["key"] in self.words:
-                continue
-            if any(token["key"] in keys for keys in self.phrases):
-                continue
-            return False
-        return True
+        """Реплика уже разобрана? Тогда модель не нужна."""
+        return sentence_key(sentence) in self.chunks
 
     # ---------- запись (дорого: одна реплика = один запрос) ----------
     def prime(self, sentence: str, timeout: int = 120):
-        """Разбирает реплику моделью и кладёт переводы в словарь.
+        """Разбирает реплику моделью и кладёт куски в словарь.
 
-        Возвращает (ok, добавлено_пар | причина). Один повтор при битом JSON —
-        замер показал, что так бывает на ~1 реплике из 5.
+        Возвращает (ok, добавлено_реплик | причина). Один повтор, если JSON
+        битый ИЛИ куски не покрыли реплику — замер показал, что так бывает
+        на ~1 реплике из 5.
         """
         text = str(sentence or "").strip()
         if not text or not tokenize(text):
@@ -316,7 +345,7 @@ class Glossary:
             self.stats["requests"] += 1
         messages = [{"role": "system", "content": _SYSTEM},
                     {"role": "user", "content": "Sentence: " + text}]
-        items = []
+        pairs = []
         for attempt in (1, 2):
             try:
                 ok, raw = self.llm.complete(
@@ -329,86 +358,47 @@ class Glossary:
                 with self._lock:
                     self.stats["failed"] += 1
                 return False, str(raw)[:120]
-            items = parse_items(raw)
-            if items:
+            pairs = parse_chunks(raw)
+            if (pairs and covers(text, pairs)
+                    and not looks_word_by_word(pairs)):
                 break
+            pairs = []
             if attempt == 1:
                 with self._lock:
                     self.stats["retries"] += 1
 
-        if not items:
+        if not pairs:
             with self._lock:
                 self.stats["failed"] += 1
-            return False, "не разобрал JSON"
+            return False, "куски не покрыли реплику"
 
-        added = self.add(items)
+        added = self.add_chunks(text, pairs)
         if added and self.autosave:
             self.save()
         return True, added
 
-    def add(self, items) -> int:
-        """Кладёт разобранные пары в словарь. Возвращает число новых пар."""
-        added = 0
-        for item in items:
-            en = str(item.get("en") or "").strip()
-            ru = str(item.get("ru") or "").strip()
-            if not en or not ru:
-                continue
-            keys = tuple(t["key"] for t in tokenize(en))
-            if not keys:
-                continue
-            with self._lock:
-                if len(keys) == 1:
-                    if self.words.get(keys[0]) == ru:
-                        continue
-                    self.words[keys[0]] = ru
-                    added += 1
-                else:
-                    if (len(keys) > MAX_PHRASE_WORDS
-                            or any(k in _POSSESSIVE for k in keys)
-                            or is_glued_phrase(keys)):
-                        # мы уже под self._lock: вложенный захват = самоблокировка
-                        self.stats["rejected"] += 1
-                        continue
-                    if self.phrases.get(keys) == ru:
-                        continue
-                    self.phrases[keys] = ru
-                    added += 1
-        return added
-
-
-# ---------------------------------------------------------
-# Разбор ответа модели
-# ---------------------------------------------------------
-def parse_items(raw: str) -> list:
-    """Достаёт список пар из ответа модели. Битый JSON → [].
-
-    Модель иногда добавляет ```json, пояснения или рвёт строку — поэтому
-    сначала пробуем как есть, потом вырезаем {...}.
-    """
-    text = str(raw or "").strip()
-    if not text:
-        return []
-    text = re.sub(r"^```(?:json)?|```$", "", text, flags=re.M).strip()
-    data = None
-    try:
-        data = json.loads(text)
-    except ValueError:
-        match = re.search(r"\{.*\}", text, re.S)
-        if match:
-            chunk = match.group(0)
+    def add_chunks(self, sentence: str, pairs) -> int:
+        """Кладёт разбор реплики. Возвращает 1 (новая) или 0 (не взяли)."""
+        text = str(sentence or "")
+        key = sentence_key(text)
+        if not key or not pairs:
+            return 0
+        clean = []
+        for pair in pairs:
             try:
-                data = json.loads(chunk)
-            except ValueError:
-                data = None
-    if not isinstance(data, dict):
-        return []
-    items = data.get("items")
-    if not isinstance(items, list):
-        return []
-    clean = []
-    for item in items:
-        if isinstance(item, dict) and item.get("en") and item.get("ru"):
-            clean.append({"en": str(item["en"]), "ru": str(item["ru"]),
-                          "phrase": bool(item.get("phrase"))})
-    return clean
+                en, ru = str(pair[0]).strip(), str(pair[1]).strip()
+            except (TypeError, IndexError):
+                continue
+            if en and ru:
+                clean.append([en, ru])
+        if (not clean or not bounds_of(text, clean)
+                or looks_word_by_word(clean)):
+            with self._lock:
+                self.stats["rejected"] += 1
+            return 0
+        with self._lock:
+            if self.chunks.get(key) == clean:
+                return 0
+            self.chunks[key] = clean
+            self._bounds.pop(key, None)
+        return 1

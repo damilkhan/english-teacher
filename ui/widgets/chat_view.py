@@ -640,13 +640,18 @@ class ChatView(ctk.CTkFrame):
         if key != self._gloss_key or self._gloss_tip is None:
             self._gloss_key = key          # курсор не на подсвеченном слове
             self._gloss_show(hit, event.x_root, event.y_root, body=body)
-        if self._gloss_said == key:
+        # Произносим СЛОВО под курсором, а не весь кусок: подсветка и
+        # перевод — куском по смыслу («by the window»), а озвучка — слово
+        # (решение ученика 03.11.2026).
+        word = str(hit.get("word") or hit.get("en") or "")
+        said = (word, hit.get("start"), hit.get("end"))
+        if self._gloss_said == said:
             self._gloss_slow = not self._gloss_slow
         else:
-            self._gloss_said = key
+            self._gloss_said = said
             self._gloss_slow = False       # первое нажатие — обычная скорость
         try:
-            self.on_speak_word(str(hit.get("en") or ""), self._gloss_slow)
+            self.on_speak_word(word, self._gloss_slow)
         except Exception:
             pass
 
