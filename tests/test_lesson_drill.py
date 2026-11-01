@@ -13,7 +13,8 @@
 #   6) окно: метод есть, вызывается на старте урока, фаза учтена;
 #   7) флаг config.LESSON_MISTAKE_DRILL выключает дрилл;
 #   8) разбор БЕЗ ошибок засчитывает задание в любой фазе (§36, живой баг 31.10);
-#   9) дрилл на 3 фразы из библиотеки: ok / wrong_side / reveal / done.
+#   9) дрилл на 3 фразы из библиотеки: ok / wrong_side / reveal / done;
+#  10) окно ведёт дрилл само: подсказка, эталон, why — без модели.
 # =========================================================
 
 import os
@@ -168,6 +169,19 @@ def test_flag_and_picker():
 
     class FakeApp:
         current_user = {"id": 1}
+        teacher_name = "Джейн"
+        shown = []                      # реплики, которые окно показало
+        spoken = []                     # что озвучено
+
+        def add_message(self, sender, text, picture=None, spans=None):
+            self.shown.append(text)
+
+        def _say(self, text, on_done=None, parts=None, on_part=None, rate=None):
+            self.spoken.append(text)
+
+    # заглушка обязана знать методы, которые зовёт правка (грабли проекта)
+    FakeApp._drill_plan = EnglishTeacherApp._drill_plan
+    FakeApp._drill_ask = EnglishTeacherApp._drill_ask
 
     real_top = gaps.top_pair
     keep_flag = getattr(config, "LESSON_MISTAKE_DRILL", True)
@@ -383,6 +397,102 @@ def test_three_phrases():
           (stuck.drill_phrases, stuck.drill_pos))
 
 
+def test_window_drill():
+    print("\n[10] Окно ведёт дрилл: подсказка, эталон, why — без модели")
+    from ui.app import EnglishTeacherApp
+    import phrases
+
+    class FakeLessons:
+        def __init__(self, session):
+            self.session = session
+
+        def current(self):
+            return self.session
+
+    class FakeApp:
+        teacher_name = "Джейн"
+
+        def __init__(self, session):
+            self.lesson = FakeLessons(session)
+            self.shown = []
+            self.spoken = []
+            self.credited = []
+
+        def add_message(self, sender, text, picture=None, spans=None):
+            self.shown.append(text)
+
+        def _say(self, text, on_done=None, parts=None, on_part=None, rate=None):
+            self.spoken.append(text)
+
+        def _credit_task(self, session, text="", marked=False):
+            self.credited.append(marked)
+            return True
+
+    FakeApp._drill_ask = EnglishTeacherApp._drill_ask
+    FakeApp._drill_reply = EnglishTeacherApp._drill_reply
+    FakeApp._drill_finish = EnglishTeacherApp._drill_finish
+
+    trio = phrases.pick("a2.lay_lie", 0)
+    session = new_session()
+    session.start_drill(WRONG, RIGHT, phrases=trio, rule_id="a2.lay_lie",
+                        words=["lay", "lie"])
+    app = FakeApp(session)
+
+    print(" -- подсказка по-русски")
+    check("ситуация показана", app._drill_ask(session) is True)
+    check("это ситуация, а не английский",
+          "🎯 Дрилл 1/3" in app.shown[-1] and trio[0]["ru"] in app.shown[-1],
+          app.shown[-1])
+
+    print(" -- другая сторона пары")
+    wrong_side = trio[0]["en"].replace(" lie ", " lay ")
+    check("реплику забрал дрилл", app._drill_reply(wrong_side) is True)
+    seen = app.shown[-1]
+    check("ученику сказали про ошибку", "❌" in seen, seen)
+    check("эталон показан", trio[0]["en"] in seen, seen)
+    check("why показан сразу", trio[0]["why"] in seen, seen)
+    check("фраза та же — просят повторить", "Скажи ещё раз" in seen, seen)
+
+    print(" -- верный ответ")
+    check("верная фраза принята", app._drill_reply(trio[0]["en"]) is True)
+    check("эталон озвучен по-английски", trio[0]["en"] in app.spoken,
+          app.spoken)
+    check("сразу спрашивают следующую",
+          "🎯 Дрилл 2/3" in app.shown[-1], app.shown[-1])
+
+    print(" -- конец дрилла")
+    for item in trio[1:]:
+        app._drill_reply(item["en"])
+    check("дрилл закрыт", session.drill_pos >= session.drill_total
+          and session.drill_current() is None,
+          (session.drill_pos, session.drill_total))
+    check("задание засчитано без «подсказки»", app.credited == [True],
+          app.credited)      # промах был выше, поэтому marked=True
+    check("ученику сказали про промахи",
+          "промахи" in app.shown[-1], app.shown[-1])
+
+    print(" -- чистая тройка: без пометки")
+    clean = new_session()
+    clean.start_drill(WRONG, RIGHT, phrases=trio, rule_id="a2.lay_lie",
+                      words=["lay", "lie"])
+    clean_app = FakeApp(clean)
+    for item in trio:
+        clean_app._drill_reply(item["en"])
+    check("marked=False, если ни одной ошибки", clean_app.credited == [False],
+          clean_app.credited)
+
+    print(" -- модель не зовётся")
+    with open(os.path.join(ROOT, "ui", "app.py"), "r", encoding="utf-8") as fh:
+        source = fh.read()
+    start = source.find("    def _drill_reply(self, text):")
+    end = source.find("\n    def ", start + 10)
+    body = source[start:end if end > start else len(source)]
+    check("в дрилле нет отправки в модель",
+          "chat.send" not in body and "controller" not in body, body[:80])
+    check("русская подсказка — текстом, не голосом",
+          "_say(current" not in source)
+
+
 def main():
     test_start_drill()
     test_credit_by_text()
@@ -393,6 +503,7 @@ def main():
     test_flag_and_picker()
     test_no_errors_credits()
     test_three_phrases()
+    test_window_drill()
     print("\n" + ("ВСЁ ПРОЙДЕНО" if not FAILED else "ПРОВАЛЕНО: %d" % len(FAILED)))
     for name in FAILED:
         print("  - " + name)

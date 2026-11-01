@@ -2067,12 +2067,119 @@ class EnglishTeacherApp:
             return False
         if not pair:
             return False
-        if not session.start_drill(pair.get("wrong"), pair.get("correct")):
+        rule_id, trio, words = self._drill_plan(pair)
+        started = session.start_drill(pair.get("wrong"), pair.get("correct"),
+                                      phrases=trio, rule_id=rule_id,
+                                      words=words)
+        if not started:
             return False
-        print("🎯 Дрилл по прошлой ошибке: %r -> %r (%s, раз: %s)"
-              % (pair.get("wrong"), pair.get("correct"),
-                 pair.get("label"), pair.get("count")))
+        print("🎯 Дрилл по прошлой ошибке: %r -> %r (%s, раз: %s; правило %s, фраз %s)"
+              % (pair.get("wrong"), pair.get("correct"), pair.get("label"),
+                 pair.get("count"), rule_id or "нет", len(trio)))
+        # первая фраза дрилла показывается сразу, без хода модели
+        self._drill_ask(session)
         return True
+
+    # ---------------- дрилл подстановки: окно, а не модель (§55 шаг 2) -------------
+    def _drill_plan(self, pair):
+        """Правило библиотеки и тройка фраз для пары из базы ошибок.
+
+        Возвращает (rule_id, фразы, слова пары). Пусто — дрилл пойдёт
+        старым путём, одной фразой. Модель здесь не участвует.
+        """
+        try:
+            import phrases as phrases_mod
+        except Exception as exc:
+            print("⚠️ Библиотека фраз недоступна: %s" % exc)
+            return "", [], []
+        rule_id = phrases_mod.rule_for_words(pair.get("wrong"),
+                                             pair.get("correct")) or ""
+        if not rule_id:
+            return "", [], []
+        item = phrases_mod.rule(rule_id) or {}
+        return rule_id, phrases_mod.pick(rule_id, 0), item.get("words") or []
+
+    def _drill_ask(self, session):
+        """Показать в чате ситуацию по-русски — текст, а не голос.
+
+        TTS русский не читает, а переводить ситуацию не надо: ученик должен
+        сам выбрать слово (решение 67). Модель фразу НЕ сочиняет.
+        """
+        current = session.drill_current()
+        if not current:
+            return False
+        self.add_message(self.teacher_name,
+                         "🎯 Дрилл %d/%d. %s" % (current["index"],
+                                                current["total"],
+                                                current["ru"]))
+        print("🎯 Дрилл %d/%d: %r" % (current["index"], current["total"],
+                                       current["en"]))
+        return True
+
+    def _drill_reply(self, text):
+        """Ответ ученика в дрилле: проверяет ПРИЛОЖЕНИЕ, модель не зовём.
+
+        Возвращает True, если реплику забрал дрилл (в модель она не уходит).
+        """
+        session = self.lesson.current()
+        if session is None:
+            return False
+        if getattr(session, "task_phase", "") != lesson_mod.TASK_DRILL:
+            return False
+        if not getattr(session, "drill_phrases", None):
+            return False            # старая одна фраза — путь прежний
+        try:
+            res = session.drill_check(text)
+        except Exception as exc:
+            print("⚠️ Проверка фразы дрилла сбилась: %s" % exc)
+            return False
+        result = res.get("result")
+        phrase = res.get("phrase") or {}
+        english = str(phrase.get("en") or "")
+        why = str(res.get("why") or "").strip()
+        if result == "ok":
+            line = "✅ " + english + ("\n" + why if why else "")
+        elif result == "wrong_side":
+            line = ("❌ Это другая сторона пары.\n👉 " + english
+                    + ("\n" + why if why else "")
+                    + "\nСкажи ещё раз: " + str(phrase.get("ru") or ""))
+        elif result == "miss":
+            hint = str(phrase.get("hint2") or "").strip()
+            line = ("🤏 " + hint if hint else "🤏 Попробуй ещё раз: "
+                    + str(phrase.get("ru") or ""))
+        elif result == "reveal":
+            line = ("👉 Правильно: " + english
+                    + ("\n" + why if why else ""))
+        elif result == "done":
+            line = "✅ " + english + ("\n" + why if why else "")
+        else:
+            return False
+        self.add_message(self.teacher_name, line)
+        if result in ("ok", "reveal", "done") and english:
+            try:
+                self._say(english)          # эталон — вслух, по-английски
+            except Exception:
+                pass
+        if res.get("finished"):
+            self._drill_finish(session)
+        elif res.get("next") and result != "wrong_side":
+            # при другой стороне пары ситуацию уже повторили в той же строке
+            self._drill_ask(session)
+        return True
+
+    def _drill_finish(self, session):
+        """Дрилл кончился: короткое слово ученику и зачёт первого задания."""
+        clean = bool(getattr(session, "drill_clean", False))
+        line = ("🏁 Дрилл пройден." if clean
+                else "🏁 Дрилл пройден. Были промахи — правило повторим позже.")
+        self.add_message(self.teacher_name, line)
+        print("🏁 Дрилл закончен: правило=%s фраз=%s ошибок=%s чисто=%s"
+              % (getattr(session, "drill_rule", ""), session.drill_total,
+                 getattr(session, "drill_errors", 0), clean))
+        try:
+            self._credit_task(session, "", marked=not clean)
+        except Exception as exc:
+            print("⚠️ Зачёт дрилла не прошёл: %s" % exc)
 
     def _credit_task_by_text(self, text):
         """Вариант В: ученик ПОВТОРИЛ исправление — засчитать задание сразу.
@@ -3514,6 +3621,9 @@ class EnglishTeacherApp:
             if self._picture_reply(text):
                 return
 
+        # §55: фразу дрилла принимает приложение — модель не нужна совсем
+        if self._drill_reply(text):
+            return
         if _asks_for_story(text):
             self._story_context = True      # ученик просит историю/сказку
         if self.server_ready:
