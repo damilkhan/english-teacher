@@ -401,6 +401,7 @@ class LessonSession:
         self.scene_answers = 0       # принятых ответов за сцену
         self.scene_skipped = 0       # вопросов, брошенных после двух осечек
         self.scene_step_skipped = 0  # брошенных вопросов В ТЕКУЩЕМ шаге
+        self.scene_said = []         # ответы ученика: [{q, a, step}] для разбора
 
     # ---------- свойства ----------
     @property
@@ -833,6 +834,7 @@ class LessonSession:
         self.scene_answers = 0
         self.scene_skipped = 0
         self.scene_step_skipped = 0
+        self.scene_said = []
         self.tasks_total = len(rows)
         self.tasks_done = 0
         self.tasks_marked = 0
@@ -888,6 +890,19 @@ class LessonSession:
             self.scene_tries = 0
             return {"step_done": False, "step": self.scene_step}
         return {"step_done": True, "step": self.scene_step}
+
+    def scene_note(self, question: Any, said: Any) -> bool:
+        """Запомнить ответ ученика для разбора В КОНЦЕ сцены (шаг 4).
+
+        Вызывается ДО scene_advance: вопрос ещё текущий. Пустые ответы и
+        русские реплики не храним — разбирать там нечего.
+        """
+        text = str(said or "").strip()
+        if not text or not _latin_words(text):
+            return False
+        self.scene_said.append({"q": str(question or "").strip()[:200],
+                                "a": text[:200], "step": self.scene_step})
+        return True
 
     def scene_credit(self, marked: Optional[bool] = None) -> bool:
         """Засчитать ШАГ сцены и встать на первый вопрос следующего.

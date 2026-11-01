@@ -2296,6 +2296,15 @@ class EnglishTeacherApp:
             print("⚠️ Ответ сцены не разобран: %s" % exc)
             return False
         result = res.get("result")
+        question = ""
+        try:
+            import scenes as scenes_mod
+            question = str((scenes_mod.question(session.scene_id,
+                                                session.scene_step,
+                                                session.scene_q) or {}).get("en")
+                           or "")
+        except Exception:
+            question = ""
         if result == "retry":
             # молчание или русский: повторяем ТОТ ЖЕ вопрос, один раз
             self.add_message(self.teacher_name,
@@ -2309,6 +2318,10 @@ class EnglishTeacherApp:
         elif result == "off_topic":
             print("🎬 Сцена: ученик ушёл в сторону — мягко возвращаю к теме")
         print("🎬 Сцена: ответ принят (%.40r)" % (text or ""))
+        try:
+            session.scene_note(question, text)  # в разбор — в КОНЦЕ сцены
+        except Exception:
+            pass
         try:
             self._register_lesson_reply(text)   # реплика идёт в счёт урока
         except Exception:
@@ -2342,7 +2355,13 @@ class EnglishTeacherApp:
         return True
 
     def _scene_finish(self, session):
-        """Сцена пройдена: слово ученику и закрытие урока обычным путём."""
+        """Сцена пройдена: слово ученику, РАЗБОР (шаг 4), итог урока.
+
+        Разбор идёт ОДНИМ запросом к модели и только здесь: по ходу сцены
+        модель не зовётся вовсе (решение ученика: правок в моменте нет).
+        Пока разбор в пути, итог урока не показываем — иначе он встанет
+        раньше и разбор придёт после «всё, урок кончен».
+        """
         marked = getattr(session, "tasks_marked", 0)
         line = ("🏁 Сцена пройдена: %d шагов из %d."
                 % (session.tasks_done, session.tasks_total))
@@ -2352,6 +2371,92 @@ class EnglishTeacherApp:
         print("🏁 Сцена закончена: %s, шагов %d/%d, с оговоркой %d, ответов %d"
               % (session.scene_id, session.tasks_done, session.tasks_total,
                  marked, getattr(session, "scene_answers", 0)))
+        if self._start_scene_review(session):
+            return                   # итог покажет _apply_scene_review
+        self._close_lesson_after_credit()
+
+    # ---------- разбор ошибок в конце сцены (шаг 4) ----------
+    def _start_scene_review(self, session):
+        """Запустить разбор сцены в ФОНЕ. False — разбора не будет."""
+        if not getattr(config, "SCENE_REVIEW_ENABLED", True):
+            return False
+        rows = list(getattr(session, "scene_said", None) or [])
+        if not rows:
+            print("🔎 Разбор сцены: ответов не было — разбирать нечего")
+            return False
+        if not self.server_ready:
+            print("🔎 Разбор сцены: сервер молчит — разбор пропущен")
+            return False
+        # честная строка ожидания: разбор идёт 1-3 с, но ученик не должен
+        # думать, что урок просто оборвался
+        self.add_message(self.teacher_name,
+                         "🔎 Смотрю твои ответы — сейчас покажу, что стоит "
+                         "поправить.")
+        try:
+            threading.Thread(target=self._scene_review_worker,
+                             args=(session, rows), daemon=True).start()
+        except Exception as exc:
+            print("⚠️ Разбор сцены не запустился: %s" % exc)
+            return False
+        print("🔎 Разбор сцены: отправлен в модель, ответов %d" % len(rows))
+        return True
+
+    def _scene_review_worker(self, session, rows):
+        """Фон: ОДИН короткий запрос к модели за разбором всей сцены."""
+        level = (self.current_user or {}).get("level") or "A2"
+        try:
+            import scene_review as review_mod
+            ok, raw = self.llm.complete(
+                review_mod.build_messages(rows, level),
+                max_tokens=getattr(config, "SCENE_REVIEW_MAX_TOKENS", 240),
+                temperature=0.0,
+                timeout=getattr(config, "SCENE_REVIEW_TIMEOUT", 45))
+        except Exception as exc:
+            print("⚠️ Разбор сцены не удался: %s" % exc)
+            self._dispatch(lambda: self._apply_scene_review(session, None, rows))
+            return
+        if not ok:
+            print("⚠️ Разбор сцены: модель не ответила (%s)" % raw)
+            self._dispatch(lambda: self._apply_scene_review(session, None, rows))
+            return
+        self._dispatch(lambda: self._apply_scene_review(session, raw, rows))
+
+    def _apply_scene_review(self, session, raw, rows):
+        """Главный поток: показать разбор, записать ошибки и закрыть урок."""
+        try:
+            import scene_review as review_mod
+        except Exception as exc:
+            print("⚠️ Модуль разбора недоступен: %s" % exc)
+            self._close_lesson_after_credit()
+            return
+        data = review_mod.parse(raw, rows) if raw else {
+            "ok": False, "mistakes": [], "why": "no-answer"}
+        if not data.get("ok"):
+            print("🔎 Разбор сцены: не показываю (%s)" % data.get("why"))
+            self.add_message(self.teacher_name,
+                             "🔎 Разбор сейчас не получился — покажу в "
+                             "следующий раз.")
+            self._close_lesson_after_credit()
+            return
+        mistakes = list(data.get("mistakes") or [])
+        self.add_message(self.teacher_name, review_mod.review_text(data))
+        print("🔎 Разбор сцены: правок %d%s"
+              % (len(mistakes),
+                 "".join(" | «%s» -> %s" % (m.get("said"), m.get("fix"))
+                         for m in mistakes)))
+        if mistakes:
+            # ошибки — в базу пробелов: следующее занятие начнётся с дрилла
+            try:
+                profile_store.record_analysis(
+                    review_mod.analysis_from(data, session.lesson_id),
+                    " ".join(str(m.get("said") or "") for m in mistakes),
+                    "", (self.current_user or {}).get("id"))
+            except Exception as exc:
+                print("⚠️ Ошибки сцены не записались: %s" % exc)
+            try:
+                self._note_mistakes(len(mistakes))
+            except Exception:
+                pass
         self._close_lesson_after_credit()
 
     def _credit_task_by_text(self, text):
