@@ -1,8 +1,8 @@
 {
   "level": "a2",
   "english": "american",
-  "status": "draft — партии 1–5, 15 правил, 90 фраз; согласовано с учеником 01.11.2026",
-  "note": "Черновик библиотеки смысловых пар. Ещё не подключён к движку. Партии 6–14 пишутся дальше.",
+  "status": "draft — партии 1–14 ЗАКРЫТЫ, 42 правил, 252 фраз; согласовано с учеником 02.11.2026",
+  "note": "Черновик библиотеки смысловых пар. Ещё не подключён к движку. Дальше — шаг 1: собрать data/phrase_pairs_a2.json и подключить движок подстановки.",
   "rules": {
     "a2.lay_lie": {
       "pair": "lie — лежать (сам) / lay — класть (что-то)",
@@ -618,6 +618,1139 @@
           "hint2": "Начни: A mechanic earns …"
         }
       ]
+    },
+    "a2.meet_know": {
+      "pair": "meet — познакомиться/встретиться (разово) / know — знать (давно)",
+      "phrases": [
+        {
+          "ru": "Тебя впервые знакомят с человеком, он протягивает руку.",
+          "en": "Nice to meet you.",
+          "why": "Знакомство ВПЕРВЫЕ — meet.",
+          "hint2": "Начни: Nice to …"
+        },
+        {
+          "ru": "Друг спрашивает, откуда ты знаешь этого парня — вы вместе учились.",
+          "en": "I know him from school.",
+          "why": "Человека знаю давно — know, не meet.",
+          "hint2": "Начни: I know …"
+        },
+        {
+          "ru": "Договариваешься с другом, где встретитесь после работы.",
+          "en": "Let's meet near the metro.",
+          "why": "Встреча в назначенном месте — meet.",
+          "hint2": "Начни: Let's meet …"
+        },
+        {
+          "ru": "Мама спрашивает, знакома ли тебе соседка с третьего этажа — вы не общались.",
+          "en": "No, I don't know her.",
+          "why": "Не знакома, а не «не встречала» — know.",
+          "hint2": "Начни: No, I don't …"
+        },
+        {
+          "ru": "Спрашивают, где вы познакомились с женой — на свадьбе друга.",
+          "en": "We met at a wedding.",
+          "why": "Познакомились однажды — прошедшее met.",
+          "hint2": "Начни: We met …"
+        },
+        {
+          "ru": "Он живёт здесь десять лет, поэтому все магазины ему знакомы.",
+          "en": "He knows all the shops here.",
+          "why": "Знает постоянно — knows, а не meets.",
+          "hint2": "Начни: He knows …"
+        }
+      ]
+    },
+    "a2.keep_hold": {
+      "pair": "keep — хранить/держать у себя (долго) / hold — держать в руках, проводить",
+      "phrases": [
+        {
+          "ru": "Тебе дают важную бумагу и просят подержать минуту, пока открывают дверь.",
+          "en": "Hold this for a minute.",
+          "why": "Держу в руках недолго — hold.",
+          "hint2": "Начни: Hold this …"
+        },
+        {
+          "ru": "Мама говорит, где лежат старые документы — в ящике на кухне, много лет.",
+          "en": "I keep old papers in the drawer.",
+          "why": "Храню постоянно, у себя — keep.",
+          "hint2": "Начни: I keep …"
+        },
+        {
+          "ru": "У тебя заняты руки, а друг спрашивает, можно ли взять твою сумку — разрешаешь.",
+          "en": "Can you hold my bag?",
+          "why": "Держать в руках — hold.",
+          "hint2": "Начни: Can you hold …"
+        },
+        {
+          "ru": "Ты не выбрасываешь старые письма, они тебе дороги.",
+          "en": "I keep all her letters.",
+          "why": "Храню годами — keep.",
+          "hint2": "Начни: I keep all …"
+        },
+        {
+          "ru": "Собрания по понедельникам проходят в офисе — рассказываешь, как это устроено.",
+          "en": "We hold meetings every Monday.",
+          "why": "Собрания ПРОВОДЯТ — hold a meeting.",
+          "hint2": "Начни: We hold …"
+        },
+        {
+          "ru": "Друг доверил тебе тайну — просишь никому не рассказывать.",
+          "en": "Please keep it a secret.",
+          "why": "Тайна остаётся внутри — keep.",
+          "hint2": "Начни: Please keep …"
+        }
+      ]
+    },
+    "a2.study_learn": {
+      "pair": "study — учиться, разбирать (процесс) / learn — выучить, узнать (результат)",
+      "phrases": [
+        {
+          "ru": "Готовишься к экзамену — сидишь с учебником три часа.",
+          "en": "I study English every evening.",
+          "why": "Процесс занятий — study.",
+          "hint2": "Начни: I study …"
+        },
+        {
+          "ru": "Друг осваивает машину, но пока не умеет — так и говорит.",
+          "en": "I'm learning to drive.",
+          "why": "Осваиваю навык — learn.",
+          "hint2": "Начни: I'm learning …"
+        },
+        {
+          "ru": "Спрашивают, чем занимается сестра в университете — медицина.",
+          "en": "She studies medicine at university.",
+          "why": "Учится по большой программе — study.",
+          "hint2": "Начни: She studies …"
+        },
+        {
+          "ru": "Ты наконец запомнил слова, которые раньше забывал, — хвалишься.",
+          "en": "I learned ten new words today.",
+          "why": "Результат есть — learn.",
+          "hint2": "Начни: I learned …"
+        },
+        {
+          "ru": "В общежитии шумно, а тебе надо готовиться — просишь тишины.",
+          "en": "I need to study for the test.",
+          "why": "Готовлюсь, разбираю материал — study.",
+          "hint2": "Начни: I need to …"
+        },
+        {
+          "ru": "Ты узнал новость от сестры, а не прочитал в интернете.",
+          "en": "I learned it from my sister.",
+          "why": "Узнал сведения — learn, не study.",
+          "hint2": "Начни: I learned it …"
+        }
+      ]
+    },
+    "a2.spend_waste": {
+      "pair": "spend — тратить на дело / waste — тратить зря",
+      "phrases": [
+        {
+          "ru": "Весь вечер ушёл на уборку, а не на сериал — рассказываешь, куда ушло время.",
+          "en": "I spent two hours cleaning.",
+          "why": "Время ушло на дело — spend (spent).",
+          "hint2": "Начни: I spent …"
+        },
+        {
+          "ru": "Он целый день листает телефон, а дел не сделано.",
+          "en": "Don't waste time on your phone.",
+          "why": "Время ушло зря — waste.",
+          "hint2": "Начни: Don't waste …"
+        },
+        {
+          "ru": "Спрашивают, сколько ты отдаёшь за квартиру в месяц.",
+          "en": "I spend half my salary on rent.",
+          "why": "Деньги тратятся на нужное — spend.",
+          "hint2": "Начни: I spend …"
+        },
+        {
+          "ru": "Друг каждый день покупает лотерейные билеты — говоришь, что это пустая трата.",
+          "en": "You're wasting money on tickets.",
+          "why": "Деньги без пользы — waste.",
+          "hint2": "Начни: You're wasting …"
+        },
+        {
+          "ru": "Спрашивают, как прошли выходные — ты всё время был с детьми.",
+          "en": "We spent the weekend with the kids.",
+          "why": "Провёл время — spend, прошедшее spent.",
+          "hint2": "Начни: We spent …"
+        },
+        {
+          "ru": "Приятель зовёт в сомнительный проект — не хочешь терять время.",
+          "en": "I don't want to waste time.",
+          "why": "Время зря — waste.",
+          "hint2": "Начни: I don't want to …"
+        }
+      ]
+    },
+    "a2.find_look_for": {
+      "pair": "find — найти (результат) / look for — искать (процесс)",
+      "phrases": [
+        {
+          "ru": "Ищешь ключи по всей квартире, пока друг ждёт у двери.",
+          "en": "I'm looking for my keys.",
+          "why": "Процесс поиска — look for.",
+          "hint2": "Начни: I'm looking for …"
+        },
+        {
+          "ru": "Ключи оказались в кармане куртки — сообщаешь, что нашёл.",
+          "en": "I found my keys in my coat.",
+          "why": "Результат — find, прошедшее found.",
+          "hint2": "Начни: I found …"
+        },
+        {
+          "ru": "Ты на сайте вакансий, подбираешь работу по вечерам.",
+          "en": "She is looking for a new job.",
+          "why": "Ещё не нашла, ищет — look for.",
+          "hint2": "Начни: She is looking …"
+        },
+        {
+          "ru": "Работа сама нашлась: старый знакомый позвал в кафе.",
+          "en": "I found a job at a café.",
+          "why": "Уже есть результат — found.",
+          "hint2": "Начни: I found a job …"
+        },
+        {
+          "ru": "В незнакомом городе ищешь аптеку, спрашиваешь у прохожих.",
+          "en": "We're looking for a pharmacy.",
+          "why": "Пока ищем — look for, не find.",
+          "hint2": "Начни: We're looking for …"
+        },
+        {
+          "ru": "Перед вылетом паспорта нигде нет — паникуешь.",
+          "en": "I can't find my passport.",
+          "why": "Результата нет — can't find, не «can't look for».",
+          "hint2": "Начни: I can't find …"
+        }
+      ]
+    },
+    "a2.hope_wish": {
+      "pair": "hope — надеюсь на реальное / wish — хочу, чтобы было иначе",
+      "phrases": [
+        {
+          "ru": "Друг ждёт ответа после собеседования — веришь в хороший исход.",
+          "en": "I hope you get the job.",
+          "why": "Исход реальный — hope + настоящее.",
+          "hint2": "Начни: I hope you …"
+        },
+        {
+          "ru": "В жару надо на работу, а ты мечтаешь оказаться на пляже.",
+          "en": "I wish I were at the beach.",
+          "why": "Нереальное «сейчас» — wish + were.",
+          "hint2": "Начни: I wish I …"
+        },
+        {
+          "ru": "Перед вылетом смотришь на небо — рейс бы не задержали.",
+          "en": "I hope the flight isn't late.",
+          "why": "Надеюсь на реальное — hope.",
+          "hint2": "Начни: I hope the flight …"
+        },
+        {
+          "ru": "Жалеешь, что английский у тебя слабый, хотя учил его в школе.",
+          "en": "I wish I spoke English better.",
+          "why": "Жалею о том, как есть, — wish + прошедшее.",
+          "hint2": "Начни: I wish I spoke …"
+        },
+        {
+          "ru": "У друга завтра экзамен — пишешь ему сообщение поддержки.",
+          "en": "I hope everything goes well.",
+          "why": "Надежда на будущее — hope.",
+          "hint2": "Начни: I hope everything …"
+        },
+        {
+          "ru": "В отпуске всего три дня, а хочется остаться дольше.",
+          "en": "I wish I could stay longer.",
+          "why": "Сейчас невозможно — wish + could.",
+          "hint2": "Начни: I wish I could …"
+        }
+      ]
+    },
+    "a2.steal_rob": {
+      "pair": "steal — украсть ВЕЩЬ / rob — ограбить человека, место",
+      "phrases": [
+        {
+          "ru": "В автобусе из кармана вытащили телефон.",
+          "en": "Someone stole my phone on the bus.",
+          "why": "Унесли ВЕЩЬ — steal (stole).",
+          "hint2": "Начни: Someone stole …"
+        },
+        {
+          "ru": "Ночью обчистили магазин на нашей улице.",
+          "en": "Someone robbed the shop on our street.",
+          "why": "Ограбили МЕСТО — rob.",
+          "hint2": "Начни: Someone robbed …"
+        },
+        {
+          "ru": "Оставил велосипед у магазина, вернулся — его нет.",
+          "en": "Someone stole my bike.",
+          "why": "Пропала вещь — steal.",
+          "hint2": "Начни: Someone stole …"
+        },
+        {
+          "ru": "Поздно вечером у банка двое отобрали сумку у женщины.",
+          "en": "Two men robbed a woman near the bank.",
+          "why": "Ограбили ЧЕЛОВЕКА — rob.",
+          "hint2": "Начни: Two men robbed …"
+        },
+        {
+          "ru": "Пока ты был на пляже, из номера пропали деньги.",
+          "en": "Someone stole money from my room.",
+          "why": "Деньги взяли — steal.",
+          "hint2": "Начни: Someone stole …"
+        },
+        {
+          "ru": "В новостях: трое в масках ворвались в ювелирный.",
+          "en": "Three men robbed a jewelry store.",
+          "why": "Ограбили магазин — rob.",
+          "hint2": "Начни: Three men robbed …"
+        }
+      ]
+    },
+    "a2.sit_set": {
+      "pair": "sit (sat) — сесть, сидеть САМ / set — поставить, положить ЧТО-ТО",
+      "phrases": [
+        {
+          "ru": "В метро место освободилось — садишься у окна.",
+          "en": "I sat down next to the window.",
+          "why": "Сам сажусь — sit (sat).",
+          "hint2": "Начни: I sat down …"
+        },
+        {
+          "ru": "Нужно встать в шесть — ставишь будильник.",
+          "en": "Set the alarm for six.",
+          "why": "Ставлю ЧТО-ТО (будильник) — set.",
+          "hint2": "Начни: Set the alarm …"
+        },
+        {
+          "ru": "В кафе все столы заняты — спрашиваешь, можно сесть здесь.",
+          "en": "Can I sit here?",
+          "why": "Сам сажусь — sit.",
+          "hint2": "Начни: Can I sit …"
+        },
+        {
+          "ru": "Ребёнок тащит тарелку на диван — просишь поставить на стол.",
+          "en": "Set the plate on the table.",
+          "why": "Ставлю предмет — set.",
+          "hint2": "Начни: Set the plate …"
+        },
+        {
+          "ru": "После смены падаешь на диван и включаешь телевизор.",
+          "en": "I sit on the sofa after work.",
+          "why": "Сижу сам — sit.",
+          "hint2": "Начни: I sit …"
+        },
+        {
+          "ru": "Гости придут через час — накрываешь на стол.",
+          "en": "Set the table for dinner.",
+          "why": "Накрываю стол — set the table.",
+          "hint2": "Начни: Set the table …"
+        }
+      ]
+    },
+    "a2.rise_raise": {
+      "pair": "rise (rose) — подниматься САМО / raise — поднимать ЧТО-ТО",
+      "phrases": [
+        {
+          "ru": "Смотришь в телефоне, во сколько встаёт солнце.",
+          "en": "The sun rises at six.",
+          "why": "Солнце поднимается САМО — rise.",
+          "hint2": "Начни: The sun rises …"
+        },
+        {
+          "ru": "На уроке знаешь ответ — тянешь руку.",
+          "en": "Raise your hand if you know.",
+          "why": "Поднимаю ЧТО-ТО (руку) — raise.",
+          "hint2": "Начни: Raise your …"
+        },
+        {
+          "ru": "Цены на бензин опять пошли вверх — жалуешься.",
+          "en": "Prices are rising again.",
+          "why": "Цены растут сами — rise.",
+          "hint2": "Начни: Prices are …"
+        },
+        {
+          "ru": "Начальник прибавил тебе зарплату — рассказываешь.",
+          "en": "My boss raised my salary.",
+          "why": "Прибавили мне — raise.",
+          "hint2": "Начни: My boss raised …"
+        },
+        {
+          "ru": "Ребёнок горячий, градусник показывает всё выше.",
+          "en": "His temperature is rising.",
+          "why": "Растёт сам — rise.",
+          "hint2": "Начни: His temperature …"
+        },
+        {
+          "ru": "Сосед орёт на весь двор — просишь не повышать голос.",
+          "en": "Don't raise your voice.",
+          "why": "«Поднять голос» — raise.",
+          "hint2": "Начни: Don't raise …"
+        }
+      ]
+    },
+    "a2.lose_miss": {
+      "pair": "lose (lost) — потерять, проиграть / miss — опоздать, пропустить, скучать",
+      "phrases": [
+        {
+          "ru": "Опять не можешь найти ключи от дома.",
+          "en": "I lost my keys again.",
+          "why": "Вещь пропала — lose (lost).",
+          "hint2": "Начни: I lost …"
+        },
+        {
+          "ru": "Проспал и не успел на автобус.",
+          "en": "I missed the bus this morning.",
+          "why": "Не успел на транспорт — miss.",
+          "hint2": "Начни: I missed …"
+        },
+        {
+          "ru": "Ваша команда проиграла в финале.",
+          "en": "We lost the final.",
+          "why": "Проиграли — lose (lost).",
+          "hint2": "Начни: We lost …"
+        },
+        {
+          "ru": "Застрял на работе и не увидел матч.",
+          "en": "I missed the match.",
+          "why": "Пропустил событие — miss.",
+          "hint2": "Начни: I missed …"
+        },
+        {
+          "ru": "Телефона нигде нет — спрашиваешь, не видели ли.",
+          "en": "I think I lost my phone.",
+          "why": "Пропала вещь — lose.",
+          "hint2": "Начни: I think I …"
+        },
+        {
+          "ru": "Уехал в другой город и скучаешь по семье.",
+          "en": "I miss my family.",
+          "why": "Скучаю — miss, не lose.",
+          "hint2": "Начни: I miss …"
+        }
+      ]
+    },
+    "a2.learn_teach": {
+      "pair": "learn — учиться, узнавать САМ / teach (taught) — учить ДРУГОГО",
+      "phrases": [
+        {
+          "ru": "Ходишь в бассейн, плавать пока не умеешь.",
+          "en": "I'm learning to swim.",
+          "why": "Учусь САМ — learn.",
+          "hint2": "Начни: I'm learning …"
+        },
+        {
+          "ru": "Работаешь в школе, ведёшь английский у пятых классов.",
+          "en": "I teach English at school.",
+          "why": "Учу ДРУГИХ — teach.",
+          "hint2": "Начни: I teach …"
+        },
+        {
+          "ru": "Дочь сама завязала шнурки — хвалишься.",
+          "en": "She learned to tie her shoes.",
+          "why": "Научилась сама — learn.",
+          "hint2": "Начни: She learned …"
+        },
+        {
+          "ru": "Друг просит показать, как работает программа.",
+          "en": "Can you teach me to use it?",
+          "why": "Учит ДРУГОЙ человек — teach.",
+          "hint2": "Начни: Can you teach …"
+        },
+        {
+          "ru": "Дед в шестьдесят освоил смартфон.",
+          "en": "My grandpa learned to use a smartphone.",
+          "why": "Освоил сам — learn.",
+          "hint2": "Начни: My grandpa …"
+        },
+        {
+          "ru": "Готовить тебя научила мама, не повар в кафе.",
+          "en": "My mom taught me to cook.",
+          "why": "Мама учила меня — teach (taught).",
+          "hint2": "Начни: My mom taught …"
+        }
+      ]
+    },
+    "a2.very_too": {
+      "pair": "very — очень (само по себе) / too — слишком (и это мешает)",
+      "phrases": [
+        {
+          "ru": "Взял кружку, а она обжигает — пить невозможно.",
+          "en": "The tea is too hot to drink.",
+          "why": "Слишком И мешает — too.",
+          "hint2": "Начни: The tea is …"
+        },
+        {
+          "ru": "Друг приготовил суп, тебе правда вкусно.",
+          "en": "The soup is very tasty.",
+          "why": "Просто сильно — very, помехи нет.",
+          "hint2": "Начни: The soup is …"
+        },
+        {
+          "ru": "Джинсы малы — не застёгиваются.",
+          "en": "These jeans are too small.",
+          "why": "Слишком и не подходит — too.",
+          "hint2": "Начни: These jeans …"
+        },
+        {
+          "ru": "Квартира дорогая, но ты ею доволен.",
+          "en": "The apartment is very expensive.",
+          "why": "Очень дорогая, но не «слишком» — very.",
+          "hint2": "Начни: The apartment …"
+        },
+        {
+          "ru": "Опаздываешь, а автобус ползёт — не успеваешь.",
+          "en": "The bus is moving too slowly.",
+          "why": "Слишком медленно для твоей цели — too.",
+          "hint2": "Начни: The bus is …"
+        },
+        {
+          "ru": "Ужин удался, хвалишь хозяйку.",
+          "en": "Thank you, it's very good.",
+          "why": "Просто очень — very.",
+          "hint2": "Начни: Thank you, …"
+        }
+      ]
+    },
+    "a2.also_either": {
+      "pair": "also — тоже (в утверждении) / either — тоже (в отрицании)",
+      "phrases": [
+        {
+          "ru": "Тебе нравится сериал, и жене тоже.",
+          "en": "My wife also likes this show.",
+          "why": "Утверждение — also.",
+          "hint2": "Начни: My wife also …"
+        },
+        {
+          "ru": "Ты не ешь суши, и брат не ест.",
+          "en": "My brother doesn't like sushi either.",
+          "why": "Отрицание — either в конце.",
+          "hint2": "Начни: My brother doesn't …"
+        },
+        {
+          "ru": "Он говорит по-английски и ещё по-немецки.",
+          "en": "He also speaks German.",
+          "why": "Утверждение, добавка — also.",
+          "hint2": "Начни: He also …"
+        },
+        {
+          "ru": "Ты не куришь, и друг твой не курит.",
+          "en": "I don't smoke and my friend doesn't either.",
+          "why": "Отрицание — either.",
+          "hint2": "Начни: I don't smoke …"
+        },
+        {
+          "ru": "Берёшь с собой воду и ещё бутерброды.",
+          "en": "I also want to take some sandwiches.",
+          "why": "Добавка в утверждении — also.",
+          "hint2": "Начни: I also want …"
+        },
+        {
+          "ru": "Автобусы сегодня не ходят, и такси не поймать.",
+          "en": "There are no buses today and no taxis either.",
+          "why": "Отрицание — either.",
+          "hint2": "Начни: There are no …"
+        }
+      ]
+    },
+    "a2.ago_before": {
+      "pair": "ago — назад (сколько прошло до сейчас) / before — раньше, до события",
+      "phrases": [
+        {
+          "ru": "Переехал в этот город два года назад.",
+          "en": "I moved to this city two years ago.",
+          "why": "«Сколько назад» — ago в конце.",
+          "hint2": "Начни: I moved …"
+        },
+        {
+          "ru": "Перед едой всегда моешь руки.",
+          "en": "Wash your hands before dinner.",
+          "why": "До события — before + слово.",
+          "hint2": "Начни: Wash your …"
+        },
+        {
+          "ru": "Спрашивают, когда вы виделись — неделю назад.",
+          "en": "We met a week ago.",
+          "why": "Сколько прошло — ago.",
+          "hint2": "Начни: We met …"
+        },
+        {
+          "ru": "Ты здесь впервые, раньше не был — говоришь об этом.",
+          "en": "I have never been here before.",
+          "why": "Раньше вообще — before в конце.",
+          "hint2": "Начни: I have never …"
+        },
+        {
+          "ru": "Познакомились в армии, это было десять лет назад.",
+          "en": "We met in the army ten years ago.",
+          "why": "Сколько прошло — ago.",
+          "hint2": "Начни: We met in …"
+        },
+        {
+          "ru": "Просишь позвонить до работы, пока не началось.",
+          "en": "Call me before work.",
+          "why": "До события — before.",
+          "hint2": "Начни: Call me …"
+        }
+      ]
+    },
+    "a2.will_goingto": {
+      "pair": "will — решил сейчас, обещание / be going to — уже решил, есть план",
+      "phrases": [
+        {
+          "ru": "Телефон звонит, руки заняты — «я отвечу».",
+          "en": "I'll answer it.",
+          "why": "Решил в секунду — will.",
+          "hint2": "Начни: I'll …"
+        },
+        {
+          "ru": "Купил билеты, летом летишь в Турцию — делишься.",
+          "en": "We're going to fly to Turkey in summer.",
+          "why": "План уже есть — going to.",
+          "hint2": "Начни: We're going to …"
+        },
+        {
+          "ru": "Друг просит помочь с переездом в субботу — обещаешь.",
+          "en": "I'll help you on Saturday.",
+          "why": "Обещание — will.",
+          "hint2": "Начни: I'll help …"
+        },
+        {
+          "ru": "Посмотрел цены и решил менять машину.",
+          "en": "I'm going to buy a new car.",
+          "why": "Намерение созрело — going to.",
+          "hint2": "Начни: I'm going to …"
+        },
+        {
+          "ru": "В дверь звонят, а ты только сел — «открою».",
+          "en": "I'll open the door.",
+          "why": "Спонтанно — will.",
+          "hint2": "Начни: I'll open …"
+        },
+        {
+          "ru": "Пятница занята: договорился с врачом.",
+          "en": "I'm going to see the doctor on Friday.",
+          "why": "Договорённость есть — going to.",
+          "hint2": "Начни: I'm going to …"
+        }
+      ]
+    },
+    "a2.this_that": {
+      "pair": "this — этот (рядом) / that — тот (далеко или уже было)",
+      "phrases": [
+        {
+          "ru": "Держишь новую кружку и показываешь другу.",
+          "en": "Look at this mug.",
+          "why": "Близко, в руках — this.",
+          "hint2": "Начни: Look at …"
+        },
+        {
+          "ru": "На фото вдалеке дом у озера — показываешь на него.",
+          "en": "That house near the lake is ours.",
+          "why": "Далеко — that.",
+          "hint2": "Начни: That house …"
+        },
+        {
+          "ru": "Книга на полке напротив — просишь подать.",
+          "en": "Can you pass me that book?",
+          "why": "Не рядом — that.",
+          "hint2": "Начни: Can you pass …"
+        },
+        {
+          "ru": "Вспоминаешь вчерашний тяжёлый день.",
+          "en": "That was a long day.",
+          "why": "Уже прошло — that.",
+          "hint2": "Начни: That was …"
+        },
+        {
+          "ru": "Стоишь с футболкой в руках — спрашиваешь размер побольше.",
+          "en": "Do you have this shirt in a bigger size?",
+          "why": "В руках — this.",
+          "hint2": "Начни: Do you have …"
+        },
+        {
+          "ru": "Вспоминаешь море прошлым летом.",
+          "en": "That was a great summer.",
+          "why": "Прошлое — that.",
+          "hint2": "Начни: That was a …"
+        }
+      ]
+    },
+    "a2.must_should": {
+      "pair": "must — обязан (правило, сам себе) / should — совет",
+      "phrases": [
+        {
+          "ru": "Температура, сам понимаешь: надо лежать.",
+          "en": "I must stay in bed today.",
+          "why": "Сильная обязанность — must.",
+          "hint2": "Начни: I must …"
+        },
+        {
+          "ru": "Друг плохо спит — даёшь совет.",
+          "en": "You should go to bed earlier.",
+          "why": "Совет — should.",
+          "hint2": "Начни: You should …"
+        },
+        {
+          "ru": "Паспорт истекает, менять обязательно — говоришь себе.",
+          "en": "I must renew my passport.",
+          "why": "Обязательно — must.",
+          "hint2": "Начни: I must renew …"
+        },
+        {
+          "ru": "Коллега устал, но берёт ещё смену — советуешь.",
+          "en": "You should take a break.",
+          "why": "Совет — should.",
+          "hint2": "Начни: You should take …"
+        },
+        {
+          "ru": "На работе правило: пропуск показывать всегда.",
+          "en": "You must show your pass at the entrance.",
+          "why": "Правило — must.",
+          "hint2": "Начни: You must show …"
+        },
+        {
+          "ru": "Сын собрался в горы в кедах — советуешь обувь получше.",
+          "en": "You should wear good shoes.",
+          "why": "Совет — should.",
+          "hint2": "Начни: You should wear …"
+        }
+      ]
+    },
+    "a2.let_make": {
+      "pair": "let — разрешать (let sb do) / make — заставлять (make sb do)",
+      "phrases": [
+        {
+          "ru": "Мама разрешила взять машину в субботу.",
+          "en": "My mom let me take the car.",
+          "why": "Разрешила — let, глагол без to.",
+          "hint2": "Начни: My mom let …"
+        },
+        {
+          "ru": "Начальник заставил всех остаться после работы.",
+          "en": "The boss made us stay late.",
+          "why": "Заставил — make, тоже без to.",
+          "hint2": "Начни: The boss made …"
+        },
+        {
+          "ru": "Врач не разрешил поднимать тяжёлое.",
+          "en": "The doctor didn't let me lift heavy things.",
+          "why": "Не разрешил — didn't let.",
+          "hint2": "Начни: The doctor didn't …"
+        },
+        {
+          "ru": "Реклама подтолкнула тебя купить эти кроссовки.",
+          "en": "The ad made me buy these sneakers.",
+          "why": "Заставила (не человек) — тоже make.",
+          "hint2": "Начни: The ad made …"
+        },
+        {
+          "ru": "Дети просят поиграть ещё полчаса — разрешаешь.",
+          "en": "Let the kids play a little longer.",
+          "why": "Разрешить — let.",
+          "hint2": "Начни: Let the kids …"
+        },
+        {
+          "ru": "Учитель не разрешает пользоваться телефоном на уроке.",
+          "en": "The teacher doesn't let us use our phones.",
+          "why": "Не разрешает — let.",
+          "hint2": "Начни: The teacher doesn't …"
+        }
+      ]
+    },
+    "a2.getup_wakeup": {
+      "pair": "wake up — проснуться / get up — встать с постели",
+      "phrases": [
+        {
+          "ru": "Будильник в шесть, а из кровати вылезаешь в полседьмого.",
+          "en": "I wake up at six but get up later.",
+          "why": "Проснуться ≠ встать — два глагола.",
+          "hint2": "Начни: I wake up …"
+        },
+        {
+          "ru": "Звонок из больницы поднял тебя в пять утра.",
+          "en": "The phone woke me up at five.",
+          "why": "Разбудили — wake up.",
+          "hint2": "Начни: The phone woke …"
+        },
+        {
+          "ru": "В субботу не спешишь — валяешься до десяти.",
+          "en": "I get up late on Saturday.",
+          "why": "Встаю с постели — get up.",
+          "hint2": "Начни: I get up …"
+        },
+        {
+          "ru": "Просыпаешься сам, за час до будильника.",
+          "en": "I usually wake up before the alarm.",
+          "why": "Проснулся сам — wake up.",
+          "hint2": "Начни: I usually …"
+        },
+        {
+          "ru": "Будильник прозвенел, ты его выключил и снова уснул.",
+          "en": "I woke up but I didn't get up.",
+          "why": "Проснулся, но не встал — оба нужны.",
+          "hint2": "Начни: I woke up but …"
+        },
+        {
+          "ru": "На работу в семь, поэтому подъём в шесть.",
+          "en": "I have to get up at six.",
+          "why": "Встать с постели — get up.",
+          "hint2": "Начни: I have to …"
+        }
+      ]
+    },
+    "a2.win_beat": {
+      "pair": "win (won) — выиграть матч, приз / beat — обыграть соперника",
+      "phrases": [
+        {
+          "ru": "Ваша команда взяла кубок в воскресенье.",
+          "en": "Our team won the cup on Sunday.",
+          "why": "Выиграли ТУРНИР — win.",
+          "hint2": "Начни: Our team won …"
+        },
+        {
+          "ru": "Матч закончился 3:1 в вашу пользу.",
+          "en": "We beat the other team three to one.",
+          "why": "Обыграли СОПЕРНИКА — beat.",
+          "hint2": "Начни: We beat …"
+        },
+        {
+          "ru": "В лотерею упало сто тысяч.",
+          "en": "He won a hundred thousand in the lottery.",
+          "why": "Выиграл ПРИЗ — win.",
+          "hint2": "Начни: He won …"
+        },
+        {
+          "ru": "Впервые обыграл друга в шахматы.",
+          "en": "I finally beat my friend at chess.",
+          "why": "Победил человека — beat.",
+          "hint2": "Начни: I finally beat …"
+        },
+        {
+          "ru": "Вы взяли финал — рассказываешь.",
+          "en": "We won the final.",
+          "why": "Выиграли МАТЧ — win.",
+          "hint2": "Начни: We won …"
+        },
+        {
+          "ru": "Сборная обыграла Канаду в финале.",
+          "en": "They beat Canada in the final.",
+          "why": "Обыграли КОМАНДУ — beat.",
+          "hint2": "Начни: They beat …"
+        }
+      ]
+    },
+    "a2.work_job": {
+      "pair": "work — работа (дело, объём, без артикля) / job — работа (место, с a)",
+      "phrases": [
+        {
+          "ru": "Спрашивают, где работаешь — в банке.",
+          "en": "I work at a bank.",
+          "why": "Работа как занятие — work, без a.",
+          "hint2": "Начни: I work …"
+        },
+        {
+          "ru": "Ищешь новую работу, старая надоела.",
+          "en": "I'm looking for a new job.",
+          "why": "Работа-место, исчисляемая — job.",
+          "hint2": "Начни: I'm looking …"
+        },
+        {
+          "ru": "Приходишь домой: сегодня дел невпроворот.",
+          "en": "I have a lot of work today.",
+          "why": "Работа-объём — work, без «ов».",
+          "hint2": "Начни: I have …"
+        },
+        {
+          "ru": "Друг нашёл хорошее место в офисе.",
+          "en": "He found a good job downtown.",
+          "why": "Конкретное место — job.",
+          "hint2": "Начни: He found …"
+        },
+        {
+          "ru": "За ужином не хочешь говорить о делах.",
+          "en": "I don't talk about work at dinner.",
+          "why": "Работа вообще — work.",
+          "hint2": "Начни: I don't talk …"
+        },
+        {
+          "ru": "Собеседование прошло, должность предложили.",
+          "en": "They offered me the job.",
+          "why": "Конкретная должность — job.",
+          "hint2": "Начни: They offered …"
+        }
+      ]
+    },
+    "a2.funny_fun": {
+      "pair": "funny — смешной / fun — весёлый, приятный",
+      "phrases": [
+        {
+          "ru": "Друг рассказал шутку, все хохочут.",
+          "en": "That's a funny joke.",
+          "why": "Вызывает смех — funny.",
+          "hint2": "Начни: That's a …"
+        },
+        {
+          "ru": "Выходные на море прошли отлично.",
+          "en": "The weekend was really fun.",
+          "why": "Хорошо и весело — fun.",
+          "hint2": "Начни: The weekend was …"
+        },
+        {
+          "ru": "Смотрели комедию, смеялись весь вечер.",
+          "en": "The movie was really funny.",
+          "why": "Смешной — funny.",
+          "hint2": "Начни: The movie was …"
+        },
+        {
+          "ru": "Играли в настольные игры — время пролетело.",
+          "en": "We had a lot of fun.",
+          "why": "Хорошо провели время — fun.",
+          "hint2": "Начни: We had …"
+        },
+        {
+          "ru": "Он странный и всё время шутит невпопад.",
+          "en": "He's a funny guy.",
+          "why": "Смешной человек — funny.",
+          "hint2": "Начни: He's a …"
+        },
+        {
+          "ru": "Работа нравится, потому что люди интересные.",
+          "en": "My job is fun.",
+          "why": "Нравится, интересно — fun.",
+          "hint2": "Начни: My job is …"
+        }
+      ]
+    },
+    "a2.live_stay": {
+      "pair": "live — жить постоянно / stay — жить временно",
+      "phrases": [
+        {
+          "ru": "Ты в этом городе с рождения.",
+          "en": "I live in this city.",
+          "why": "Постоянно — live.",
+          "hint2": "Начни: I live …"
+        },
+        {
+          "ru": "Приехал в Москву на три дня, ночуешь у брата.",
+          "en": "I'm staying with my brother this week.",
+          "why": "Временно — stay.",
+          "hint2": "Начни: I'm staying …"
+        },
+        {
+          "ru": "Спрашивают, где сестра — в Казани.",
+          "en": "My sister lives in Kazan.",
+          "why": "Постоянно — live (lives).",
+          "hint2": "Начни: My sister …"
+        },
+        {
+          "ru": "В отпуске ночевали в отеле у пляжа.",
+          "en": "We stayed at a hotel near the beach.",
+          "why": "Временно — stay.",
+          "hint2": "Начни: We stayed …"
+        },
+        {
+          "ru": "Родители в своём доме уже тридцать лет.",
+          "en": "My parents live in a country house.",
+          "why": "Постоянно, «загородный дом» — live.",
+          "hint2": "Начни: My parents …"
+        },
+        {
+          "ru": "В командировке жил в маленькой квартире.",
+          "en": "I stayed in a small apartment.",
+          "why": "Временно — stay.",
+          "hint2": "Начни: I stayed …"
+        }
+      ]
+    },
+    "a2.comeback_goback": {
+      "pair": "come back — вернуться СЮДА / go back — вернуться ТУДА",
+      "phrases": [
+        {
+          "ru": "Друг уезжает и обещает быть к ужину — ты ждёшь дома.",
+          "en": "He'll come back before dinner.",
+          "why": "Вернётся СЮДА — come back.",
+          "hint2": "Начни: He'll come back …"
+        },
+        {
+          "ru": "После обеда пошёл обратно в офис.",
+          "en": "I went back to the office after lunch.",
+          "why": "Ушёл ТУДА — go back.",
+          "hint2": "Начни: I went back …"
+        },
+        {
+          "ru": "Гость вернулся за зонтом.",
+          "en": "He came back for his umbrella.",
+          "why": "Вернулся СЮДА — come back.",
+          "hint2": "Начни: He came back …"
+        },
+        {
+          "ru": "Забыл ключи и пошёл обратно к машине.",
+          "en": "I went back to my car.",
+          "why": "Пошёл ТУДА — go back.",
+          "hint2": "Начни: I went back …"
+        },
+        {
+          "ru": "Мама ждёт к девяти — просит вернуться домой.",
+          "en": "Come back home by nine.",
+          "why": "Приди СЮДА — come back.",
+          "hint2": "Начни: Come back …"
+        },
+        {
+          "ru": "Отпуск кончился, пора обратно на работу.",
+          "en": "It's time to go back to work.",
+          "why": "Туда, откуда приехал — go back.",
+          "hint2": "Начни: It's time to …"
+        }
+      ]
+    },
+    "a2.travel_trip": {
+      "pair": "travel — путешествовать (глагол) / trip — поездка (существительное)",
+      "phrases": [
+        {
+          "ru": "Мечтаешь объехать полмира.",
+          "en": "I want to travel around the world.",
+          "why": "Действие — travel (глагол).",
+          "hint2": "Начни: I want to …"
+        },
+        {
+          "ru": "На выходные собираетесь в горы.",
+          "en": "We're planning a trip to the mountains.",
+          "why": "Поездка как вещь — trip.",
+          "hint2": "Начни: We're planning …"
+        },
+        {
+          "ru": "Любишь ездить поездом, самолёт не твой.",
+          "en": "I like to travel by train.",
+          "why": "Способ путешествий — travel.",
+          "hint2": "Начни: I like to …"
+        },
+        {
+          "ru": "Поездка в Питер заняла два дня.",
+          "en": "The trip to St. Petersburg took two days.",
+          "why": "Одна поездка — trip.",
+          "hint2": "Начни: The trip to …"
+        },
+        {
+          "ru": "Он много ездит по работе.",
+          "en": "He travels a lot for work.",
+          "why": "Ездит регулярно — travel (travels).",
+          "hint2": "Начни: He travels …"
+        },
+        {
+          "ru": "Рассказываешь про первую поездку за границу.",
+          "en": "My first trip abroad was to Turkey.",
+          "why": "Одна поездка — trip.",
+          "hint2": "Начни: My first trip …"
+        }
+      ]
+    },
+    "a2.play_do": {
+      "pair": "play — играть в игру с мячом, шахматы / do — заниматься йогой, карате, гимнастикой",
+      "phrases": [
+        {
+          "ru": "По воскресеньям гоняешь мяч с друзьями.",
+          "en": "I play soccer on Sundays.",
+          "why": "Игра с мячом — play.",
+          "hint2": "Начни: I play …"
+        },
+        {
+          "ru": "По утрам у тебя йога.",
+          "en": "I do yoga every morning.",
+          "why": "Йога — do, не play.",
+          "hint2": "Начни: I do yoga …"
+        },
+        {
+          "ru": "По субботам корт и ракетка.",
+          "en": "I play tennis on Saturdays.",
+          "why": "Игра с мячом — play.",
+          "hint2": "Начни: I play tennis …"
+        },
+        {
+          "ru": "Сын ходит на карате.",
+          "en": "My son does karate.",
+          "why": "Боевое искусство — do.",
+          "hint2": "Начни: My son does …"
+        },
+        {
+          "ru": "С детьми рубишься в шахматы.",
+          "en": "I play chess with my kids.",
+          "why": "Настольная игра — play.",
+          "hint2": "Начни: I play chess …"
+        },
+        {
+          "ru": "В школьной команде играешь в баскетбол.",
+          "en": "He plays basketball at school.",
+          "why": "Игра с мячом — play.",
+          "hint2": "Начни: He plays …"
+        }
+      ]
+    },
+    "a2.leave_forget": {
+      "pair": "leave (left) — оставить где-то / forget (forgot) — не помнить",
+      "phrases": [
+        {
+          "ru": "Оставил зонт в автобусе — пришёл домой мокрый.",
+          "en": "I left my umbrella on the bus.",
+          "why": "Оставил в МЕСТЕ — leave.",
+          "hint2": "Начни: I left …"
+        },
+        {
+          "ru": "Не помнишь, как зовут нового коллегу.",
+          "en": "I forgot his name.",
+          "why": "Не помню — forget.",
+          "hint2": "Начни: I forgot …"
+        },
+        {
+          "ru": "Ключи остались на столе в офисе.",
+          "en": "I left my keys at the office.",
+          "why": "Оставил в МЕСТЕ — leave.",
+          "hint2": "Начни: I left my keys …"
+        },
+        {
+          "ru": "Забыл про день рождения жены.",
+          "en": "I forgot my wife's birthday.",
+          "why": "Не помню — forget.",
+          "hint2": "Начни: I forgot my …"
+        },
+        {
+          "ru": "Документы остались в машине.",
+          "en": "I left the papers in the car.",
+          "why": "Оставил в МЕСТЕ — leave.",
+          "hint2": "Начни: I left the …"
+        },
+        {
+          "ru": "Пароль от банка вылетел из головы.",
+          "en": "I forgot my bank password.",
+          "why": "Не помню — forget.",
+          "hint2": "Начни: I forgot my …"
+        }
+      ]
     }
+  },
+  "decisions_89": {
+    "date": "02.11.2026",
+    "to_pairs": [
+      "very/too",
+      "also/either",
+      "ago/before",
+      "will/be going to",
+      "this/that",
+      "must/should",
+      "let/make"
+    ],
+    "to_cards": [
+      "some/any",
+      "much/many",
+      "a little/a few",
+      "for/since",
+      "past simple/present perfect",
+      "can/could"
+    ],
+    "dropped": [
+      "still/yet",
+      "hope/want",
+      "take a shower/have a shower"
+    ],
+    "note": "решение по 16 предложенным парам (п.89): 7 в пары, 6 в карточки, 3 выброшены"
   }
 }
