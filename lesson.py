@@ -40,8 +40,12 @@ LISTENING = "listening"
 # а проверяет, закрепился ли материал блока (см. §8 снимка проекта).
 CHECK = "check"
 MIXED = "mixed"                 # не используем в UI (совместимость данных)
+# Шаг 3 (02.11.2026): СЦЕНА — урок-диалог по жизненной ситуации (ресторан).
+# Реплики участника (официанта) ведёт ПРИЛОЖЕНИЕ: готовые вопросы берутся из
+# scenes.py по номеру шага, модель в сцене не зовётся совсем (вариант А).
+SCENE = "scene"
 
-KNOWN_TYPES = (SPEAKING, CHAT, LISTENING, CHECK, MIXED)
+KNOWN_TYPES = (SPEAKING, CHAT, LISTENING, CHECK, MIXED, SCENE)
 DEFAULT_TYPE = SPEAKING
 
 TYPE_LABELS = {
@@ -50,6 +54,7 @@ TYPE_LABELS = {
     LISTENING: "аудирование",
     CHECK: "проверка",
     MIXED: "смешанный",
+    SCENE: "сцена",
 }
 
 # Каналы ответа (наборы), по типам уроков.
@@ -97,6 +102,13 @@ TASK_DONE = "done"
 # От «fix» отличается только тем, КТО попросил повтор: там ошибка случилась
 # сейчас, здесь — пара «было -> стало» взята из базы ошибок (gaps.top_pair).
 TASK_DRILL = "drill"
+# Шаг 3 (02.11.2026): фаза СЦЕНЫ. Вопросы задаёт приложение (scenes.py),
+# ученик отвечает; шаг считается пройденным, когда отвечен его последний
+# вопрос. Задание урока = ШАГ сцены (6 шагов = 6 заданий).
+TASK_SCENE = "scene"
+# Сколько раз повторяем ОДИН вопрос сцены, если ответа на английском нет
+# (молчание или русский текст), прежде чем идти дальше с пометкой.
+SCENE_TRIES = 1
 
 # Что вернул Аналитик про ответ ученика (вариант Б, §36).
 ANSWER_CORRECT = "correct"      # ответ по заданию и без реальных ошибок
@@ -135,7 +147,9 @@ def allowed_inputs(lesson_type: Any) -> Set[str]:
     name = normalize_type(lesson_type)
     if name == CHAT:
         return set(_TEXT)
-    if name == MIXED:
+    if name in (MIXED, SCENE):
+        # сцена-пилот: на время проверки отвечаем и голосом, и текстом
+        # (решение ученика 02.11.2026), чтобы быстрее поймать баги
         return set(_VOICE) | set(_TEXT)
     # speaking / listening / check — только голос
     return set(_VOICE)
@@ -259,6 +273,21 @@ def _flat(text: Any) -> str:
     return " ".join("".join(keep).split())
 
 
+def _latin_words(text: Any) -> List[str]:
+    """Английские слова в ответе (латиница). Пусто — английского нет.
+
+    Нужно сцене: на вопрос официанта ученик может ответить по-русски или
+    молчанием — такой ответ не принимаем, вопрос повторяем (решение ученика:
+    сцена — это практика говорения, а не перевод).
+    """
+    words = []
+    for chunk in str(text or "").split():
+        word = "".join(ch for ch in chunk if ch.isalpha())
+        if word and all("a" <= ch.lower() <= "z" for ch in word):
+            words.append(word.lower())
+    return words
+
+
 def says_fix(student_text: Any, corrections) -> bool:
     """Ученик ПОВТОРИЛ исправление? Проверка без модели (вариант В, §36).
 
@@ -362,6 +391,16 @@ class LessonSession:
         self.drill_errors = 0        # промахов за весь дрилл
         self.drill_tries = 0         # промахов в ТЕКУЩЕЙ фразе
         self.drill_why = ""          # объяснение последней фразы
+        # Шаг 3: позиция в СЦЕНЕ (ресторан). Тексты вопросов — в scenes.py,
+        # здесь только «где мы стоим» и счётчики для итога.
+        self.scene_id = ""           # a2.restaurant ("" — это не сцена)
+        self.scene_step = 1          # номер шага, 1..N
+        self.scene_q = 0             # индекс вопроса ВНУТРИ шага (0..)
+        self.scene_counts = []       # type: List[int] вопросов в каждом шаге
+        self.scene_tries = 0         # осечек на ТЕКУЩЕМ вопросе
+        self.scene_answers = 0       # принятых ответов за сцену
+        self.scene_skipped = 0       # вопросов, брошенных после двух осечек
+        self.scene_step_skipped = 0  # брошенных вопросов В ТЕКУЩЕМ шаге
 
     # ---------- свойства ----------
     @property
@@ -767,6 +806,111 @@ class LessonSession:
             payload["drill_wrong"] = self.drill_wrong
         return payload
 
+    # ---------- сцена-диалог (шаг 3, 02.11.2026) ----------
+    def start_scene(self, scene_id: Any, counts=None) -> bool:
+        """Начать сцену: ШАГИ становятся заданиями урока (6 шагов = 6 заданий).
+
+        Вопросы и карточку роли даёт scenes.py — модель сюда не допускается
+        (вариант А: выдумкам неоткуда взяться).
+        """
+        if not self.is_active:
+            return False
+        rows = []
+        for value in (counts or []):
+            try:
+                number = int(value)
+            except (TypeError, ValueError):
+                continue
+            if number > 0:
+                rows.append(number)
+        if not str(scene_id or "").strip() or not rows:
+            return False
+        self.scene_id = str(scene_id).strip()
+        self.scene_counts = rows
+        self.scene_step = 1
+        self.scene_q = 0
+        self.scene_tries = 0
+        self.scene_answers = 0
+        self.scene_skipped = 0
+        self.scene_step_skipped = 0
+        self.tasks_total = len(rows)
+        self.tasks_done = 0
+        self.tasks_marked = 0
+        self.task_attempts = 0
+        self.task_phase = TASK_SCENE
+        return True
+
+    @property
+    def is_scene(self) -> bool:
+        """Урок идёт как СЦЕНА (диалог по жизненной ситуации)."""
+        return bool(self.scene_id)
+
+    @property
+    def scene_total_steps(self) -> int:
+        """Сколько шагов в сцене."""
+        return len(self.scene_counts)
+
+    def scene_check(self, text: Any) -> Dict[str, Any]:
+        """Разобрать ответ ученика в сцене (без модели).
+
+        Результаты:
+          ok        — ответ на английском принят, идём дальше;
+          retry     — пусто/по-русски: вопрос повторяем (SCENE_TRIES раз);
+          skip      — осечек больше, чем SCENE_TRIES: вопрос пропускаем;
+          off_topic — ученик спросил своё: мягко вернём к теме сцены.
+        """
+        said = _flat(text)
+        result = "ok"
+        if not said or not _latin_words(text):
+            self.scene_tries += 1
+            result = "retry" if self.scene_tries <= SCENE_TRIES else "skip"
+            if result == "skip":
+                # вопрос бросили: шаг засчитаем, но С ОГОВОРКОЙ
+                self.scene_skipped += 1
+                self.scene_step_skipped += 1
+        else:
+            self.scene_answers += 1
+            self.scene_tries = 0
+            if "?" in str(text or ""):
+                result = "off_topic"
+        return {"result": result, "step": self.scene_step,
+                "tries": self.scene_tries}
+
+    def scene_advance(self) -> Dict[str, Any]:
+        """Ответ принят: следующий вопрос шага или конец шага.
+
+        Шаг засчитывает ОКНО (_scene_credit), поэтому здесь только позиция.
+        """
+        rows = self.scene_counts or []
+        limit = rows[self.scene_step - 1] if 0 <= self.scene_step - 1 < len(rows) else 0
+        if self.scene_q + 1 < limit:
+            self.scene_q += 1
+            self.scene_tries = 0
+            return {"step_done": False, "step": self.scene_step}
+        return {"step_done": True, "step": self.scene_step}
+
+    def scene_credit(self, marked: Optional[bool] = None) -> bool:
+        """Засчитать ШАГ сцены и встать на первый вопрос следующего.
+
+        marked=None — решает САМ шаг: если в нём был брошенный вопрос, шаг
+        идёт с оговоркой (иначе ученик получал бы «чисто» за пропуск).
+        """
+        if not self.is_active or not self.has_tasks:
+            return False
+        if marked is None:
+            marked = self.scene_step_skipped > 0
+        self.tasks_done += 1
+        if marked:
+            self.tasks_marked += 1
+        self.scene_step_skipped = 0
+        self.scene_step += 1
+        self.scene_q = 0
+        self.scene_tries = 0
+        if self.all_tasks_done:
+            self.task_phase = TASK_DONE
+            self.finished = True
+        return True
+
     def finish(self) -> None:
         """Завершить занятие успешно (дошёл до конца)."""
         self.finished = True
@@ -790,6 +934,8 @@ class LessonSession:
         урок с LESSON_TASKS = 0 — по-прежнему реплики.
         """
         if self.has_tasks:
+            if self.is_scene:
+                return "Шаг %d/%d" % (self.task_index, self.tasks_total)
             return "Задание %d/%d" % (self.task_index, self.tasks_total)
         return "%d/%d" % (self.replies, self.reply_target)
     def state(self) -> Dict[str, Any]:

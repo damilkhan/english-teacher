@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "level": "A2",
+  "scenes": [
+    {
+      "id": "a2.restaurant",
+      "title": "At the Restaurant",
+      "title_ru": "В ресторане",
+      "lesson": "city/2.1",
+      "point": "city/point_2",
+      "card": {
+        "role": "waiter",
+        "ru": "Официант в небольшом американском ресторане. Его работа: принять заказ, принести еду и напитки, принести счёт, попрощаться. Говорит коротко и вежливо. Он НЕ друг гостю: про жизнь, семью, работу и планы не спрашивает — его дело столик и еда.",
+        "en": "You are the waiter in a small American restaurant. Your job is to take the order, bring the food and drinks, bring the bill and say goodbye. You speak short and polite. You are NOT a friend of the guest: you never ask about their life, family, job or plans — your job is the table and the food."
+      },
+      "steps": [
+        {
+          "n": 1,
+          "title": "Приветствие и посадка",
+          "questions": [
+            {"en": "Good evening! How many people are with you?", "hint": "сколько вас"},
+            {"en": "Would you like a table by the window?", "hint": "у окна?"},
+            {"en": "Here is your table. Can I get you something to drink?", "hint": "что-нибудь выпить?"}
+          ]
+        },
+        {
+          "n": 2,
+          "title": "Меню",
+          "questions": [
+            {"en": "Here is the menu. Would you like a few minutes?", "hint": "посмотреть меню?"},
+            {"en": "Are you ready to order?", "hint": "готовы заказать?"}
+          ]
+        },
+        {
+          "n": 3,
+          "title": "Заказ",
+          "questions": [
+            {"en": "What would you like to start with?", "hint": "с чего начнёте?"},
+            {"en": "And for the main course?", "hint": "горячее?"},
+            {"en": "Would you like soup or salad with that?", "hint": "суп или салат?"}
+          ]
+        },
+        {
+          "n": 4,
+          "title": "Принесли еду",
+          "questions": [
+            {"en": "Here is your food. Enjoy your meal!", "hint": "поблагодари"},
+            {"en": "Is everything all right with your food?", "hint": "всё в порядке?"},
+            {"en": "Would you like some more bread?", "hint": "ещё хлеба?"}
+          ]
+        },
+        {
+          "n": 5,
+          "title": "Десерт",
+          "questions": [
+            {"en": "Would you like to see the dessert menu?", "hint": "десерт?"}
+          ]
+        },
+        {
+          "n": 6,
+          "title": "Счёт и уход",
+          "questions": [
+            {"en": "Would you like anything else?", "hint": "ещё что-нибудь?"},
+            {"en": "Here is your bill. Card or cash?", "hint": "картой или наличными?"},
+            {"en": "Thank you. Have a nice evening!", "hint": "попрощайся"}
+          ]
+        }
+      ]
+    }
+  ]
+}
