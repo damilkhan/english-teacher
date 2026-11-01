@@ -858,8 +858,11 @@ class LessonSession:
         Результаты:
           ok        — ответ на английском принят, идём дальше;
           retry     — пусто/по-русски: вопрос повторяем (SCENE_TRIES раз);
-          skip      — осечек больше, чем SCENE_TRIES: вопрос пропускаем;
-          off_topic — ученик спросил своё: мягко вернём к теме сцены.
+          skip      — осечек больше, чем SCENE_TRIES: вопрос пропускаем.
+
+        Вопрос в ответе — ОБЫЧНЫЙ ответ: ученик мог пытаться сказать фразу и
+        ошибиться («are we two persons?»). Знак «?» больше ничего не решает:
+        ошибки ищет разбор в конце сцены, а не проверка знака.
         """
         said = _flat(text)
         result = "ok"
@@ -873,8 +876,6 @@ class LessonSession:
         else:
             self.scene_answers += 1
             self.scene_tries = 0
-            if "?" in str(text or ""):
-                result = "off_topic"
         return {"result": result, "step": self.scene_step,
                 "tries": self.scene_tries}
 

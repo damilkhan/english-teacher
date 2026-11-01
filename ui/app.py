@@ -2245,11 +2245,12 @@ class EnglishTeacherApp:
             print("⚠️ Сцена %s не прочиталась: %s" % (scene_id, exc))
             return ([], "")
 
-    def _scene_ask(self, session, prefix=""):
-        """Задать очередной вопрос сцены: вслух по-английски + подсказка в чате.
+    def _scene_ask(self, session):
+        """Задать очередной вопрос сцены: в чат и вслух, только по-английски.
 
-        Подсказка по-русски — в кавычках-ёлочках и жёлтым (span «warn»):
-        курсива в окне чата нет, а цвет есть (§43). Модель НЕ зовётся.
+        Русская подсказка («сколько вас») УБРАНА 03.11.2026: она мешала и
+        дублировала ховер-перевод. Формулировки в scenes_a2.json остаются.
+        Модель НЕ зовётся.
         """
         try:
             import scenes as scenes_mod
@@ -2263,15 +2264,7 @@ class EnglishTeacherApp:
                   % (session.scene_step, session.scene_q))
             return False
         english = str(item.get("en") or "").strip()
-        hint = str(item.get("hint") or "").strip()
-        body = str(prefix or "") + english
-        line = body
-        spans = []
-        if hint:
-            line = body + "\n«" + hint + "»"
-            start = len(body) + 2
-            spans = [(start, start + len(hint), "warn")]
-        self.add_message(self.teacher_name, line, spans=spans)
+        self.add_message(self.teacher_name, english)
         print("🎬 Сцена: шаг %d/%d, вопрос №%d"
               % (item.get("step"), item.get("of_steps"), item.get("number")))
         try:
@@ -2315,8 +2308,6 @@ class EnglishTeacherApp:
             return True
         if result == "skip":
             print("🎬 Сцена: вопрос пропущен — осечек %s" % res.get("tries"))
-        elif result == "off_topic":
-            print("🎬 Сцена: ученик ушёл в сторону — мягко возвращаю к теме")
         print("🎬 Сцена: ответ принят (%.40r)" % (text or ""))
         try:
             session.scene_note(question, text)  # в разбор — в КОНЦЕ сцены
@@ -2332,10 +2323,7 @@ class EnglishTeacherApp:
         if session.finished or session.all_tasks_done:
             self._scene_finish(session)
             return True
-        prefix = ""
-        if result == "off_topic":
-            prefix = "Good, we'll talk about that later.\n"
-        self._scene_ask(session, prefix=prefix)
+        self._scene_ask(session)
         return True
 
     def _scene_credit(self, session):

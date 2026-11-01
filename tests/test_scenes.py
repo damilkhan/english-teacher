@@ -144,8 +144,11 @@ check("молчание — повтор", probe.scene_check("").get("result") =
 probe, _ = new_scene_session()
 check("«yes» — это ответ", probe.scene_check("yes").get("result") == "ok")
 probe, _ = new_scene_session()
-check("встречный вопрос — ушли в сторону",
-      probe.scene_check("can I have some water?").get("result") == "off_topic")
+check("вопрос в ответе — ОБЫЧНЫЙ ответ, не «ушли в сторону»",
+      probe.scene_check("can I have some water?").get("result") == "ok")
+probe, _ = new_scene_session()
+check("«are we two persons?» — ответ (ошибку ловит разбор в конце)",
+      probe.scene_check("are we two persons?").get("result") == "ok")
 probe, _ = new_scene_session()
 check("ответ из русских букв и цифр — не зачёт",
       probe.scene_check("2 человека").get("result") == "retry")
@@ -195,8 +198,13 @@ check("перехват стоит ДО требования сервера",
       (_pos, _after))
 check("лог шага и номера вопроса",
       "🎬 Сцена: шаг %d/%d, вопрос №%d" in src)
-check("подсказка в кавычках-ёлочках", '"\\n«" + hint + "»"' in src)
-check("подсказка подсвечена (span warn)", 'spans = [(start, start + len(hint), "warn")]' in src)
+check("жёлтой подсказки в чате НЕТ (убрана 03.11.2026)",
+      '"«" + hint' not in src and "hint + \"»\"" not in src)
+check("вопрос сцены показывается только по-английски",
+      'add_message(self.teacher_name, english)' in src)
+check("формулировки подсказок в библиотеке ОСТАЛИСЬ (решение 84)",
+      '"hint"' in open(os.path.join(ROOT, "data", "scenes_a2.json"),
+                       encoding="utf-8").read())
 check("фото после сцены не дают",
       'if getattr(session, "is_scene", False):' in src)
 check("дрилл на сцене не запускается",
