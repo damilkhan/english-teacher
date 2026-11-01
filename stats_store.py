@@ -45,6 +45,13 @@ _SCHEMA = (
     " lesson TEXT NOT NULL DEFAULT '')",
     "CREATE INDEX IF NOT EXISTS idx_mistakes_rule ON mistakes(rule)",
     "CREATE INDEX IF NOT EXISTS idx_mistakes_date ON mistakes(date)",
+    # §55 шаг 2: «отработано». История ошибок (mistakes) НЕ удаляется —
+    # закрытое правило просто перестаёт быть пробелом.
+    "CREATE TABLE IF NOT EXISTS drill_state ("
+    " rule TEXT PRIMARY KEY,"
+    " streak INTEGER NOT NULL DEFAULT 0,"
+    " mastered_at TEXT NOT NULL DEFAULT '',"
+    " updated TEXT NOT NULL DEFAULT '')",
 )
 
 COLUMNS = ("date", "wrong", "correct", "note", "type", "rule", "source", "lesson")
@@ -220,3 +227,96 @@ def ensure_migrated(profile, user_id=None):
 def forget_migrated():
     """Забыть, кто уже переносился (нужно тестам и смене ученика)."""
     _migrated.clear()
+
+
+# =========================================================
+# «Отработано» (§55, шаг 2)
+# =========================================================
+# Правило библиотеки (например a2.lay_lie) закрывается, когда ученик сделал
+# подряд DRILL_MASTER_STREAK верных фраз без единой ошибки. Новая ошибка по
+# этому правилу снимает отметку: правило снова пробел.
+DRILL_MASTER_STREAK = 3
+
+
+def drill_state(user_id=None):
+    """{rule: {"streak", "mastered_at"}} — что уже отработано."""
+    out = {}
+    with _LOCK:
+        try:
+            conn = _connect(user_id)
+        except Exception as exc:
+            print("Статистика: база недоступна (%s)" % exc)
+            return out
+        try:
+            for row in conn.execute("SELECT rule, streak, mastered_at FROM drill_state"):
+                out[str(row["rule"])] = {"streak": int(row["streak"] or 0),
+                                         "mastered_at": str(row["mastered_at"] or "")}
+        except Exception as exc:
+            print("Статистика: состояние дрилла не прочитано (%s)" % exc)
+        finally:
+            conn.close()
+    return out
+
+
+def mastered_rules(user_id=None):
+    """Множество правил, которые больше НЕ считаются пробелом."""
+    return {rule for rule, item in drill_state(user_id).items()
+            if item.get("mastered_at")}
+
+
+def drill_ok(rule, step=1, need=DRILL_MASTER_STREAK, user_id=None):
+    """Верные фразы подряд: +step к серии, серия >= need → «отработано»."""
+    name = str(rule or "").strip()
+    if not name:
+        return {}
+    now = datetime.now().isoformat()
+    with _LOCK:
+        try:
+            conn = _connect(user_id)
+        except Exception as exc:
+            print("Статистика: база недоступна (%s)" % exc)
+            return {}
+        try:
+            row = conn.execute(
+                "SELECT streak, mastered_at FROM drill_state WHERE rule = ?",
+                (name,)).fetchone()
+            streak = int((row["streak"] if row else 0) or 0) + max(1, int(step or 1))
+            mastered = str((row["mastered_at"] if row else "") or "")
+            if streak >= int(need or DRILL_MASTER_STREAK) and not mastered:
+                mastered = now
+            conn.execute(
+                "INSERT OR REPLACE INTO drill_state (rule, streak, mastered_at,"
+                " updated) VALUES (?, ?, ?, ?)",
+                (name, streak, mastered, now))
+            conn.commit()
+            return {"rule": name, "streak": streak, "mastered_at": mastered}
+        except Exception as exc:
+            print("Статистика: отметка дрилла не записалась (%s)" % exc)
+            return {}
+        finally:
+            conn.close()
+
+
+def drill_fail(rule, user_id=None):
+    """Ошибка по правилу: серия обнулилась, отметка «отработано» снята."""
+    name = str(rule or "").strip()
+    if not name:
+        return {}
+    now = datetime.now().isoformat()
+    with _LOCK:
+        try:
+            conn = _connect(user_id)
+        except Exception as exc:
+            print("Статистика: база недоступна (%s)" % exc)
+            return {}
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO drill_state (rule, streak, mastered_at,"
+                " updated) VALUES (?, 0, '', ?)", (name, now))
+            conn.commit()
+            return {"rule": name, "streak": 0, "mastered_at": ""}
+        except Exception as exc:
+            print("Статистика: сброс отметки не удался (%s)" % exc)
+            return {}
+        finally:
+            conn.close()

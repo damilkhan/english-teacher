@@ -2180,6 +2180,21 @@ class EnglishTeacherApp:
             self._credit_task(session, "", marked=not clean)
         except Exception as exc:
             print("⚠️ Зачёт дрилла не прошёл: %s" % exc)
+        # §55 шаг 2: «отработано». Историю ошибок НЕ трогаем.
+        rule = str(getattr(session, "drill_rule", "") or "")
+        if rule:
+            try:
+                import stats_store
+                if clean:
+                    state = stats_store.drill_ok(rule, step=session.drill_total or 1)
+                    print("🏅 Правило отработано: %s (серия %s, отметка %s)"
+                          % (rule, state.get("streak"),
+                             state.get("mastered_at") or "пока нет"))
+                else:
+                    stats_store.drill_fail(rule)
+                    print("🎯 Правило осталось в работе: %s" % rule)
+            except Exception as exc:
+                print("⚠️ Отметка «отработано» не записалась: %s" % exc)
 
     def _credit_task_by_text(self, text):
         """Вариант В: ученик ПОВТОРИЛ исправление — засчитать задание сразу.

@@ -10,7 +10,8 @@
 #   3) мусор в списке не пишется, пустая пара «было/стало» не пишется;
 #   4) перенос старых записей из JSON-профиля — ОДИН раз, без дублей;
 #   5) clear() чистит таблицу;
-#   6) record_analysis пишет в ДВА места: JSON (с полем rule) и SQLite.
+#   6) record_analysis пишет в ДВА места: JSON (с полем rule) и SQLite;
+#   7) «отработано»: 3 верных подряд закрывают правило, ошибка снимает отметку.
 # =========================================================
 
 import os
@@ -200,6 +201,68 @@ def test_record_analysis_writes_both():
         check("в базе уже две записи", stats_store.count(uid) == 2, stats_store.count(uid))
 
 
+def test_drill_mastered():
+    print("\n[7] «Отработано»: серия верных фраз и снятие отметки (§55 шаг 2)")
+    import gaps
+    with temp_profile_dir():
+        check("сначала ничего не отработано", stats_store.drill_state(1) == {},
+              stats_store.drill_state(1))
+        stats_store.drill_ok("a2.lay_lie", user_id=1)
+        stats_store.drill_ok("a2.lay_lie", user_id=1)
+        state = stats_store.drill_state(1)
+        check("серия растёт", state.get("a2.lay_lie", {}).get("streak") == 2,
+              state)
+        check("до трёх — ещё не отработано",
+              stats_store.mastered_rules(1) == set(),
+              stats_store.mastered_rules(1))
+        stats_store.drill_ok("a2.lay_lie", user_id=1)
+        check("3 верных подряд — отработано",
+              "a2.lay_lie" in stats_store.mastered_rules(1),
+              stats_store.drill_state(1))
+        check("дата отметки записана",
+              bool(stats_store.drill_state(1)["a2.lay_lie"]["mastered_at"]))
+
+        print(" -- ошибка возвращает правило в работу")
+        stats_store.drill_fail("a2.lay_lie", user_id=1)
+        check("отметка снята", stats_store.mastered_rules(1) == set(),
+              stats_store.drill_state(1))
+        check("серия обнулилась",
+              stats_store.drill_state(1)["a2.lay_lie"]["streak"] == 0,
+              stats_store.drill_state(1))
+
+        print(" -- история ошибок при этом цела")
+        stats_store.add_mistakes([
+            {"wrong": "go to lay down", "correct": "go to lie down",
+             "rule": "word_choice"},
+            {"wrong": "eaten", "correct": "ate", "rule": "word_choice"},
+        ], user_id=1)
+        before = stats_store.count(1)
+        for _ in range(3):
+            stats_store.drill_ok("a2.lay_lie", user_id=1)
+        check("записи ошибок не удалены", stats_store.count(1) == before,
+              (before, stats_store.count(1)))
+
+        print(" -- карта пробелов: отработанная пара уходит")
+        rows = gaps.aggregate(user_id=1)
+        top = rows[0] if rows else {}
+        check("word_choice остался (есть второе слово)",
+              top.get("rule") == "word_choice", top)
+        check("оказалось 1, а не 2", top.get("count") == 1, top)
+        check("top_pair по отработанному правилу молчит",
+              gaps.top_pair(user_id=1) is None, gaps.top_pair(user_id=1))
+
+        print(" -- новая ошибка снимает отметку при разборе")
+        notes = profile_store.record_analysis(
+            {"move_type": "A", "move_status": "N",
+             "errors": [{"type": "grammar", "wrong": "lay down",
+                         "correct": "lie down", "rule": "word_choice"}]},
+            "lay down", user_id=1)
+        check("разбор записался", bool(notes), notes)
+        check("правило снова в работе", stats_store.mastered_rules(1) == set(),
+              stats_store.drill_state(1))
+        stats_store.clear(1)
+
+
 def main():
     test_paths()
     test_add_and_rows()
@@ -207,6 +270,7 @@ def main():
     test_migration()
     test_clear()
     test_record_analysis_writes_both()
+    test_drill_mastered()
     print("\n" + ("ВСЁ ПРОЙДЕНО" if not FAILED else "ПРОВАЛЕНО: %d" % len(FAILED)))
     for name in FAILED:
         print("  - " + name)

@@ -317,6 +317,18 @@ def record_analysis(analysis, user_text, jane_response="", user_id=None):
         except Exception as exc:
             print("Статистика: ошибки не записались (%s)" % exc)
 
+    # §55 шаг 2: новая ошибка по ОТРАБОТАННОМУ правилу возвращает его в работу
+    if stats_items and getattr(config, "GAPS_ENABLED", True):
+        try:
+            mastered = stats_store.mastered_rules(user_id)
+            for item in stats_items:
+                lib = gaps.library_rule(item.get("wrong"), item.get("correct"))
+                if lib and lib in mastered:
+                    stats_store.drill_fail(lib, user_id)
+                    print("🎯 Правило снова в работе: %s" % lib)
+        except Exception as exc:
+            print("Статистика: отметка «отработано» не снята (%s)" % exc)
+
     if recorded:
         notes.append("📝 *Разбор: %s/%s · ошибок %d*" % (move_type, move_status, recorded))
     return notes

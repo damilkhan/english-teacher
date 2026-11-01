@@ -22,6 +22,11 @@ from collections import Counter
 import config
 import stats_store
 
+try:                                   # библиотека смысловых пар (§55)
+    import phrases
+except Exception:                      # pragma: no cover
+    phrases = None
+
 # Закрытый список правил (модель своё придумать не может).
 RULES = ("past_simple", "aux_verb", "verb_form", "word_order", "article",
          "preposition", "plural", "spelling", "word_choice", "other")
@@ -257,6 +262,24 @@ def gap_threshold():
         return 2
 
 
+def library_rule(wrong, correct):
+    """Правило библиотеки для пары «было -> стало» (a2.lay_lie) или ''."""
+    if phrases is None:
+        return ""
+    try:
+        return phrases.rule_for_words(wrong, correct) or ""
+    except Exception:
+        return ""
+
+
+def mastered_ids(user_id=None):
+    """Правила библиотеки, которые ученик уже отработал (§55 шаг 2)."""
+    try:
+        return stats_store.mastered_rules(user_id)
+    except Exception:
+        return set()
+
+
 def aggregate(rows=None, user_id=None):
     """Свести записи по правилам: [( правило, сколько, примеры, даты ), …].
 
@@ -264,10 +287,18 @@ def aggregate(rows=None, user_id=None):
     правила, чтобы таблица не «прыгала» между перерисовками.
     """
     data = stats_store.rows(user_id) if rows is None else (rows or [])
+    # §55 шаг 2: отработанное правило пробелом больше не считается.
+    # Если записи передали СНАРУЖИ и ученик не назван — считаем как дали
+    # (отчёты и тесты видят ровно то, что положили).
+    done = mastered_ids(user_id) if (rows is None or user_id is not None) else set()
     buckets = {}
     for row in data:
         if not isinstance(row, dict):
             continue
+        if done:
+            lib = library_rule(row.get("wrong"), row.get("correct"))
+            if lib and lib in done:
+                continue          # фразы этого правила уже отработаны
         rule = normalize_rule(row.get("rule"))
         bucket = buckets.get(rule)
         if bucket is None:
@@ -334,6 +365,8 @@ def top_pair(user_id=None, rows=None, min_words=2, max_words=8):
                                            wrong, correct))
 
     limit = gap_threshold()
+    # §55 шаг 2: отработанные правила в дрилл больше не предлагаем
+    done_ids = mastered_ids(user_id)
     best = None                  # (сколько раз, правило, было, стало)
     for rule in sorted(pairs, key=lambda r: (-counts.get(r, 0), r)):
         if rule == "other" or counts.get(rule, 0) < limit:
@@ -341,6 +374,9 @@ def top_pair(user_id=None, rows=None, min_words=2, max_words=8):
         # внутри правила — фраза подлиннее (ближе к живой речи), потом свежая
         _size, _date, wrong, correct = sorted(
             pairs[rule], key=lambda it: (-it[0], it[1]))[0]
+        lib = library_rule(wrong, correct)
+        if lib and lib in done_ids:
+            continue             # эту пару ученик уже отработал
         best = (counts[rule], rule, wrong, correct)
         break
     if best is None:

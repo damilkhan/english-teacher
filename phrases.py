@@ -110,6 +110,11 @@ def _has(text: Any, word: str) -> bool:
     return re.search(pattern, low) is not None
 
 
+def has_word(text: Any, word: Any) -> bool:
+    """Публичная проверка «слово есть в тексте целым словом» (для lesson.py)."""
+    return _has(text, word)
+
+
 def rule_for_words(wrong: Any, correct: Any, level: str = "a2") -> Optional[str]:
     """Какое правило библиотеки стоит за парой «было -> стало».
 
