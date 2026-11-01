@@ -1436,17 +1436,31 @@ class EnglishTeacherApp:
         student_text — реплика ученика, с которой начался урок (её Джейн
         сначала услышит в затравке), auto — урок выбран самой Джейн по плану.
         """
+        # Шаг 3 (02.11.2026): сцена привязана к уроку КАРТЫ — отдельной кнопки
+        # нет (решение ученика). Нашли сцену — урок идёт как диалог «сцена».
+        scene_id = self._scene_for_lesson(data.get("id"))
+        scene_counts, scene_title = (self._scene_parts(scene_id) if scene_id
+                                     else ([], ""))
         session = self.lesson.start(
             lesson_id=data["id"], point_id=data.get("point_id"),
-            lesson_type=data.get("type"), title=data.get("title"),
+            lesson_type=(lesson_mod.SCENE if scene_id else data.get("type")),
+            title=data.get("title"),
             topic=data.get("topic"), block_number=data.get("block_number"),
             block_title=data.get("block_title"),
             reply_target=data.get("reply_target"), code=data.get("code"))
         if session is None:
             return None
 
-        # §55: первое задание — повтор ПРОШЛОЙ ошибки (если пробел есть)
-        self._start_mistake_drill(session)
+        if scene_id and session.start_scene(scene_id, scene_counts):
+            # сцена: ШАГИ становятся заданиями урока (6 шагов = 6 заданий)
+            print("🎬 Сцена: %s — %s (шагов %d, вопросов %d)"
+                  % (scene_id, scene_title or "", session.tasks_total,
+                     sum(scene_counts)))
+        else:
+            if scene_id:
+                print("⚠️ Сцена %s не началась — урок поведёт модель" % scene_id)
+            # §55: первое задание — повтор ПРОШЛОЙ ошибки (если пробел есть)
+            self._start_mistake_drill(session)
 
         # 🧪 ТЕСТ (временный): флаг-файл ставит урок на последний шаг
         if self._test_tail_flag():
@@ -1475,7 +1489,7 @@ class EnglishTeacherApp:
             pass
         self.info_bar.clear()
         opening = "🎓 Начинаем %s (%s)." % (
-            session.label(), lesson_mod.type_label(data.get("type")))
+            session.label(), lesson_mod.type_label(session.lesson_type))
         if auto:
             opening += "\n📚 По плану дальше — этот урок. Поехали!"
         if data.get("story"):
@@ -1485,6 +1499,12 @@ class EnglishTeacherApp:
                         "(даже перевода). Отвечай вслух по-английски. "
                         "Балл скажу в конце — %d из 10 нужно, чтобы сдать."
                         % (ru_text.questions(exam_mod.QUESTIONS), exam_mod.PASS_SCORE))
+        if session.is_scene:
+            # Сцена: по-русски можно — модель в сцене не зовётся, язык урока
+            # от русской строки не «переключается».
+            opening += ("\n🎬 Сцена: «%s». Я официант, ты гость. Отвечай "
+                        "по-английски вслух (можно и текстом). Шагов: %d."
+                        % (scene_title or session.scene_id, session.scene_total_steps))
         try:
             self.reactions.reset()          # новый урок — новый счёт стараний
         except Exception:
@@ -1506,10 +1526,14 @@ class EnglishTeacherApp:
         except Exception:
             pass
         self.lesson_bar.set_lesson(session.label(),
-                                   lesson_mod.type_label(data.get("type")),
+                                   lesson_mod.type_label(session.lesson_type),
                                    session.progress_text())
         self._apply_lesson_input_state(session)
         self._lesson_state("thinking")
+        if session.is_scene:
+            # вопросы задаёт ПРИЛОЖЕНИЕ: сервер (модель) не нужен вообще
+            self._scene_ask(session)
+            return session
         if self.server_ready:
             self._open_lesson_dialog(lesson_payload, student_text)
         else:
@@ -1770,6 +1794,10 @@ class EnglishTeacherApp:
         # приходит репликой преподавателя, ответ голосом или письмом.
         # Выгружаем ТОЛЬКО когда Вербот досказал: иначе фото и просьба
         # влезали посреди реплики/похвалы (баг 26.10.2026).
+        if getattr(session, "is_scene", False):
+            # сцена: фото-задание после неё не даём — пилот идёт без модели
+            print("🎬 Сцена закрыта: фото-задание пропущено")
+            return
         self._wait_for_speech(self._start_picture_task)
 
     # ---------- задание с картинкой ----------
@@ -2195,6 +2223,136 @@ class EnglishTeacherApp:
                     print("🎯 Правило осталось в работе: %s" % rule)
             except Exception as exc:
                 print("⚠️ Отметка «отработано» не записалась: %s" % exc)
+
+    # ---------------- сцена-пилот: диалог ведёт окно (шаг 3) ------------------
+    def _scene_for_lesson(self, lesson_id):
+        """Сцена, привязанная к уроку карты ("" — урок обычный)."""
+        if not getattr(config, "LESSON_SCENE", True):
+            return ""
+        try:
+            import scenes as scenes_mod
+            return scenes_mod.for_lesson(lesson_id)
+        except Exception as exc:
+            print("⚠️ Библиотека сцен недоступна: %s" % exc)
+            return ""
+
+    def _scene_parts(self, scene_id):
+        """(сколько вопросов в каждом шаге, название по-русски) для старта."""
+        try:
+            import scenes as scenes_mod
+            return (scenes_mod.counts(scene_id), scenes_mod.title(scene_id))
+        except Exception as exc:
+            print("⚠️ Сцена %s не прочиталась: %s" % (scene_id, exc))
+            return ([], "")
+
+    def _scene_ask(self, session, prefix=""):
+        """Задать очередной вопрос сцены: вслух по-английски + подсказка в чате.
+
+        Подсказка по-русски — в кавычках-ёлочках и жёлтым (span «warn»):
+        курсива в окне чата нет, а цвет есть (§43). Модель НЕ зовётся.
+        """
+        try:
+            import scenes as scenes_mod
+            item = scenes_mod.question(session.scene_id, session.scene_step,
+                                       session.scene_q)
+        except Exception as exc:
+            print("⚠️ Вопрос сцены не найден: %s" % exc)
+            return False
+        if not item:
+            print("⚠️ Вопрос сцены пуст: шаг %s, вопрос %s"
+                  % (session.scene_step, session.scene_q))
+            return False
+        english = str(item.get("en") or "").strip()
+        hint = str(item.get("hint") or "").strip()
+        body = str(prefix or "") + english
+        line = body
+        spans = []
+        if hint:
+            line = body + "\n«" + hint + "»"
+            start = len(body) + 2
+            spans = [(start, start + len(hint), "warn")]
+        self.add_message(self.teacher_name, line, spans=spans)
+        print("🎬 Сцена: шаг %d/%d, вопрос №%d"
+              % (item.get("step"), item.get("of_steps"), item.get("number")))
+        try:
+            self._say(english)          # вопрос — вслух, по-английски
+        except Exception:
+            pass
+        return True
+
+    def _scene_reply(self, text):
+        """Ответ ученика в сцене: проверяет ПРИЛОЖЕНИЕ, модель не зовём.
+
+        Возвращает True, если реплику забрала сцена (в модель она не уходит).
+        """
+        session = self.lesson.current()
+        if session is None or not getattr(session, "is_scene", False):
+            return False
+        if not session.is_active:
+            return False
+        try:
+            res = session.scene_check(text)
+        except Exception as exc:
+            print("⚠️ Ответ сцены не разобран: %s" % exc)
+            return False
+        result = res.get("result")
+        if result == "retry":
+            # молчание или русский: повторяем ТОТ ЖЕ вопрос, один раз
+            self.add_message(self.teacher_name,
+                             "🤏 Sorry, I didn't get that. Say it in English, "
+                             "please.")
+            print("🎬 Сцена: ответ не принят (%.40r)" % (text or ""))
+            self._scene_ask(session)
+            return True
+        if result == "skip":
+            print("🎬 Сцена: вопрос пропущен — осечек %s" % res.get("tries"))
+        elif result == "off_topic":
+            print("🎬 Сцена: ученик ушёл в сторону — мягко возвращаю к теме")
+        print("🎬 Сцена: ответ принят (%.40r)" % (text or ""))
+        try:
+            self._register_lesson_reply(text)   # реплика идёт в счёт урока
+        except Exception:
+            pass
+        step_done = bool(session.scene_advance().get("step_done"))
+        if step_done:
+            self._scene_credit(session)
+        if session.finished or session.all_tasks_done:
+            self._scene_finish(session)
+            return True
+        prefix = ""
+        if result == "off_topic":
+            prefix = "Good, we'll talk about that later.\n"
+        self._scene_ask(session, prefix=prefix)
+        return True
+
+    def _scene_credit(self, session):
+        """Засчитать ШАГ сцены: полоса урока, промпт (модель его не читает)."""
+        before = getattr(session, "tasks_marked", 0)
+        if not session.scene_credit():
+            return False
+        marked = getattr(session, "tasks_marked", 0) > before
+        print("✅ Сцена: шаг %d/%d засчитан%s"
+              % (session.tasks_done, session.tasks_total,
+                 " с оговоркой" if marked else ""))
+        self._sync_lesson_prompt(just_credited=True)
+        try:
+            self.lesson_bar.set_progress(session.progress_text())
+        except Exception:
+            pass
+        return True
+
+    def _scene_finish(self, session):
+        """Сцена пройдена: слово ученику и закрытие урока обычным путём."""
+        marked = getattr(session, "tasks_marked", 0)
+        line = ("🏁 Сцена пройдена: %d шагов из %d."
+                % (session.tasks_done, session.tasks_total))
+        if marked:
+            line += (" Шагов с оговоркой: %d — к ним вернёмся позже." % marked)
+        self.add_message(self.teacher_name, line)
+        print("🏁 Сцена закончена: %s, шагов %d/%d, с оговоркой %d, ответов %d"
+              % (session.scene_id, session.tasks_done, session.tasks_total,
+                 marked, getattr(session, "scene_answers", 0)))
+        self._close_lesson_after_credit()
 
     def _credit_task_by_text(self, text):
         """Вариант В: ученик ПОВТОРИЛ исправление — засчитать задание сразу.
@@ -3636,6 +3794,9 @@ class EnglishTeacherApp:
             if self._picture_reply(text):
                 return
 
+        # Шаг 3: в сцене ответ принимает приложение — модель не зовётся вовсе
+        if self._scene_reply(text):
+            return
         # §55: фразу дрилла принимает приложение — модель не нужна совсем
         if self._drill_reply(text):
             return

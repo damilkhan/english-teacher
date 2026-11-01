@@ -84,7 +84,13 @@ def summary_text(session, block_title: str = "") -> str:
     if tasks_total:
         # §36: у урока с заданиями главное — сколько ЗАДАНИЙ сдано, реплики
         # остаются ниже справочно (решение ученика 26.10.2026).
-        line = "📋 Заданий: %d из %d" % (tasks_done, tasks_total)
+        # Шаг 3: у сцены задания — это ШАГИ диалога, так и пишем
+        try:
+            scene = bool(getattr(session, "is_scene", False))
+        except Exception:
+            scene = False
+        line = ("📋 Шагов: %d из %d" if scene else "📋 Заданий: %d из %d") % (
+            tasks_done, tasks_total)
         if tasks_marked:
             line += " (с подсказкой: %d)" % tasks_marked
         lines.append(line)
