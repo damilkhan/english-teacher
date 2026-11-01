@@ -25,6 +25,11 @@ import difflib
 import logging
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+try:
+    import phrases                    # библиотека смысловых пар (§55)
+except Exception:                         # pragma: no cover
+    phrases = None
+
 _log = logging.getLogger(__name__)
 
 # ---------- типы уроков ----------
@@ -107,6 +112,9 @@ REPEAT_RATIO = 0.80
 # отличаются одной буквой (похожесть 0.87), поэтому обычный порог засчитывал
 # бы ученику сам его старый неверный вариант.
 DRILL_RATIO = 0.95
+# §55 шаг 2: сколько раз даём попробовать ОДНУ фразу дрилла, прежде чем
+# показать эталон и пойти дальше (иначе ученик застревает на фразе).
+DRILL_TRIES = 2
 
 
 # =========================================================
@@ -345,6 +353,15 @@ class LessonSession:
         # §55: материал дрилла (что ученик сказал раньше и как надо)
         self.drill_wrong = ""
         self.drill_correct = ""
+        # §55 шаг 2: дрилл на 3 фразы из библиотеки (phrases.py).
+        # Пустая очередь = старый режим «одна фраза» (совместимость).
+        self.drill_rule = ""         # id правила библиотеки (a2.lay_lie)
+        self.drill_phrases = []      # type: List[Dict[str, Any]]
+        self.drill_words = []        # type: List[str]
+        self.drill_pos = 0           # сколько фраз уже сделано
+        self.drill_errors = 0        # промахов за весь дрилл
+        self.drill_tries = 0         # промахов в ТЕКУЩЕЙ фразе
+        self.drill_why = ""          # объяснение последней фразы
 
     # ---------- свойства ----------
     @property
@@ -472,14 +489,16 @@ class LessonSession:
         return self.state()
 
     # ---------- задания (§36) ----------
-    def start_drill(self, wrong, correct) -> bool:
-        """Первое задание урока = ДРИЛЛ по прошлой ошибке ученика (§55).
+    def start_drill(self, wrong, correct, phrases=None, rule_id="",
+                    words=None) -> bool:
+        """Первое задание урока = ДРИЛЛ по ПРОШЛОЙ ошибке ученика (§55).
 
-        Материал готовый: пара «было -> стало» из базы ошибок
-        (gaps.top_pair). Модель ничего не придумывает — она только просит
-        повторить. Зачёт по тексту (says_fix), как в фазе «fix», поэтому
-        ложных зачётов нет. Урок остаётся про свою тему: дрилл занимает
-        ТОЛЬКО первое из трёх заданий.
+        Два режима:
+          * одна фраза (phrases пусто) — старый: материал «было -> стало»,
+            зачёт по тексту через says_fix;
+          * очередь фраз (1..3) — шаг 2: фразы берутся из библиотеки
+            phrases.py, модель их НЕ сочиняет, ответ проверяет drill_check().
+        Дрилл занимает ТОЛЬКО первое из трёх заданий урока.
         """
         want = str(correct or "").strip()
         if not want or not self.is_active or not self.has_tasks:
@@ -489,7 +508,133 @@ class LessonSession:
         self.repeat_expected = [want]
         self.task_phase = TASK_DRILL
         self.task_attempts = 0
+        self.drill_rule = str(rule_id or "").strip()
+        self.drill_words = [str(w).strip() for w in (words or []) if str(w).strip()]
+        queue = []                                   # type: List[Dict[str, str]]
+        for item in (phrases or []):
+            if isinstance(item, dict) and item.get("en"):
+                queue.append({"ru": str(item.get("ru") or "").strip(),
+                              "en": str(item.get("en") or "").strip(),
+                              "why": str(item.get("why") or "").strip(),
+                              "hint2": str(item.get("hint2") or "").strip()})
+        self.drill_phrases = queue
+        self.drill_pos = 0
+        self.drill_errors = 0
+        self.drill_tries = 0
+        self.drill_why = ""
+        if queue:
+            self.repeat_expected = [queue[0]["en"]]
         return True
+
+    # ---------- дрилл на 3 фразы (§55, шаг 2) ----------
+    @property
+    def drill_total(self) -> int:
+        """Сколько фраз в дрилле (0 — режим одной фразы)."""
+        return len(self.drill_phrases)
+
+    @property
+    def drill_clean(self) -> bool:
+        """Все фразы сделаны и промахов не было ни одного."""
+        return (self.drill_total > 0 and self.drill_errors == 0
+                and self.drill_pos >= self.drill_total)
+
+    def drill_current(self) -> Optional[Dict[str, Any]]:
+        """Фраза, которую спрашиваем СЕЙЧАС (None — дрилл кончился)."""
+        if not self.drill_phrases or self.drill_pos >= len(self.drill_phrases):
+            return None
+        item = self.drill_phrases[self.drill_pos]
+        return {"ru": item["ru"], "en": item["en"], "why": item["why"],
+                "hint2": item["hint2"], "index": self.drill_pos + 1,
+                "total": len(self.drill_phrases)}
+
+    def _drill_other_side(self, said: str, want: str) -> bool:
+        """Сказал ДРУГУЮ сторону пары? (Lay вместо lie — ошибка, решение 79.)
+
+        Смотрим только ключевые слова правила: одно есть в эталоне, другое —
+        в сказанном. Без похожести на эталон это просто промах, а не подмена.
+        """
+        if phrases is None:
+            return False
+        words = [w for w in (self.drill_words or []) if w]
+        if len(words) < 2:
+            return False
+        for mine in words:
+            if not phrases.has_word(want, mine):
+                continue
+            for other in words:
+                if other == mine:
+                    continue
+                if (phrases.has_word(said, other)
+                        and not phrases.has_word(said, mine)):
+                    return True
+        return False
+
+    def _drill_report(self, result: str, phrase: Dict[str, Any],
+                      why: str = "") -> Dict[str, Any]:
+        """Что окну делать дальше: result, текущая фраза, следующая, why."""
+        total = self.drill_total
+        finished = self.drill_pos >= total
+        nxt = self.drill_current()
+        self.repeat_expected = [nxt["en"]] if nxt else []
+        self.drill_why = why
+        return {"result": result, "phrase": phrase, "next": nxt, "why": why,
+                "done": min(self.drill_pos, total), "total": total,
+                "next_index": (nxt["index"] if nxt else total),
+                "errors": self.drill_errors, "finished": finished}
+
+    def drill_check(self, student_text: Any) -> Dict[str, Any]:
+        """Ответ на текущую фразу дрилла, без модели.
+
+        Результаты:
+          ok          — сказал эталон, перешли к следующей фразе;
+          wrong_side  — сказал ДРУГУЮ сторону пары: объяснение сразу (79);
+          miss        — не то; после DRILL_TRIES промахов — reveal;
+          reveal      — попытки кончились, эталон показан, идём дальше;
+          done        — все фразы сделаны.
+        """
+        phrase = self.drill_current()
+        if phrase is None:
+            return {"result": "none", "finished": self.drill_total > 0}
+        said = _flat(student_text)
+        want = _flat(phrase.get("en"))
+        old = _flat(self.drill_wrong)
+
+        def fail(kind: str, why: str = "") -> Dict[str, Any]:
+            self.drill_errors += 1
+            self.drill_tries += 1
+            if self.drill_tries >= DRILL_TRIES:
+                # попытки кончились: эталон показываем и идём дальше,
+                # иначе ученик застревает на одной фразе
+                self.drill_pos += 1
+                self.drill_tries = 0
+                return self._drill_report("reveal", phrase, why or phrase["why"])
+            return self._drill_report(kind, phrase, why)
+
+        if not said:
+            return fail("miss")
+        # 1) эталон целиком прозвучал — зачёт
+        if want and want in said:
+            self.drill_pos += 1
+            self.drill_tries = 0
+            done = self.drill_pos >= self.drill_total
+            return self._drill_report("done" if done else "ok", phrase,
+                                      phrase["why"])
+        # 2) старая ошибка внутри фразы — зачёта нет (§55, DRILL_RATIO)
+        if old and old in said:
+            return fail("miss")
+        # 3) ДРУГАЯ сторона пары — ошибка и объяснение сразу (решение 79).
+        #    Проверяем ДО порога похожести: «Lay down…» и «Lie down…»
+        #    отличаются одним словом и иначе прошли бы как верный ответ.
+        ratio = difflib.SequenceMatcher(None, said, want).ratio()
+        if ratio >= 0.60 and self._drill_other_side(said, want):
+            return fail("wrong_side", phrase["why"])
+        if ratio >= DRILL_RATIO:
+            self.drill_pos += 1
+            self.drill_tries = 0
+            done = self.drill_pos >= self.drill_total
+            return self._drill_report("done" if done else "ok", phrase,
+                                      phrase["why"])
+        return fail("miss")
 
     def expect_repeat(self, corrections) -> List[str]:
         """Запомнить, что просили повторить, и перейти в фазу «ждём повтор».
@@ -514,6 +659,10 @@ class LessonSession:
     def says_fix(self, student_text: Any) -> bool:
         """Ученик повторил исправление? Мгновенно, без модели (вариант В)."""
         if self.task_phase not in (TASK_FIX, TASK_DRILL):
+            return False
+        if self.task_phase == TASK_DRILL and self.drill_phrases:
+            # дрилл на 3 фразы: ответ принимает окно (drill_check),
+            # случайная реплика в чате задание НЕ засчитывает
             return False
         if self.task_phase == TASK_DRILL and self.drill_correct:
             # §55: фраза должна совпасть почти точно, а СТАРАЯ ошибка в
@@ -563,6 +712,10 @@ class LessonSession:
         self.task_attempts = 0
         self.drill_wrong = ""
         self.drill_correct = ""
+        self.drill_phrases = []
+        self.drill_pos = 0
+        self.drill_tries = 0
+        self.drill_why = ""
         if self.all_tasks_done:
             self.task_phase = TASK_DONE
             self.finished = True

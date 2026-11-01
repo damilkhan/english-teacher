@@ -12,7 +12,8 @@
 #   5) промпт урока знает про дрилл и не теряет ветку закрытия урока;
 #   6) окно: метод есть, вызывается на старте урока, фаза учтена;
 #   7) флаг config.LESSON_MISTAKE_DRILL выключает дрилл;
-#   8) разбор БЕЗ ошибок засчитывает задание в любой фазе (§36, живой баг 31.10).
+#   8) разбор БЕЗ ошибок засчитывает задание в любой фазе (§36, живой баг 31.10);
+#   9) дрилл на 3 фразы из библиотеки: ok / wrong_side / reveal / done.
 # =========================================================
 
 import os
@@ -296,6 +297,92 @@ def test_no_errors_credits():
     check("итог урока вызван", len(app.lesson.on_finished) == 1,
           len(app.lesson.on_finished))
 
+def test_three_phrases():
+    print("\n[9] Дрилл на 3 фразы из библиотеки (шаг 2)")
+    import phrases
+    trio = phrases.pick("a2.lay_lie", 0)
+    check("в тройке 3 фразы", len(trio) == 3, len(trio))
+    session = new_session()
+    ok = session.start_drill(WRONG, RIGHT, phrases=trio, rule_id="a2.lay_lie",
+                             words=["lay", "lie"])
+    check("дрилл на 3 фразы принят", ok is True)
+    check("сколько фраз — столько и ждём", session.drill_total == 3,
+          session.drill_total)
+    current = session.drill_current()
+    check("спрашиваем первую", current and current["index"] == 1, current)
+    check("подсказка — ситуация по-русски", bool(current["ru"]), current)
+    check("ждут эталон первой фразы",
+          session.repeat_expected == [trio[0]["en"]], session.repeat_expected)
+
+    print(" -- верный ответ")
+    res = session.drill_check(trio[0]["en"])
+    check("ответ засчитан", res["result"] == "ok", res["result"])
+    check("перешли ко второй", res["next"] and res["next"]["index"] == 2, res)
+    check("why показан после ответа", bool(res["why"]), res)
+    check("ошибок 0", res["errors"] == 0, res["errors"])
+
+    print(" -- другая сторона пары = ошибка сразу")
+    own = session.drill_current()
+    check("вторая фраза про lay", "lay" in own["en"].lower(), own["en"])
+    said = own["en"].lower().replace("lay", "lie", 1)
+    res = session.drill_check(said)
+    check("узнали другую сторону пары", res["result"] == "wrong_side",
+          res["result"])
+    check("why сразу", bool(res["why"]), res)
+    check("с фразы не сдвинулись", res["done"] == 1, res["done"])
+    check("ошибка посчитана", res["errors"] == 1, res["errors"])
+
+    print(" -- вторая попытка верна")
+    res = session.drill_check(own["en"])
+    check("засчитано со второй попытки", res["result"] == "ok", res["result"])
+    res = session.drill_check(session.drill_current()["en"])
+    check("третья фраза закрыла дрилл", res["result"] == "done", res["result"])
+    check("дрилл закончен", res["finished"] is True, res)
+    check("с промахом — не «чисто»", session.drill_clean is False)
+    check("ждать больше нечего", session.repeat_expected == [],
+          session.repeat_expected)
+
+    print(" -- чистая тройка")
+    clean = new_session()
+    clean.start_drill(WRONG, RIGHT, phrases=trio, rule_id="a2.lay_lie",
+                      words=["lay", "lie"])
+    for item in trio:
+        clean.drill_check(item["en"])
+    check("3 из 3 без промахов", clean.drill_clean is True,
+          (clean.drill_pos, clean.drill_errors))
+
+    print(" -- две осечки = показываем эталон")
+    stuck = new_session()
+    stuck.start_drill(WRONG, RIGHT, phrases=trio, rule_id="a2.lay_lie",
+                      words=["lay", "lie"])
+    stuck.drill_check("no idea")
+    res = stuck.drill_check("still no idea")
+    check("после двух промахов — reveal", res["result"] == "reveal",
+          res["result"])
+    check("эталон в ответе есть", bool(res["phrase"]["en"]), res)
+    check("идём дальше", res["next"] and res["next"]["index"] == 2, res)
+
+    print(" -- очередь ведёт окно, а не чат")
+    check("says_fix в дрилле на 3 фразы молчит",
+          stuck.says_fix(trio[0]["en"]) is False)
+    check("старая ошибка внутри фразы — промах",
+          new_session().start_drill(WRONG, RIGHT, phrases=trio,
+                                    rule_id="a2.lay_lie",
+                                    words=["lay", "lie"]) or True)
+    probe = new_session()
+    probe.start_drill(WRONG, RIGHT, phrases=trio, rule_id="a2.lay_lie",
+                      words=["lay", "lie"])
+    res = probe.drill_check("go to lay down")
+    check("фраза со старой ошибкой не зачтена", res["result"] == "miss",
+          res["result"])
+
+    print(" -- зачёт задания после дрилла")
+    state = stuck.credit_task("", marked=True)
+    check("задание 1 из 3 засчитано", state.get("tasks_done") == 1, state)
+    check("очередь очищена", stuck.drill_phrases == [] and stuck.drill_pos == 0,
+          (stuck.drill_phrases, stuck.drill_pos))
+
+
 def main():
     test_start_drill()
     test_credit_by_text()
@@ -305,6 +392,7 @@ def main():
     test_window()
     test_flag_and_picker()
     test_no_errors_credits()
+    test_three_phrases()
     print("\n" + ("ВСЁ ПРОЙДЕНО" if not FAILED else "ПРОВАЛЕНО: %d" % len(FAILED)))
     for name in FAILED:
         print("  - " + name)
