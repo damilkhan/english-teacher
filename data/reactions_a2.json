@@ -332,6 +332,15 @@
             "en": "We are ready"
           }
         ]
+      },
+      "words": {
+        "minutes": "Take your time. I'll come back in a few minutes.",
+        "minute": "Take your time. I'll come back in a few minutes.",
+        "a moment": "Sure. I'll come back in a moment.",
+        "moment": "Sure. I'll come back in a moment.",
+        "we are ready": "Great. What would you like to start with?",
+        "ready": "Great. What would you like to start with?",
+        "let me look": "Take your time. I'll be right back."
       }
     },
     "ready": {
@@ -354,6 +363,13 @@
             "en": "Can I have the menu again?"
           }
         ]
+      },
+      "words": {
+        "minute": "OK. Take your time.",
+        "minutes": "OK. Take your time.",
+        "more time": "OK. Take your time.",
+        "menu again": "Of course. Here is the menu.",
+        "menu": "Of course. Here is the menu."
       }
     },
     "starter": {
@@ -424,7 +440,7 @@
         ],
         "end": [
           {
-            "ru": "спасибо",
+            "ru": "пожалуйста",
             "en": "please"
           }
         ],
@@ -571,6 +587,10 @@
             "en": "Both, please"
           }
         ]
+      },
+      "words": {
+        "both": "Both. Good choice. Is that all?",
+        "both please": "Both. Good choice. Is that all?"
       }
     },
     "thanks": {
@@ -609,6 +629,15 @@
             "en": "No, the food is cold"
           }
         ]
+      },
+      "words": {
+        "delicious": "I'm glad you like it!",
+        "tasty": "I'm glad you like it!",
+        "everything is fine": "Very good. I'm glad you like it.",
+        "all good": "Very good. I'm glad you like it.",
+        "fine": "Very good. I'm glad you like it.",
+        "very good": "I'm glad you like it.",
+        "great": "I'm glad you like it."
       }
     },
     "bread": {
@@ -761,7 +790,10 @@
         "goodbye": "Have a nice evening!",
         "see you": "See you!",
         "good night": "Good night!",
-        "thanks for": "You're welcome. Thank you!"
+        "thanks for": "You're welcome. Thank you!",
+        "have a nice evening": "You too! Thank you.",
+        "nice evening": "You too! Thank you.",
+        "good evening": "Good evening!"
       },
       "chips": {
         "short": [
@@ -932,6 +964,9 @@
             "en": "I'm just looking"
           }
         ]
+      },
+      "words": {
+        "just looking": "No problem. Take your time."
       }
     },
     "shop_size": {
@@ -1059,6 +1094,11 @@
             "en": "Any colour"
           }
         ]
+      },
+      "words": {
+        "any colour": "OK, I'll pick a nice one for you.",
+        "any color": "OK, I'll pick a nice one for you.",
+        "any": "OK, I'll pick a nice one for you."
       }
     },
     "shop_like": {
@@ -1101,6 +1141,12 @@
             "en": "Do you have another colour?"
           }
         ]
+      },
+      "words": {
+        "another colour": "Yes, we have it in blue and black.",
+        "another color": "Yes, we have it in blue and black.",
+        "other colours": "Yes, we have it in blue and black.",
+        "other colors": "Yes, we have it in blue and black."
       }
     },
     "shop_try": {
@@ -1221,6 +1267,10 @@
             "en": "Is there a discount?"
           }
         ]
+      },
+      "words": {
+        "expensive": "I understand. We have cheaper ones too.",
+        "too expensive": "I understand. We have cheaper ones too."
       }
     },
     "shop_take": {
@@ -1233,7 +1283,9 @@
       "words": {
         "take it": "Great! How would you like to pay?",
         "i will take it": "Great! How would you like to pay?",
-        "take them": "Great! How would you like to pay?"
+        "take them": "Great! How would you like to pay?",
+        "think about it": "OK. Take your time.",
+        "think": "OK. Take your time."
       },
       "chips": {
         "short": [
@@ -1382,7 +1434,9 @@
         "bye": "Have a nice day!",
         "goodbye": "Have a nice day!",
         "see you": "See you! Goodbye!",
-        "good night": "Good night!"
+        "good night": "Good night!",
+        "have a nice day": "Thank you! You too!",
+        "nice day": "Thank you! You too!"
       },
       "chips": {
         "short": [
