@@ -70,6 +70,9 @@ class Fake:
         self.spoken.append(question)
         return True
 
+    def _replay_after(self, mark):
+        return None
+
     def _scene_credit(self, session):
         return session.scene_credit()
 
@@ -124,8 +127,8 @@ f = Fake(s)
 f._scene_reply("sorry, latte")
 check("переспрос словами слота",
       f.lines[:1] == ["Sorry, what would you like to drink?"], f.lines[:2])
-check("тот же вопрос задан снова",
-      f.asks == ["Here is your table. Can I get you something to drink?"], f.asks)
+check("вопрос НЕ задан второй раз (он внутри переспроса)",
+      f.asks == [], f.asks)
 check("шаг не сдвинулся", (s.scene_step, s.scene_q) == (1, 2),
       (s.scene_step, s.scene_q))
 f._scene_reply("sorry, latte")
