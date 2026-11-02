@@ -18,51 +18,111 @@
           "n": 1,
           "title": "Приветствие и посадка",
           "questions": [
-            {"en": "Good evening! How many people are with you?", "hint": "сколько вас"},
-            {"en": "Would you like a table by the window?", "hint": "у окна?"},
-            {"en": "Here is your table. Can I get you something to drink?", "hint": "что-нибудь выпить?"}
+            {
+              "en": "Good evening! How many people are with you?",
+              "hint": "сколько вас",
+              "slot": "people"
+            },
+            {
+              "en": "Would you like a table by the window?",
+              "hint": "у окна?",
+              "slot": "table"
+            },
+            {
+              "en": "Here is your table. Can I get you something to drink?",
+              "hint": "что-нибудь выпить?",
+              "slot": "drink"
+            }
           ]
         },
         {
           "n": 2,
           "title": "Меню",
           "questions": [
-            {"en": "Here is the menu. Would you like a few minutes?", "hint": "посмотреть меню?"},
-            {"en": "Are you ready to order?", "hint": "готовы заказать?"}
+            {
+              "en": "Here is the menu. Would you like a few minutes to look at it?",
+              "hint": "посмотреть меню?",
+              "slot": "menu"
+            },
+            {
+              "en": "Are you ready to order?",
+              "hint": "готовы заказать?",
+              "slot": "ready"
+            }
           ]
         },
         {
           "n": 3,
           "title": "Заказ",
           "questions": [
-            {"en": "What would you like to start with?", "hint": "с чего начнёте?"},
-            {"en": "And for the main course?", "hint": "горячее?"},
-            {"en": "Would you like soup or salad with that?", "hint": "суп или салат?"}
+            {
+              "en": "What would you like to start with?",
+              "hint": "с чего начнёте?",
+              "slot": "starter"
+            },
+            {
+              "en": "And for the main course?",
+              "hint": "горячее?",
+              "slot": "main"
+            },
+            {
+              "en": "Would you like soup or salad with that?",
+              "hint": "суп или салат?",
+              "slot": "side"
+            }
           ]
         },
         {
           "n": 4,
           "title": "Принесли еду",
           "questions": [
-            {"en": "Here is your food. Enjoy your meal!", "hint": "поблагодари"},
-            {"en": "Is everything all right with your food?", "hint": "всё в порядке?"},
-            {"en": "Would you like some more bread?", "hint": "ещё хлеба?"}
+            {
+              "en": "Here is your food. Enjoy your meal!",
+              "hint": "поблагодари",
+              "slot": "thanks"
+            },
+            {
+              "en": "Is everything all right with your food?",
+              "hint": "всё в порядке?",
+              "slot": "food_ok"
+            },
+            {
+              "en": "Would you like some more bread?",
+              "hint": "ещё хлеба?",
+              "slot": "bread"
+            }
           ]
         },
         {
           "n": 5,
           "title": "Десерт",
           "questions": [
-            {"en": "Would you like to see the dessert menu?", "hint": "десерт?"}
+            {
+              "en": "Would you like to see the dessert menu?",
+              "hint": "десерт?",
+              "slot": "dessert"
+            }
           ]
         },
         {
           "n": 6,
           "title": "Счёт и уход",
           "questions": [
-            {"en": "Would you like anything else?", "hint": "ещё что-нибудь?"},
-            {"en": "Here is your bill. Card or cash?", "hint": "картой или наличными?"},
-            {"en": "Thank you. Have a nice evening!", "hint": "попрощайся"}
+            {
+              "en": "Would you like anything else?",
+              "hint": "ещё что-нибудь?",
+              "slot": "anything"
+            },
+            {
+              "en": "Here is your bill. Card or cash?",
+              "hint": "картой или наличными?",
+              "slot": "payment"
+            },
+            {
+              "en": "Thank you. Have a nice evening!",
+              "hint": "попрощайся",
+              "slot": "goodbye"
+            }
           ]
         }
       ]

@@ -1,0 +1,408 @@
+{
+  "level": "a2",
+  "note": "ОБЩИЕ слова и шаблоны реакций на уровень A2. Один файл на все сцены. Скриптов на фразы ученика НЕТ (решение 100). Код только читает: слова -> намерение -> шаблон из данных.",
+  "words": {
+    "yes": [
+      "yes",
+      "yeah",
+      "yep",
+      "sure",
+      "ok",
+      "okay",
+      "alright",
+      "of course",
+      "certainly",
+      "gladly"
+    ],
+    "no": [
+      "no",
+      "nope",
+      "nothing",
+      "not",
+      "never"
+    ],
+    "thanks": [
+      "thank",
+      "thanks",
+      "thx"
+    ],
+    "bill": [
+      "bill",
+      "check",
+      "pay"
+    ],
+    "toilet": [
+      "toilet",
+      "bathroom",
+      "restroom",
+      "wc"
+    ],
+    "repeat": [
+      "sorry",
+      "again",
+      "repeat",
+      "pardon"
+    ],
+    "dontknow": [
+      "don't know",
+      "dont know",
+      "no idea",
+      "not sure",
+      "i don't know"
+    ],
+    "recommend": [
+      "recommend",
+      "suggest",
+      "advice"
+    ],
+    "whatyouhave": [
+      "what do you have",
+      "what have you got",
+      "what is there",
+      "what kind"
+    ],
+    "howmuch": [
+      "how much",
+      "how many dollars",
+      "price"
+    ],
+    "complaint": [
+      "cold",
+      "hot",
+      "wrong",
+      "bad",
+      "dirty",
+      "burnt",
+      "raw",
+      "salty",
+      "sweet",
+      "sour",
+      "not fresh",
+      "not good",
+      "don't like",
+      "dont like",
+      "too long",
+      "not tasty"
+    ],
+    "goodbye": [
+      "bye",
+      "goodbye",
+      "see you",
+      "good night"
+    ]
+  },
+  "numbers": {
+    "1": "One",
+    "2": "Two",
+    "3": "Three",
+    "4": "Four",
+    "5": "Five",
+    "6": "Six",
+    "7": "Seven",
+    "8": "Eight",
+    "9": "Nine",
+    "10": "Ten",
+    "one": "One",
+    "two": "Two",
+    "three": "Three",
+    "four": "Four",
+    "five": "Five",
+    "six": "Six",
+    "seven": "Seven",
+    "eight": "Eight",
+    "nine": "Nine",
+    "ten": "Ten",
+    "alone": "One",
+    "just me": "One",
+    "just myself": "One",
+    "only me": "One",
+    "two of us": "Two",
+    "three of us": "Three",
+    "with my wife": "Two",
+    "with my friend": "Two",
+    "with a friend": "Two",
+    "me and my wife": "Two",
+    "me and my friend": "Two",
+    "and my friend": "Two",
+    "my friend and me": "Two",
+    "with my family": "Three"
+  },
+  "universal": {
+    "yes": "Yes, sure.",
+    "no": "No problem.",
+    "thanks": "You're welcome.",
+    "dontknow": "No problem. Take your time.",
+    "repeat": "Sorry, could you say that again?",
+    "bill": "Here is your bill.",
+    "toilet": "It's over there, on the right.",
+    "complaint": "I'm sorry about that. I'll take it back to the kitchen.",
+    "recommend": "I recommend the chicken. It's very good.",
+    "have": "We have beer, wine, juice and coffee.",
+    "price": "It's about ten dollars."
+  },
+  "slots": {
+    "people": {
+      "ask": "How many people are with you?",
+      "numbers": true,
+      "echo_one": "Just one? Right this way, please.",
+      "echo": "{num} people? Right this way, please.",
+      "yes": "This way, please.",
+      "no": "Let me find you a table.",
+      "fallback": "Sorry, how many of you are there?"
+    },
+    "table": {
+      "ask": "Would you like a table by the window?",
+      "items": {
+        "window": "by the window",
+        "by the window": "by the window",
+        "corner": "in the corner",
+        "outside": "outside",
+        "terrace": "on the terrace",
+        "table": "this table"
+      },
+      "echo": "{item}? Good choice. This way, please.",
+      "yes": "This way, please. Here is your table.",
+      "no": "OK, this table is fine. Right this way, please."
+    },
+    "drink": {
+      "ask": "Something to drink?",
+      "items": {
+        "beer": "beer",
+        "wine": "wine",
+        "water": "water",
+        "juice": "juice",
+        "coffee": "coffee",
+        "tea": "tea",
+        "cola": "cola",
+        "coke": "cola",
+        "lemonade": "lemonade",
+        "milk": "milk",
+        "soda": "soda",
+        "milkshake": "milkshake",
+        "champagne": "champagne"
+      },
+      "echo_one": "One {item}, coming up.",
+      "echo": "{n} {item_plural}, coming up.",
+      "yes": "What would you like? We have beer, wine, juice and coffee.",
+      "no": "No problem. Just water, then?",
+      "have": "beer, wine, juice, coffee, tea and cola",
+      "recommend": "I recommend our lemonade. It's very good.",
+      "price": "Coffee is three dollars, beer is five dollars.",
+      "fallback": "Sorry, what would you like to drink?",
+      "plurals": {
+        "beer": "beers",
+        "wine": "wines",
+        "water": "waters",
+        "juice": "juices",
+        "coffee": "coffees",
+        "tea": "teas",
+        "cola": "colas",
+        "lemonade": "lemonades",
+        "milk": "milks",
+        "soda": "sodas",
+        "milkshake": "milkshakes"
+      }
+    },
+    "menu": {
+      "ask": "Would you like a few minutes to look at the menu?",
+      "yes": "Take your time. I'll come back in a few minutes.",
+      "no": "OK. What would you like to start with?"
+    },
+    "ready": {
+      "ask": "Are you ready to order?",
+      "yes": "Great. What would you like to start with?",
+      "no": "Take your time. I'll come back in a few minutes.",
+      "dontknow": "No problem. Take your time. I'll come back in a few minutes."
+    },
+    "starter": {
+      "ask": "What would you like to start with?",
+      "items": {
+        "soup": "soup",
+        "salad": "salad",
+        "bread": "bread",
+        "cheese": "cheese",
+        "shrimp": "shrimps",
+        "prawns": "shrimps",
+        "onion rings": "onion rings",
+        "rings": "onion rings",
+        "wings": "chicken wings",
+        "garlic bread": "garlic bread"
+      },
+      "echo": "{item} to start. Very good.",
+      "yes": "What would you like? We have soup, salad, onion rings and garlic bread.",
+      "no": "No starter? OK. And for the main course?",
+      "have": "soup, salad, onion rings and garlic bread",
+      "recommend": "I recommend the onion rings. They're very good.",
+      "price": "Soup is five dollars, salad is six dollars.",
+      "fallback": "Sorry, what would you like to start with?",
+      "plurals": {
+        "soup": "soups",
+        "salad": "salads",
+        "bread": "breads",
+        "cheese": "cheese",
+        "onion rings": "onion rings",
+        "wings": "chicken wings",
+        "garlic bread": "garlic bread",
+        "shrimps": "shrimps"
+      }
+    },
+    "main": {
+      "ask": "And for the main course?",
+      "items": {
+        "steak": "steak",
+        "chicken": "chicken",
+        "fish": "fish",
+        "pizza": "pizza",
+        "pasta": "pasta",
+        "burger": "a burger",
+        "hamburger": "a burger",
+        "rice": "rice",
+        "fries": "fries",
+        "sandwich": "a sandwich",
+        "eggs": "eggs",
+        "pancakes": "pancakes",
+        "seafood": "seafood"
+      },
+      "echo": "{item} for the main course. Good choice.",
+      "yes": "What would you like? We have steak, chicken, fish, pizza and pasta.",
+      "no": "OK. And to drink with it?",
+      "have": "steak, chicken, fish, pizza and pasta",
+      "recommend": "I recommend the steak. It's our best dish.",
+      "price": "The steak is twenty dollars, the chicken is fourteen.",
+      "fallback": "Sorry, what would you like for the main course?",
+      "plurals": {
+        "steak": "steaks",
+        "chicken": "chicken",
+        "fish": "fish",
+        "pizza": "pizzas",
+        "pasta": "pasta",
+        "burger": "burgers",
+        "rice": "rice",
+        "fries": "fries",
+        "sandwich": "sandwiches",
+        "eggs": "eggs",
+        "pancakes": "pancakes"
+      }
+    },
+    "side": {
+      "ask": "Would you like soup or salad with that?",
+      "items": {
+        "soup": "soup",
+        "salad": "salad",
+        "fries": "fries",
+        "potatoes": "potatoes",
+        "rice": "rice",
+        "vegetables": "vegetables"
+      },
+      "echo": "With {item}. Very good.",
+      "yes": "Soup or salad?",
+      "no": "No side dish. OK, that's all.",
+      "have": "soup, salad, fries, potatoes and rice",
+      "plurals": {
+        "soup": "soups",
+        "salad": "salads",
+        "fries": "fries",
+        "potatoes": "potatoes",
+        "rice": "rice",
+        "vegetables": "vegetables"
+      }
+    },
+    "thanks": {
+      "thanks": "You're welcome. Enjoy your meal!",
+      "yes": "You're welcome. Enjoy your meal!"
+    },
+    "food_ok": {
+      "ask": "Is everything all right with your food?",
+      "yes": "Very good. I'm glad you like it.",
+      "no": "Oh, I'm sorry! I'll take it back to the kitchen.",
+      "thanks": "You're welcome. Enjoy your meal!"
+    },
+    "bread": {
+      "ask": "Would you like some more bread?",
+      "yes": "Here you are. More bread for you.",
+      "no": "No more bread. OK.",
+      "thanks": "You're welcome."
+    },
+    "dessert": {
+      "ask": "Would you like to see the dessert menu?",
+      "items": {
+        "cake": "cake",
+        "ice": "ice cream",
+        "ice cream": "ice cream",
+        "tiramisu": "tiramisu",
+        "pie": "pie",
+        "chocolate": "chocolate",
+        "fruit": "fruit",
+        "coffee": "coffee",
+        "tea": "tea"
+      },
+      "echo": "{item}, then. Very good.",
+      "yes": "Here is the dessert menu. Our cake is very good.",
+      "no": "No dessert. Would you like the bill?",
+      "have": "cake, ice cream, pie and fruit",
+      "recommend": "I recommend the cake with ice cream. It's very good.",
+      "price": "Cake is six dollars, ice cream is five dollars.",
+      "plurals": {
+        "cake": "cakes",
+        "ice cream": "ice creams",
+        "tiramisu": "tiramisu",
+        "pie": "pies",
+        "chocolate": "chocolates",
+        "fruit": "fruit",
+        "coffee": "coffees",
+        "tea": "teas"
+      }
+    },
+    "anything": {
+      "ask": "Would you like anything else?",
+      "items": {
+        "beer": "beer",
+        "water": "water",
+        "coffee": "coffee",
+        "tea": "tea",
+        "bread": "bread",
+        "cake": "cake",
+        "dessert": "dessert"
+      },
+      "echo": "One {item}, coming up.",
+      "yes": "What would you like?",
+      "no": "OK. Here is your bill.",
+      "plurals": {
+        "beer": "beers",
+        "water": "waters",
+        "coffee": "coffees",
+        "tea": "teas",
+        "bread": "breads",
+        "cake": "cakes",
+        "dessert": "desserts"
+      }
+    },
+    "payment": {
+      "ask": "Card or cash?",
+      "items": {
+        "card": "by card",
+        "cash": "in cash",
+        "credit": "by card",
+        "debit": "by card",
+        "visa": "by card",
+        "mastercard": "by card"
+      },
+      "echo": "{item}. Fine, thank you.",
+      "yes": "By card? Fine, thank you.",
+      "no": "OK, no problem. Thank you.",
+      "fallback": "Sorry, will you pay by card or in cash?"
+    },
+    "goodbye": {
+      "thanks": "Thank you. Have a nice evening!",
+      "yes": "Have a nice evening!",
+      "no": "Have a nice evening!",
+      "words": {
+        "bye": "Have a nice evening!",
+        "goodbye": "Have a nice evening!",
+        "see you": "See you!",
+        "good night": "Good night!",
+        "thanks for": "You're welcome. Thank you!"
+      }
+    }
+  }
+}
