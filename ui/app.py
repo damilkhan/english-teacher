@@ -3844,6 +3844,10 @@ class EnglishTeacherApp:
         if panel is not None and panel.is_open:
             panel.accept_text(text)
             return
+        # СЦЕНА (03.11.2026): распознанное НЕ уходит в чат само — кладём в поле.
+        # Ученик видит, что услышал STT, правит и жмёт «Отправить» (или Enter).
+        if self._scene_draft(text):
+            return
         # первая реплика голосом тоже запускает урок (до проверки языка)
         if self._maybe_start_auto_lesson(text, "Вы (голос)"):
             return
@@ -3856,6 +3860,32 @@ class EnglishTeacherApp:
             return
         self.add_message("Вы (голос)", text)
         self._handle_text(text)
+
+    def _scene_draft(self, text):
+        """Сцена: показать распознанное В ПОЛЕ, а не отправлять молча.
+
+        Ученик (03.11.2026): сперва вижу, что услышал STT; верно — «Отправить»
+        (или Enter), неверно — правлю руками или стираю и говорю заново.
+        Так ошибка распознавания не отнимает ответ, и разбору есть что брать.
+        Возвращает True, если текст ушёл в поле.
+        """
+        ctrl = getattr(self, "lesson", None)
+        try:
+            session = ctrl.current() if ctrl is not None else None
+        except Exception:
+            session = None
+        if session is None or not session.is_active or not session.is_scene:
+            return False
+        if not str(text or "").strip():
+            return False
+        try:
+            self.input_bar.set_text(text)
+            self.input_bar.focus_input()
+            print("📝 Сцена: распознано %.40r — в поле на проверку" % text)
+        except Exception as exc:
+            print("⚠️ Сцена: черновик в поле не показан: %s" % exc)
+            return False
+        return True
 
     def _on_server_state(self, state, message):
         self.server_state = state
