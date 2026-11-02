@@ -403,6 +403,349 @@
         "good night": "Good night!",
         "thanks for": "You're welcome. Thank you!"
       }
+    },
+    "shop_help": {
+      "ask": "Can I help you?",
+      "items": {
+        "jacket": "jacket",
+        "coat": "coat",
+        "shirt": "shirt",
+        "t-shirt": "t-shirt",
+        "tshirt": "t-shirt",
+        "jeans": "jeans",
+        "trousers": "trousers",
+        "pants": "pants",
+        "dress": "dress",
+        "skirt": "skirt",
+        "sweater": "sweater",
+        "jumper": "sweater",
+        "shoes": "shoes",
+        "boots": "boots",
+        "hat": "hat",
+        "cap": "cap",
+        "bag": "bag",
+        "scarf": "scarf"
+      },
+      "echo_one": "{item}? This way, please.",
+      "echo": "{num} {item_plural}? This way, please.",
+      "plurals": {
+        "jacket": "jackets",
+        "coat": "coats",
+        "shirt": "shirts",
+        "t-shirt": "t-shirts",
+        "jeans": "jeans",
+        "trousers": "trousers",
+        "pants": "pants",
+        "dress": "dresses",
+        "skirt": "skirts",
+        "sweater": "sweaters",
+        "shoes": "shoes",
+        "boots": "boots",
+        "hat": "hats",
+        "cap": "caps",
+        "bag": "bags",
+        "scarf": "scarves"
+      },
+      "yes": "Good. What are you looking for?",
+      "no": "No problem. Call me if you need anything.",
+      "thanks": "You're welcome.",
+      "have": "We have jackets, shirts, jeans and shoes.",
+      "recommend": "I recommend this jacket. It's very good.",
+      "price": "Jackets are forty dollars, shirts are twenty.",
+      "bill": "You can pay at the cash desk over there.",
+      "complaint": "I'm sorry about that. What's wrong with it?",
+      "fallback": "Sorry, how can I help you?",
+      "words": {
+        "just looking": "No problem. Take your time.",
+        "look around": "No problem. Take your time."
+      }
+    },
+    "shop_item": {
+      "ask": "What are you looking for?",
+      "items": {
+        "jacket": "jacket",
+        "coat": "coat",
+        "shirt": "shirt",
+        "t-shirt": "t-shirt",
+        "tshirt": "t-shirt",
+        "jeans": "jeans",
+        "trousers": "trousers",
+        "pants": "pants",
+        "dress": "dress",
+        "skirt": "skirt",
+        "sweater": "sweater",
+        "jumper": "sweater",
+        "shoes": "shoes",
+        "boots": "boots",
+        "hat": "hat",
+        "cap": "cap",
+        "bag": "bag",
+        "scarf": "scarf"
+      },
+      "echo_one": "{item}? Over here, please.",
+      "echo": "{num} {item_plural}? Over here, please.",
+      "plurals": {
+        "jacket": "jackets",
+        "coat": "coats",
+        "shirt": "shirts",
+        "t-shirt": "t-shirts",
+        "dress": "dresses",
+        "skirt": "skirts",
+        "sweater": "sweaters",
+        "hat": "hats",
+        "cap": "caps",
+        "bag": "bags",
+        "scarf": "scarves"
+      },
+      "yes": "Everything is here. Look, please.",
+      "no": "OK. Look around, please.",
+      "have": "We have jackets, shirts, jeans and shoes.",
+      "recommend": "I recommend this jacket. It's very good.",
+      "price": "From twenty to sixty dollars.",
+      "bill": "You can pay at the cash desk over there.",
+      "complaint": "I'm sorry about that. What's wrong with it?",
+      "fallback": "Sorry, what would you like to buy?"
+    },
+    "shop_size": {
+      "ask": "What size do you wear?",
+      "items": {
+        "30": "30",
+        "32": "32",
+        "34": "34",
+        "36": "36",
+        "38": "38",
+        "40": "40",
+        "42": "42",
+        "44": "44",
+        "46": "46",
+        "48": "48",
+        "50": "50",
+        "small": "small",
+        "medium": "medium",
+        "large": "large",
+        "extra large": "extra large",
+        "xl": "XL",
+        "xxl": "XXL",
+        "s": "S",
+        "m": "M",
+        "l": "L",
+        "thirty eight": "38",
+        "forty": "40",
+        "forty two": "42",
+        "forty four": "44",
+        "forty six": "46",
+        "forty eight": "48",
+        "fifty": "50"
+      },
+      "echo_one": "Size {item}. Here you are.",
+      "echo": "Size {item}. Here you are.",
+      "yes": "Medium? Here you are.",
+      "no": "Let me find your size.",
+      "thanks": "You're welcome.",
+      "have": "We have small, medium, large and extra large.",
+      "recommend": "Take medium. It's the most common size.",
+      "price": "This one is forty dollars.",
+      "fallback": "Sorry, what size do you wear? Small, medium or large?"
+    },
+    "shop_colour": {
+      "ask": "What colour would you like?",
+      "items": {
+        "black": "black",
+        "white": "white",
+        "blue": "blue",
+        "red": "red",
+        "green": "green",
+        "grey": "grey",
+        "gray": "grey",
+        "brown": "brown",
+        "yellow": "yellow",
+        "pink": "pink",
+        "orange": "orange",
+        "beige": "beige"
+      },
+      "echo_one": "In {item}. Here you are.",
+      "echo": "In {item}. Here you are.",
+      "yes": "This one, then. In black.",
+      "no": "OK. We have it in other colours too.",
+      "thanks": "You're welcome.",
+      "have": "We have it in black, white, blue and red.",
+      "recommend": "Black is the best choice.",
+      "price": "The same price, forty dollars.",
+      "fallback": "Sorry, what colour would you like?"
+    },
+    "shop_like": {
+      "ask": "Do you like it?",
+      "items": {
+        "black": "black",
+        "white": "white",
+        "blue": "blue",
+        "red": "red",
+        "green": "green",
+        "grey": "grey",
+        "gray": "grey",
+        "brown": "brown",
+        "yellow": "yellow",
+        "pink": "pink",
+        "orange": "orange",
+        "beige": "beige"
+      },
+      "echo_one": "In {item}? Good choice.",
+      "echo": "In {item}? Good choice.",
+      "yes": "Great! Would you like to try it on?",
+      "no": "No problem. We have it in other colours.",
+      "thanks": "You're welcome.",
+      "recommend": "Take the black one. It looks very good.",
+      "price": "It costs forty dollars.",
+      "complaint": "I'm sorry. What don't you like about it?",
+      "fallback": "Sorry, do you like this one?"
+    },
+    "shop_try": {
+      "ask": "Would you like to try it on?",
+      "yes": "The changing room is over there, on the right.",
+      "no": "OK. Do you want to take it?",
+      "thanks": "You're welcome.",
+      "price": "It costs forty dollars.",
+      "fallback": "Sorry, do you want to try it on?"
+    },
+    "shop_fit": {
+      "ask": "Is the size OK?",
+      "items": {
+        "small": "small",
+        "big": "big",
+        "tight": "tight",
+        "loose": "loose",
+        "bigger": "bigger",
+        "smaller": "smaller"
+      },
+      "echo_one": "It's {item}. Let me bring another one.",
+      "echo": "It's {item}. Let me bring another one.",
+      "yes": "Very good! Do you want to take it?",
+      "no": "Do you want a bigger size?",
+      "thanks": "You're welcome.",
+      "complaint": "I'm sorry. I'll bring another size.",
+      "fallback": "Sorry, is the size OK for you?"
+    },
+    "shop_bigger": {
+      "ask": "Do you want a bigger size?",
+      "items": {
+        "smaller": "smaller",
+        "small": "small",
+        "bigger": "bigger",
+        "larger": "larger"
+      },
+      "echo_one": "A {item} one? One moment, please.",
+      "echo": "A {item} one? One moment, please.",
+      "yes": "Here is a bigger size. Try this one.",
+      "no": "OK, this size, then. Do you want to take it?",
+      "thanks": "You're welcome.",
+      "fallback": "Sorry, do you want a bigger size?"
+    },
+    "shop_price": {
+      "ask": "Is that OK?",
+      "items": {
+        "discount": "a discount",
+        "sale": "a sale",
+        "cheaper": "a cheaper one",
+        "card": "by card",
+        "cash": "in cash"
+      },
+      "echo_one": "With {item}? One moment, please.",
+      "echo": "With {item}? One moment, please.",
+      "yes": "Good! Do you want to take it?",
+      "no": "It's a good price. Do you want to take it?",
+      "have": "We have cheaper ones too, from twenty dollars.",
+      "recommend": "This one is the best for the price.",
+      "price": "It costs forty dollars.",
+      "complaint": "I understand. We have cheaper ones too.",
+      "fallback": "Sorry, is forty dollars OK for you?"
+    },
+    "shop_take": {
+      "ask": "Do you want to take it?",
+      "yes": "Great! How would you like to pay?",
+      "no": "No problem. Maybe next time.",
+      "thanks": "You're welcome. How would you like to pay?",
+      "price": "Forty dollars, please.",
+      "fallback": "Sorry, do you want to take it?",
+      "words": {
+        "take it": "Great! How would you like to pay?",
+        "i will take it": "Great! How would you like to pay?",
+        "take them": "Great! How would you like to pay?"
+      }
+    },
+    "shop_pay": {
+      "ask": "How would you like to pay?",
+      "items": {
+        "card": "by card",
+        "cash": "in cash",
+        "credit": "by card",
+        "debit": "by card",
+        "visa": "by card",
+        "mastercard": "by card",
+        "phone": "by phone"
+      },
+      "echo_one": "{item}. Fine, thank you.",
+      "echo": "{item}. Fine, thank you.",
+      "yes": "By card? Fine. Can I have your card, please?",
+      "no": "In cash? Fine. The cash desk is over there.",
+      "thanks": "You're welcome.",
+      "bill": "It's forty dollars. Card or cash?",
+      "price": "Forty dollars, please.",
+      "fallback": "Sorry, will you pay by card or in cash?"
+    },
+    "shop_card": {
+      "ask": "Can I have your card, please?",
+      "items": {
+        "card": "card",
+        "phone": "phone"
+      },
+      "echo_one": "Here is your {item} back. Thank you.",
+      "echo": "Here is your {item} back. Thank you.",
+      "yes": "Thank you. Please enter your PIN.",
+      "no": "OK. Then pay in cash at the cash desk.",
+      "thanks": "You're welcome. Please enter your PIN.",
+      "fallback": "Sorry, can I have your card, please?",
+      "words": {
+        "here you are": "Thank you. Please enter your PIN.",
+        "here it is": "Thank you. Please enter your PIN.",
+        "here": "Thank you. Please enter your PIN."
+      }
+    },
+    "shop_bag": {
+      "ask": "Do you need a bag?",
+      "items": {
+        "bag": "bag"
+      },
+      "echo_one": "{item}? Here you are.",
+      "yes": "Here is a bag.",
+      "no": "OK, no bag. Here is your receipt.",
+      "thanks": "You're welcome.",
+      "fallback": "Sorry, do you need a bag?"
+    },
+    "shop_receipt": {
+      "ask": "Would you like a receipt?",
+      "items": {
+        "receipt": "a receipt"
+      },
+      "echo_one": "Here is your {item}. Thank you!",
+      "echo": "Here is your {item}. Thank you!",
+      "yes": "Here you are. Thank you!",
+      "no": "OK. Thank you! Have a nice day!",
+      "thanks": "You're welcome. Have a nice day!",
+      "fallback": "Sorry, would you like a receipt?"
+    },
+    "shop_bye": {
+      "ask": "Have a nice day!",
+      "yes": "Thank you! Have a nice day!",
+      "no": "OK. Thank you! Have a nice day!",
+      "thanks": "You're welcome. Have a nice day!",
+      "price": "Thank you! Have a nice day!",
+      "fallback": "Sorry, thank you and have a nice day!",
+      "words": {
+        "bye": "Have a nice day!",
+        "goodbye": "Have a nice day!",
+        "see you": "See you! Goodbye!",
+        "good night": "Good night!"
+      }
     }
   }
 }

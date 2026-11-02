@@ -126,6 +126,131 @@
           ]
         }
       ]
+    },
+    {
+      "id": "a2.shop",
+      "title": "In the Shop",
+      "title_ru": "В магазине",
+      "lesson": "city/3.1",
+      "point": "city/point_3",
+      "card": {
+        "role": "shop assistant",
+        "ru": "Продавец в небольшом магазине одежды. Его работа: спросить, что нужно, подсказать размер и цвет, показать примерочную, назвать цену, принять оплату, отдать пакет и чек, попрощаться. Говорит коротко и вежливо. Он НЕ друг покупателю: про жизнь, семью и планы не спрашивает — его дело товар и деньги.",
+        "en": "You are the shop assistant in a small clothes shop. Your job is to ask what the customer needs, help with size and colour, show the changing room, tell the price, take the payment, give a bag and a receipt and say goodbye. You speak short and polite. You are NOT a friend of the customer: you never ask about their life, family or plans — your job is the goods and the money."
+      },
+      "steps": [
+        {
+          "n": 1,
+          "title": "Продавец здоровается",
+          "questions": [
+            {
+              "en": "Good morning! Can I help you?",
+              "hint": "помочь?",
+              "slot": "shop_help"
+            },
+            {
+              "en": "What are you looking for?",
+              "hint": "что ищете?",
+              "slot": "shop_item"
+            }
+          ]
+        },
+        {
+          "n": 2,
+          "title": "Размер и цвет",
+          "questions": [
+            {
+              "en": "What size do you wear?",
+              "hint": "какой размер?",
+              "slot": "shop_size"
+            },
+            {
+              "en": "What colour would you like?",
+              "hint": "какой цвет?",
+              "slot": "shop_colour"
+            },
+            {
+              "en": "We have this one in black. Do you like it?",
+              "hint": "нравится?",
+              "slot": "shop_like"
+            }
+          ]
+        },
+        {
+          "n": 3,
+          "title": "Примерка",
+          "questions": [
+            {
+              "en": "Would you like to try it on?",
+              "hint": "примерите?",
+              "slot": "shop_try"
+            },
+            {
+              "en": "The changing room is over there. Is the size OK?",
+              "hint": "размер подходит?",
+              "slot": "shop_fit"
+            },
+            {
+              "en": "Do you want a bigger size?",
+              "hint": "размер побольше?",
+              "slot": "shop_bigger"
+            }
+          ]
+        },
+        {
+          "n": 4,
+          "title": "Цена",
+          "questions": [
+            {
+              "en": "It costs forty dollars. Is that OK?",
+              "hint": "сорок долларов, хорошо?",
+              "slot": "shop_price"
+            },
+            {
+              "en": "Do you want to take it?",
+              "hint": "берёте?",
+              "slot": "shop_take"
+            }
+          ]
+        },
+        {
+          "n": 5,
+          "title": "Оплата",
+          "questions": [
+            {
+              "en": "How would you like to pay?",
+              "hint": "как платите?",
+              "slot": "shop_pay"
+            },
+            {
+              "en": "Can I have your card, please?",
+              "hint": "дайте карту",
+              "slot": "shop_card"
+            }
+          ]
+        },
+        {
+          "n": 6,
+          "title": "Пакет, чек, уход",
+          "questions": [
+            {
+              "en": "Do you need a bag?",
+              "hint": "нужен пакет?",
+              "slot": "shop_bag"
+            },
+            {
+              "en": "Would you like a receipt?",
+              "hint": "нужен чек?",
+              "slot": "shop_receipt"
+            },
+            {
+              "en": "Thank you for your visit. Have a nice day!",
+              "hint": "до свидания",
+              "slot": "shop_bye"
+            }
+          ]
+        }
+      ]
     }
   ]
 }
