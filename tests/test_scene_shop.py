@@ -82,7 +82,7 @@ SAMPLE = [
     ("Would you like to try it on?", "yes",
      "The changing room is over there, on the right."),
     ("The changing room is over there. Is the size OK?", "yes",
-     "Very good! Do you want to take it?"),
+     "Very good!"),
     ("Do you want a bigger size?", "yes",
      "Here is a bigger size. Try this one."),
     ("It costs forty dollars. Is that OK?", "how much is it?",

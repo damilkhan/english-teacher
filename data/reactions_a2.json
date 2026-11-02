@@ -195,7 +195,7 @@
         "table": "this table"
       },
       "echo": "{item}? Good choice. This way, please.",
-      "yes": "This way, please. Here is your table.",
+      "yes": "This way, please.",
       "no": "OK, this table is fine. Right this way, please.",
       "chips": {
         "short": [
@@ -234,7 +234,7 @@
       "echo_one": "One {item}, coming up.",
       "echo": "{n} {item_plural}, coming up.",
       "yes": "What would you like? We have beer, wine, juice and coffee.",
-      "no": "No problem. Just water, then?",
+      "no": "No problem.",
       "have": "beer, wine, juice, coffee, tea and cola",
       "recommend": "I recommend our lemonade. It's very good.",
       "price": "Coffee is three dollars, beer is five dollars.",
@@ -316,7 +316,7 @@
     "menu": {
       "ask": "Would you like a few minutes to look at the menu?",
       "yes": "Take your time. I'll come back in a few minutes.",
-      "no": "OK. What would you like to start with?",
+      "no": "OK.",
       "chips": {
         "short": [
           {
@@ -338,9 +338,10 @@
         "minute": "Take your time. I'll come back in a few minutes.",
         "a moment": "Sure. I'll come back in a moment.",
         "moment": "Sure. I'll come back in a moment.",
-        "we are ready": "Great. What would you like to start with?",
-        "ready": "Great. What would you like to start with?",
-        "let me look": "Take your time. I'll be right back."
+        "we are ready": "Good.",
+        "ready": "Good.",
+        "let me look": "Take your time. I'll be right back.",
+        "i'm ready": "Good."
       }
     },
     "ready": {
@@ -369,7 +370,11 @@
         "minutes": "OK. Take your time.",
         "more time": "OK. Take your time.",
         "menu again": "Of course. Here is the menu.",
-        "menu": "Of course. Here is the menu."
+        "menu": "Of course. Here is the menu.",
+        "ready": "Great. Let's start.",
+        "we are ready": "Great. Let's start.",
+        "i'm ready": "Great. Let's start.",
+        "yes we are": "Great. Let's start."
       }
     },
     "starter": {
@@ -387,7 +392,7 @@
         "garlic bread": "garlic bread"
       },
       "echo": "{item} to start. Very good.",
-      "yes": "What would you like? We have soup, salad, onion rings and garlic bread.",
+      "yes": "We have soup, salad, onion rings and garlic bread.",
       "no": "No starter? OK.",
       "have": "soup, salad, onion rings and garlic bread",
       "recommend": "I recommend the onion rings. They're very good.",
@@ -471,7 +476,7 @@
       },
       "echo": "{item} for the main course. Good choice.",
       "yes": "What would you like? We have steak, chicken, fish, pizza and pasta.",
-      "no": "OK. And to drink with it?",
+      "no": "OK.",
       "have": "steak, chicken, fish, pizza and pasta",
       "recommend": "I recommend the steak. It's our best dish.",
       "price": "The steak is twenty dollars, the chicken is fourteen.",
@@ -547,7 +552,7 @@
         "vegetables": "vegetables"
       },
       "echo": "With {item}. Very good.",
-      "yes": "Soup or salad?",
+      "yes": "Both are good. Which one?",
       "no": "No side dish. OK, that's all.",
       "have": "soup, salad, fries, potatoes and rice",
       "plurals": {
@@ -594,8 +599,8 @@
       }
     },
     "thanks": {
-      "thanks": "You're welcome. Enjoy your meal!",
-      "yes": "You're welcome. Enjoy your meal!",
+      "thanks": "You're welcome.",
+      "yes": "Very good.",
       "chips": {
         "short": [
           {
@@ -607,6 +612,9 @@
             "en": "Thank you, it looks great"
           }
         ]
+      },
+      "words": {
+        "you are welcome": "Enjoy your meal!"
       }
     },
     "food_ok": {
@@ -673,7 +681,7 @@
       },
       "echo": "{item}, then. Very good.",
       "yes": "Here is the dessert menu. Our cake is very good.",
-      "no": "No dessert. Would you like the bill?",
+      "no": "No dessert. OK.",
       "have": "cake, ice cream, pie and fruit",
       "recommend": "I recommend the cake with ice cream. It's very good.",
       "price": "Cake is six dollars, ice cream is five dollars.",
@@ -716,8 +724,8 @@
         "dessert": "dessert"
       },
       "echo": "One {item}, coming up.",
-      "yes": "What would you like?",
-      "no": "OK. Here is your bill.",
+      "yes": "OK.",
+      "no": "OK, no problem.",
       "plurals": {
         "beer": "beers",
         "water": "waters",
@@ -742,7 +750,8 @@
             "en": "Some more water, please"
           }
         ]
-      }
+      },
+      "bill": "Of course. Right away."
     },
     "payment": {
       "ask": "Card or cash?",
@@ -1152,7 +1161,7 @@
     "shop_try": {
       "ask": "Would you like to try it on?",
       "yes": "The changing room is over there, on the right.",
-      "no": "OK. Do you want to take it?",
+      "no": "OK.",
       "thanks": "You're welcome.",
       "price": "It costs forty dollars.",
       "fallback": "Sorry, do you want to try it on?",
@@ -1181,7 +1190,7 @@
       },
       "echo_one": "It's {item}. Let me bring another one.",
       "echo": "It's {item}. Let me bring another one.",
-      "yes": "Very good! Do you want to take it?",
+      "yes": "Very good!",
       "no": "No problem. Let me check.",
       "thanks": "You're welcome.",
       "complaint": "I'm sorry. I'll bring another size.",
@@ -1214,7 +1223,7 @@
       "echo_one": "A {item} one? One moment, please.",
       "echo": "A {item} one? One moment, please.",
       "yes": "Here is a bigger size. Try this one.",
-      "no": "OK, this size, then. Do you want to take it?",
+      "no": "OK, this size, then.",
       "thanks": "You're welcome.",
       "fallback": "Sorry, do you want a bigger size?",
       "chips": {
@@ -1407,8 +1416,8 @@
       "echo_one": "Here is your {item}. Thank you!",
       "echo": "Here is your {item}. Thank you!",
       "yes": "Here you are. Thank you!",
-      "no": "OK. Thank you! Have a nice day!",
-      "thanks": "You're welcome. Have a nice day!",
+      "no": "OK. Thank you.",
+      "thanks": "You're welcome. Thank you.",
       "fallback": "Sorry, would you like a receipt?",
       "chips": {
         "short": [
