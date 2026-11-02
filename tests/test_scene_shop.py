@@ -78,7 +78,7 @@ SAMPLE = [
     ("What size do you wear?", "medium", "Size medium. Here you are."),
     ("What colour would you like?", "black", "In black. Here you are."),
     ("We have this one in black. Do you like it?", "yes",
-     "Great! Would you like to try it on?"),
+     "Great! I'm glad you like it."),
     ("Would you like to try it on?", "yes",
      "The changing room is over there, on the right."),
     ("The changing room is over there. Is the size OK?", "yes",
