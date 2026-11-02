@@ -148,7 +148,41 @@
       "echo": "{num} people? Right this way, please.",
       "yes": "This way, please.",
       "no": "Let me find you a table.",
-      "fallback": "Sorry, how many of you are there?"
+      "fallback": "Sorry, how many of you are there?",
+      "chips": {
+        "count": [
+          {
+            "ru": "один",
+            "en": "one"
+          },
+          {
+            "ru": "два",
+            "en": "two"
+          },
+          {
+            "ru": "три",
+            "en": "three"
+          },
+          {
+            "ru": "четыре",
+            "en": "four"
+          }
+        ],
+        "short": [
+          {
+            "ru": "Только я",
+            "en": "Just me"
+          },
+          {
+            "ru": "Нас двое",
+            "en": "Two of us"
+          },
+          {
+            "ru": "С женой",
+            "en": "With my wife"
+          }
+        ]
+      }
     },
     "table": {
       "ask": "Would you like a table by the window?",
@@ -162,7 +196,23 @@
       },
       "echo": "{item}? Good choice. This way, please.",
       "yes": "This way, please. Here is your table.",
-      "no": "OK, this table is fine. Right this way, please."
+      "no": "OK, this table is fine. Right this way, please.",
+      "chips": {
+        "short": [
+          {
+            "ru": "Да, пожалуйста",
+            "en": "Yes, please"
+          },
+          {
+            "ru": "Лучше у окна",
+            "en": "A table by the window, please"
+          },
+          {
+            "ru": "Нет, спасибо",
+            "en": "No, thanks"
+          }
+        ]
+      }
     },
     "drink": {
       "ask": "Something to drink?",
@@ -201,18 +251,110 @@
         "milk": "milks",
         "soda": "sodas",
         "milkshake": "milkshakes"
+      },
+      "chips": {
+        "start": [
+          {
+            "ru": "Я бы хотел",
+            "en": "I would like"
+          },
+          {
+            "ru": "Можно",
+            "en": "Can I have"
+          }
+        ],
+        "count": [
+          {
+            "ru": "один",
+            "en": "one"
+          },
+          {
+            "ru": "два",
+            "en": "two"
+          }
+        ],
+        "item": [
+          {
+            "ru": "пиво",
+            "en": "beer"
+          },
+          {
+            "ru": "вино",
+            "en": "wine"
+          },
+          {
+            "ru": "воду",
+            "en": "water"
+          },
+          {
+            "ru": "сок",
+            "en": "juice"
+          },
+          {
+            "ru": "кофе",
+            "en": "coffee"
+          }
+        ],
+        "end": [
+          {
+            "ru": "спасибо",
+            "en": "thanks"
+          }
+        ],
+        "short": [
+          {
+            "ru": "Просто воду",
+            "en": "Just water"
+          },
+          {
+            "ru": "Ничего, спасибо",
+            "en": "Nothing, thanks"
+          }
+        ]
       }
     },
     "menu": {
       "ask": "Would you like a few minutes to look at the menu?",
       "yes": "Take your time. I'll come back in a few minutes.",
-      "no": "OK. What would you like to start with?"
+      "no": "OK. What would you like to start with?",
+      "chips": {
+        "short": [
+          {
+            "ru": "Да, пожалуйста",
+            "en": "Yes, please"
+          },
+          {
+            "ru": "Дайте пару минут",
+            "en": "A few minutes, please"
+          },
+          {
+            "ru": "Мы готовы",
+            "en": "We are ready"
+          }
+        ]
+      }
     },
     "ready": {
       "ask": "Are you ready to order?",
       "yes": "Great. What would you like to start with?",
       "no": "Take your time. I'll come back in a few minutes.",
-      "dontknow": "No problem. Take your time. I'll come back in a few minutes."
+      "dontknow": "No problem. Take your time. I'll come back in a few minutes.",
+      "chips": {
+        "short": [
+          {
+            "ru": "Да, готовы",
+            "en": "Yes, we are ready"
+          },
+          {
+            "ru": "Ещё минутку",
+            "en": "One more minute"
+          },
+          {
+            "ru": "Можно меню ещё раз?",
+            "en": "Can I have the menu again?"
+          }
+        ]
+      }
     },
     "starter": {
       "ask": "What would you like to start with?",
@@ -244,6 +386,54 @@
         "wings": "chicken wings",
         "garlic bread": "garlic bread",
         "shrimps": "shrimps"
+      },
+      "chips": {
+        "start": [
+          {
+            "ru": "Я бы хотел",
+            "en": "I would like"
+          },
+          {
+            "ru": "Можно",
+            "en": "Can I have"
+          }
+        ],
+        "count": [
+          {
+            "ru": "один",
+            "en": "one"
+          },
+          {
+            "ru": "два",
+            "en": "two"
+          }
+        ],
+        "item": [
+          {
+            "ru": "суп",
+            "en": "soup"
+          },
+          {
+            "ru": "салат",
+            "en": "salad"
+          },
+          {
+            "ru": "креветки",
+            "en": "shrimp"
+          }
+        ],
+        "end": [
+          {
+            "ru": "спасибо",
+            "en": "please"
+          }
+        ],
+        "short": [
+          {
+            "ru": "Ничего, спасибо",
+            "en": "Nothing, thanks"
+          }
+        ]
       }
     },
     "main": {
@@ -282,6 +472,52 @@
         "sandwich": "sandwiches",
         "eggs": "eggs",
         "pancakes": "pancakes"
+      },
+      "chips": {
+        "start": [
+          {
+            "ru": "Я бы хотел",
+            "en": "I would like"
+          },
+          {
+            "ru": "Мне",
+            "en": "For me"
+          }
+        ],
+        "item": [
+          {
+            "ru": "стейк",
+            "en": "steak"
+          },
+          {
+            "ru": "курицу",
+            "en": "chicken"
+          },
+          {
+            "ru": "рыбу",
+            "en": "fish"
+          },
+          {
+            "ru": "пасту",
+            "en": "pasta"
+          },
+          {
+            "ru": "бургер",
+            "en": "burger"
+          }
+        ],
+        "end": [
+          {
+            "ru": "пожалуйста",
+            "en": "please"
+          }
+        ],
+        "short": [
+          {
+            "ru": "Что посоветуете?",
+            "en": "What do you recommend?"
+          }
+        ]
       }
     },
     "side": {
@@ -305,23 +541,93 @@
         "potatoes": "potatoes",
         "rice": "rice",
         "vegetables": "vegetables"
+      },
+      "chips": {
+        "start": [
+          {
+            "ru": "Я бы хотел",
+            "en": "I would like"
+          }
+        ],
+        "item": [
+          {
+            "ru": "суп",
+            "en": "soup"
+          },
+          {
+            "ru": "салат",
+            "en": "salad"
+          }
+        ],
+        "end": [
+          {
+            "ru": "пожалуйста",
+            "en": "please"
+          }
+        ],
+        "short": [
+          {
+            "ru": "И то и другое",
+            "en": "Both, please"
+          }
+        ]
       }
     },
     "thanks": {
       "thanks": "You're welcome. Enjoy your meal!",
-      "yes": "You're welcome. Enjoy your meal!"
+      "yes": "You're welcome. Enjoy your meal!",
+      "chips": {
+        "short": [
+          {
+            "ru": "Спасибо",
+            "en": "Thank you"
+          },
+          {
+            "ru": "Спасибо, выглядит отлично",
+            "en": "Thank you, it looks great"
+          }
+        ]
+      }
     },
     "food_ok": {
       "ask": "Is everything all right with your food?",
       "yes": "Very good. I'm glad you like it.",
       "no": "Oh, I'm sorry! I'll take it back to the kitchen.",
-      "thanks": "You're welcome. Enjoy your meal!"
+      "thanks": "You're welcome. Enjoy your meal!",
+      "chips": {
+        "short": [
+          {
+            "ru": "Да, всё хорошо",
+            "en": "Yes, everything is fine"
+          },
+          {
+            "ru": "Очень вкусно",
+            "en": "It's delicious"
+          },
+          {
+            "ru": "Нет, еда холодная",
+            "en": "No, the food is cold"
+          }
+        ]
+      }
     },
     "bread": {
       "ask": "Would you like some more bread?",
       "yes": "Here you are. More bread for you.",
       "no": "No more bread. OK.",
-      "thanks": "You're welcome."
+      "thanks": "You're welcome.",
+      "chips": {
+        "short": [
+          {
+            "ru": "Да, пожалуйста",
+            "en": "Yes, please"
+          },
+          {
+            "ru": "Нет, спасибо",
+            "en": "No, thanks"
+          }
+        ]
+      }
     },
     "dessert": {
       "ask": "Would you like to see the dessert menu?",
@@ -351,6 +657,22 @@
         "fruit": "fruit",
         "coffee": "coffees",
         "tea": "teas"
+      },
+      "chips": {
+        "short": [
+          {
+            "ru": "Да, покажите",
+            "en": "Yes, please show me"
+          },
+          {
+            "ru": "Нет, спасибо",
+            "en": "No, thanks"
+          },
+          {
+            "ru": "Что посоветуете?",
+            "en": "What do you recommend?"
+          }
+        ]
       }
     },
     "anything": {
@@ -375,6 +697,22 @@
         "bread": "breads",
         "cake": "cakes",
         "dessert": "desserts"
+      },
+      "chips": {
+        "short": [
+          {
+            "ru": "Нет, спасибо",
+            "en": "No, thanks"
+          },
+          {
+            "ru": "Счёт, пожалуйста",
+            "en": "The bill, please"
+          },
+          {
+            "ru": "Ещё воды, пожалуйста",
+            "en": "Some more water, please"
+          }
+        ]
       }
     },
     "payment": {
@@ -390,7 +728,29 @@
       "echo": "{item}. Fine, thank you.",
       "yes": "By card? Fine, thank you.",
       "no": "OK, no problem. Thank you.",
-      "fallback": "Sorry, will you pay by card or in cash?"
+      "fallback": "Sorry, will you pay by card or in cash?",
+      "chips": {
+        "item": [
+          {
+            "ru": "картой",
+            "en": "by card"
+          },
+          {
+            "ru": "наличными",
+            "en": "in cash"
+          }
+        ],
+        "short": [
+          {
+            "ru": "Картой",
+            "en": "By card"
+          },
+          {
+            "ru": "Наличными",
+            "en": "In cash"
+          }
+        ]
+      }
     },
     "goodbye": {
       "thanks": "Thank you. Have a nice evening!",
@@ -402,6 +762,22 @@
         "see you": "See you!",
         "good night": "Good night!",
         "thanks for": "You're welcome. Thank you!"
+      },
+      "chips": {
+        "short": [
+          {
+            "ru": "Спасибо",
+            "en": "Thank you"
+          },
+          {
+            "ru": "До свидания",
+            "en": "Goodbye"
+          },
+          {
+            "ru": "Хорошего вечера",
+            "en": "Have a nice evening"
+          }
+        ]
       }
     },
     "shop_help": {
@@ -458,6 +834,22 @@
       "words": {
         "just looking": "No problem. Take your time.",
         "look around": "No problem. Take your time."
+      },
+      "chips": {
+        "short": [
+          {
+            "ru": "Да, помогите пожалуйста",
+            "en": "Yes, please"
+          },
+          {
+            "ru": "Я просто смотрю",
+            "en": "I'm just looking"
+          },
+          {
+            "ru": "Я ищу куртку",
+            "en": "I'm looking for a jacket"
+          }
+        ]
       }
     },
     "shop_item": {
@@ -504,7 +896,43 @@
       "price": "From twenty to sixty dollars.",
       "bill": "You can pay at the cash desk over there.",
       "complaint": "I'm sorry about that. What's wrong with it?",
-      "fallback": "Sorry, what would you like to buy?"
+      "fallback": "Sorry, what would you like to buy?",
+      "chips": {
+        "start": [
+          {
+            "ru": "Я ищу",
+            "en": "I'm looking for"
+          },
+          {
+            "ru": "Мне нужна",
+            "en": "I need"
+          }
+        ],
+        "item": [
+          {
+            "ru": "куртку",
+            "en": "a jacket"
+          },
+          {
+            "ru": "рубашку",
+            "en": "a shirt"
+          },
+          {
+            "ru": "джинсы",
+            "en": "jeans"
+          },
+          {
+            "ru": "туфли",
+            "en": "shoes"
+          }
+        ],
+        "short": [
+          {
+            "ru": "Просто смотрю",
+            "en": "I'm just looking"
+          }
+        ]
+      }
     },
     "shop_size": {
       "ask": "What size do you wear?",
@@ -545,7 +973,37 @@
       "have": "We have small, medium, large and extra large.",
       "recommend": "Take medium. It's the most common size.",
       "price": "This one is forty dollars.",
-      "fallback": "Sorry, what size do you wear? Small, medium or large?"
+      "fallback": "Sorry, what size do you wear? Small, medium or large?",
+      "chips": {
+        "item": [
+          {
+            "ru": "маленький",
+            "en": "small"
+          },
+          {
+            "ru": "средний",
+            "en": "medium"
+          },
+          {
+            "ru": "большой",
+            "en": "large"
+          }
+        ],
+        "short": [
+          {
+            "ru": "Средний",
+            "en": "Medium"
+          },
+          {
+            "ru": "Сорок восьмой",
+            "en": "Forty eight"
+          },
+          {
+            "ru": "Не знаю",
+            "en": "I don't know"
+          }
+        ]
+      }
     },
     "shop_colour": {
       "ask": "What colour would you like?",
@@ -571,7 +1029,37 @@
       "have": "We have it in black, white, blue and red.",
       "recommend": "Black is the best choice.",
       "price": "The same price, forty dollars.",
-      "fallback": "Sorry, what colour would you like?"
+      "fallback": "Sorry, what colour would you like?",
+      "chips": {
+        "item": [
+          {
+            "ru": "чёрный",
+            "en": "black"
+          },
+          {
+            "ru": "белый",
+            "en": "white"
+          },
+          {
+            "ru": "синий",
+            "en": "blue"
+          },
+          {
+            "ru": "красный",
+            "en": "red"
+          },
+          {
+            "ru": "зелёный",
+            "en": "green"
+          }
+        ],
+        "short": [
+          {
+            "ru": "Любой",
+            "en": "Any colour"
+          }
+        ]
+      }
     },
     "shop_like": {
       "ask": "Do you like it?",
@@ -597,7 +1085,23 @@
       "recommend": "Take the black one. It looks very good.",
       "price": "It costs forty dollars.",
       "complaint": "I'm sorry. What don't you like about it?",
-      "fallback": "Sorry, do you like this one?"
+      "fallback": "Sorry, do you like this one?",
+      "chips": {
+        "short": [
+          {
+            "ru": "Да, нравится",
+            "en": "Yes, I like it"
+          },
+          {
+            "ru": "Нет, не нравится",
+            "en": "No, I don't like it"
+          },
+          {
+            "ru": "Есть другой цвет?",
+            "en": "Do you have another colour?"
+          }
+        ]
+      }
     },
     "shop_try": {
       "ask": "Would you like to try it on?",
@@ -605,7 +1109,19 @@
       "no": "OK. Do you want to take it?",
       "thanks": "You're welcome.",
       "price": "It costs forty dollars.",
-      "fallback": "Sorry, do you want to try it on?"
+      "fallback": "Sorry, do you want to try it on?",
+      "chips": {
+        "short": [
+          {
+            "ru": "Да, можно",
+            "en": "Yes, please"
+          },
+          {
+            "ru": "Нет, не надо",
+            "en": "No, thanks"
+          }
+        ]
+      }
     },
     "shop_fit": {
       "ask": "Is the size OK?",
@@ -623,7 +1139,23 @@
       "no": "Do you want a bigger size?",
       "thanks": "You're welcome.",
       "complaint": "I'm sorry. I'll bring another size.",
-      "fallback": "Sorry, is the size OK for you?"
+      "fallback": "Sorry, is the size OK for you?",
+      "chips": {
+        "short": [
+          {
+            "ru": "Да, подходит",
+            "en": "Yes, it fits"
+          },
+          {
+            "ru": "Нет, слишком большой",
+            "en": "No, it's too big"
+          },
+          {
+            "ru": "Нет, слишком маленький",
+            "en": "No, it's too small"
+          }
+        ]
+      }
     },
     "shop_bigger": {
       "ask": "Do you want a bigger size?",
@@ -638,7 +1170,23 @@
       "yes": "Here is a bigger size. Try this one.",
       "no": "OK, this size, then. Do you want to take it?",
       "thanks": "You're welcome.",
-      "fallback": "Sorry, do you want a bigger size?"
+      "fallback": "Sorry, do you want a bigger size?",
+      "chips": {
+        "short": [
+          {
+            "ru": "Да, побольше",
+            "en": "Yes, a bigger one"
+          },
+          {
+            "ru": "Нет, этот подходит",
+            "en": "No, this one is fine"
+          },
+          {
+            "ru": "Можно поменьше?",
+            "en": "Can I have a smaller one?"
+          }
+        ]
+      }
     },
     "shop_price": {
       "ask": "Is that OK?",
@@ -657,7 +1205,23 @@
       "recommend": "This one is the best for the price.",
       "price": "It costs forty dollars.",
       "complaint": "I understand. We have cheaper ones too.",
-      "fallback": "Sorry, is forty dollars OK for you?"
+      "fallback": "Sorry, is forty dollars OK for you?",
+      "chips": {
+        "short": [
+          {
+            "ru": "Да, нормально",
+            "en": "Yes, that's OK"
+          },
+          {
+            "ru": "Дорого",
+            "en": "It's too expensive"
+          },
+          {
+            "ru": "Есть скидка?",
+            "en": "Is there a discount?"
+          }
+        ]
+      }
     },
     "shop_take": {
       "ask": "Do you want to take it?",
@@ -670,6 +1234,22 @@
         "take it": "Great! How would you like to pay?",
         "i will take it": "Great! How would you like to pay?",
         "take them": "Great! How would you like to pay?"
+      },
+      "chips": {
+        "short": [
+          {
+            "ru": "Да, беру",
+            "en": "Yes, I'll take it"
+          },
+          {
+            "ru": "Нет, не буду",
+            "en": "No, thank you"
+          },
+          {
+            "ru": "Я подумаю",
+            "en": "I'll think about it"
+          }
+        ]
       }
     },
     "shop_pay": {
@@ -690,7 +1270,29 @@
       "thanks": "You're welcome.",
       "bill": "It's forty dollars. Card or cash?",
       "price": "Forty dollars, please.",
-      "fallback": "Sorry, will you pay by card or in cash?"
+      "fallback": "Sorry, will you pay by card or in cash?",
+      "chips": {
+        "item": [
+          {
+            "ru": "картой",
+            "en": "by card"
+          },
+          {
+            "ru": "наличными",
+            "en": "in cash"
+          }
+        ],
+        "short": [
+          {
+            "ru": "Картой",
+            "en": "By card"
+          },
+          {
+            "ru": "Наличными",
+            "en": "In cash"
+          }
+        ]
+      }
     },
     "shop_card": {
       "ask": "Can I have your card, please?",
@@ -708,6 +1310,18 @@
         "here you are": "Thank you. Please enter your PIN.",
         "here it is": "Thank you. Please enter your PIN.",
         "here": "Thank you. Please enter your PIN."
+      },
+      "chips": {
+        "short": [
+          {
+            "ru": "Вот, пожалуйста",
+            "en": "Here you are"
+          },
+          {
+            "ru": "Можно наличными?",
+            "en": "Can I pay in cash?"
+          }
+        ]
       }
     },
     "shop_bag": {
@@ -719,7 +1333,19 @@
       "yes": "Here is a bag.",
       "no": "OK, no bag. Here is your receipt.",
       "thanks": "You're welcome.",
-      "fallback": "Sorry, do you need a bag?"
+      "fallback": "Sorry, do you need a bag?",
+      "chips": {
+        "short": [
+          {
+            "ru": "Да, нужен",
+            "en": "Yes, please"
+          },
+          {
+            "ru": "Нет, не нужен",
+            "en": "No, thanks"
+          }
+        ]
+      }
     },
     "shop_receipt": {
       "ask": "Would you like a receipt?",
@@ -731,7 +1357,19 @@
       "yes": "Here you are. Thank you!",
       "no": "OK. Thank you! Have a nice day!",
       "thanks": "You're welcome. Have a nice day!",
-      "fallback": "Sorry, would you like a receipt?"
+      "fallback": "Sorry, would you like a receipt?",
+      "chips": {
+        "short": [
+          {
+            "ru": "Да, пожалуйста",
+            "en": "Yes, please"
+          },
+          {
+            "ru": "Нет, спасибо",
+            "en": "No, thanks"
+          }
+        ]
+      }
     },
     "shop_bye": {
       "ask": "Have a nice day!",
@@ -745,6 +1383,22 @@
         "goodbye": "Have a nice day!",
         "see you": "See you! Goodbye!",
         "good night": "Good night!"
+      },
+      "chips": {
+        "short": [
+          {
+            "ru": "Спасибо",
+            "en": "Thank you"
+          },
+          {
+            "ru": "До свидания",
+            "en": "Goodbye"
+          },
+          {
+            "ru": "Хорошего дня",
+            "en": "Have a nice day"
+          }
+        ]
       }
     }
   }

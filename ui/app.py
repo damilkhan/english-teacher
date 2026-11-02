@@ -80,6 +80,7 @@ from ui.widgets.control_bar import ControlBar
 from ui.widgets.info_bar import InfoBar
 from ui.widgets.input_bar import InputBar
 from ui.widgets.hint_bar import HintBar
+from ui.widgets.chip_builder import ChipBuilder
 from ui.widgets.lesson_bar import LessonBar
 from ui.widgets.map_view import MapView
 from ui.widgets.visualizer import AudioVisualizer
@@ -888,6 +889,17 @@ class EnglishTeacherApp:
                                 on_listen=self._hint_listen,
                                 before=self.chat_view,
                                 on_close=self._pron_forget)
+
+        # ---------- КОНСТРУКТОР ПРЕДЛОЖЕНИЯ НА РУССКОМ (решение 101) ----------
+        # Панель под чатом: чипы ТОЛЬКО по-русски, ученик собирает русское
+        # предложение, в голове переводит и говорит по-английски в микрофон.
+        # Английского на экране нет: en у чипа нужен только движку реакций.
+        # Показывается только в сцене (сама прячется, как lesson_bar).
+        self.chip_builder = ChipBuilder(self.chat_tab, p,
+                                        on_record=self._start_recording,
+                                        on_record_release=self._stop_recording,
+                                        on_replay=self._scene_replay_question,
+                                        before=self.chat_view)
 
         # ---------- кнопки на старте (решение ученика 27.10.2026) ----------
         # Пока ученик ничего не сделал, ему не надо угадывать, что писать:
@@ -1987,6 +1999,7 @@ class EnglishTeacherApp:
 
     def _end_lesson(self):
         """Свернуть интерфейс занятия (полоса, блокировка, тема промпта)."""
+        self._scene_chips_off()         # конструктор прячется вместе с уроком
         self._server_task = None        # занятие закрыто — ожидание сервера не нужно
         self._story_context = False     # рассказ был частью урока
         self._exam = None               # экзамен закрыт вместе с занятием
@@ -2267,6 +2280,11 @@ class EnglishTeacherApp:
         self.add_message(self.teacher_name, english)
         print("🎬 Сцена: шаг %d/%d, вопрос №%d"
               % (item.get("step"), item.get("of_steps"), item.get("number")))
+        # Чипы — по слоту ТЕКУЩЕГО вопроса: набор зависит от места диалога
+        try:
+            self.chip_builder.show_slot(item.get("slot"), english)
+        except Exception as exc:
+            print("⚠️ Чипы конструктора не построены: %s" % exc)
         try:
             self._say(english)          # вопрос — вслух, по-английски
         except Exception:
@@ -2369,6 +2387,20 @@ class EnglishTeacherApp:
         self._scene_say(session, reaction, finish=done)
         return True
 
+    def _scene_replay_question(self, text):
+        """Кнопка 🔊 в конструкторе: повторить вопрос вслух (без модели)."""
+        try:
+            self._say(text)
+        except Exception as exc:
+            print("⚠️ Вопрос не озвучен повторно: %s" % exc)
+
+    def _scene_chips_off(self):
+        """Сцена кончилась: убрать конструктор с экрана."""
+        try:
+            self.chip_builder.clear()
+        except Exception:
+            pass
+
     def _scene_say(self, session, line, finish=False):
         """Озвучить РЕАКЦИЮ, и только ПОСЛЕ неё — следующий вопрос или итог.
 
@@ -2432,6 +2464,7 @@ class EnglishTeacherApp:
                 % (session.tasks_done, session.tasks_total))
         if marked:
             line += (" Шагов с оговоркой: %d — к ним вернёмся позже." % marked)
+        self._scene_chips_off()      # конструктор больше не нужен
         self.add_message(self.teacher_name, line)
         print("🏁 Сцена закончена: %s, шагов %d/%d, с оговоркой %d, ответов %d"
               % (session.scene_id, session.tasks_done, session.tasks_total,
@@ -4324,6 +4357,7 @@ class EnglishTeacherApp:
         self.info_bar.apply_theme(p)
         self.lesson_bar.apply_theme(p)
         self.hint_bar.apply_theme(p)
+        self.chip_builder.apply_theme(p)
         self.right_panel.apply_theme(p)
         self.users_panel.apply_theme(p)
 
