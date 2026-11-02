@@ -2289,15 +2289,15 @@ class EnglishTeacherApp:
             print("⚠️ Ответ сцены не разобран: %s" % exc)
             return False
         result = res.get("result")
-        question = ""
+        item = {}
         try:
             import scenes as scenes_mod
-            question = str((scenes_mod.question(session.scene_id,
-                                                session.scene_step,
-                                                session.scene_q) or {}).get("en")
-                           or "")
+            item = scenes_mod.question(session.scene_id, session.scene_step,
+                                       session.scene_q) or {}
         except Exception:
-            question = ""
+            item = {}
+        question = str(item.get("en") or "")
+        slot = str(item.get("slot") or "")     # метка места диалога (§57)
         if result == "retry":
             # молчание или русский: повторяем ТОТ ЖЕ вопрос, один раз
             self.add_message(self.teacher_name,
@@ -2309,6 +2309,50 @@ class EnglishTeacherApp:
         if result == "skip":
             print("🎬 Сцена: вопрос пропущен — осечек %s" % res.get("tries"))
         print("🎬 Сцена: ответ принят (%.40r)" % (text or ""))
+
+        # ДВИЖОК РЕАКЦИЙ (§57, 03.11.2026): сцена ОТВЕЧАЕТ на смысл, а не
+        # читает скрипт подряд. Разбираем только ПРИНЯТЫЙ английский ответ:
+        # пустое и русское уже ушло в retry/skip выше. Модель не зовём.
+        reaction, again, react_mod = "", "", None
+        if result == "ok" and slot:
+            try:
+                import scene_reactions as react_mod
+                if react_mod.has_slot(slot):
+                    sense = react_mod.intent(slot, text)
+                    # Готовую реакцию отдаёт ДВИЖОК; None = сказать нечего
+                    # (переспрос, «не знаю», пусто) — тогда вопрос повторяем.
+                    reaction = react_mod.reply_to(slot, sense) or ""
+                    if not reaction:
+                        # незнакомое слово переспрашиваем словами слота,
+                        # просьбу повторить — просто повтором вопроса
+                        again = ("unknown" if sense.kind == react_mod.OTHER
+                                 else "repeat")
+            except Exception as exc:
+                react_mod = None
+                print("⚠️ Движок реакций не ответил: %s" % exc)
+
+        lost = getattr(self, "_scene_lost", None)
+        if lost is None:
+            lost = self._scene_lost = {}
+        key = (session.scene_id, session.scene_step, session.scene_q)
+        if again:
+            if lost.get(key, 0) < 1:
+                lost[key] = 1
+                line = ""
+                if again == "unknown" and react_mod is not None:
+                    try:
+                        line = react_mod.unknown(slot)   # свой переспрос слота
+                    except Exception:
+                        line = ""
+                print("🎬 Сцена: не понял (%.40r) — переспрос" % (text or ""))
+                self._scene_say(session, line)   # переспрос → ТОТ ЖЕ вопрос
+                return True
+            # второй раз не поняли: не застреваем — «OK.» и шаг идёт дальше
+            print("🎬 Сцена: не понял дважды (%.40r) — идём дальше"
+                  % (text or ""))
+            reaction = "OK."
+        lost.pop(key, None)
+
         try:
             session.scene_note(question, text)  # в разбор — в КОНЦЕ сцены
         except Exception:
@@ -2320,10 +2364,43 @@ class EnglishTeacherApp:
         step_done = bool(session.scene_advance().get("step_done"))
         if step_done:
             self._scene_credit(session)
-        if session.finished or session.all_tasks_done:
-            self._scene_finish(session)
-            return True
-        self._scene_ask(session)
+        done = session.finished or session.all_tasks_done
+        # Реакция — ВСЛУХ, и только ПОСЛЕ неё следующий вопрос или итог
+        self._scene_say(session, reaction, finish=done)
+        return True
+
+    def _scene_say(self, session, line, finish=False):
+        """Озвучить РЕАКЦИЮ, и только ПОСЛЕ неё — следующий вопрос или итог.
+
+        Решение ученика (03.11.2026): реакция озвучивается голосом ВСЕГДА, и
+        сразу после неё идёт следующий вопрос. Озвучка в фоне, поэтому шаг
+        ждёт её конца — иначе tts.speak оборвёт реакцию на полуслове.
+        """
+        line = str(line or "").strip()
+
+        def _next():
+            def _run():
+                try:
+                    if finish:
+                        self._scene_finish(session)
+                    else:
+                        self._scene_ask(session)
+                except Exception as exc:
+                    print("⚠️ Сцена: следующий шаг не пошёл: %s" % exc)
+
+            try:
+                self._dispatch(_run)
+            except Exception:
+                _run()
+
+        if line:
+            self.add_message(self.teacher_name, line)
+            try:
+                self._say(line, on_done=_next)
+                return True
+            except Exception as exc:
+                print("⚠️ Сцена: реакция не озвучена: %s" % exc)
+        _next()
         return True
 
     def _scene_credit(self, session):

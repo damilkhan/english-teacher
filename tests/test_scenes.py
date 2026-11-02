@@ -78,8 +78,8 @@ questions = [q for step in row["steps"] for q in step["questions"]]
 check("вопросов ровно 15", len(questions) == 15, len(questions))
 check("у каждого вопроса есть подсказка по-русски",
       all(str(q.get("hint") or "").strip() for q in questions))
-check("вопросы короткие (до 60 знаков)",
-      all(len(q["en"]) <= 60 for q in questions),
+check("вопросы короткие (до 65 знаков)",
+      all(len(q["en"]) <= 65 for q in questions),   # 61 — вопрос про меню (§57)
       max(len(q["en"]) for q in questions))
 check("вопросы по-английски (латиница + знаки)",
       all(all("a" <= ch.lower() <= "z" or ch in " ?!.,'-" for ch in q["en"])

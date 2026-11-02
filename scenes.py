@@ -153,6 +153,7 @@ def question(scene_id, step, index=0, level="A2") -> dict:
     return {
         "en": str(item.get("en") or "").strip(),
         "hint": str(item.get("hint") or "").strip(),
+        "slot": str(item.get("slot") or "").strip(),
         "step": step_no,
         "of_steps": len(rows),
         "index": index,
