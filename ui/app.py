@@ -2362,7 +2362,12 @@ class EnglishTeacherApp:
                     except Exception:
                         line = ""
                 print("🎬 Сцена: не понял (%.40r) — переспрос" % (text or ""))
-                self._scene_say(session, line)   # переспрос → ТОТ ЖЕ вопрос
+                # Переспрос САМ содержит вопрос («Sorry, what would you like
+                # to drink?»), поэтому вопрос второй раз НЕ задаём: иначе
+                # официант спрашивал одно и то же дважды (живой баг 03.11.2026).
+                # Просьба повторить («sorry?») — наоборот: реплики нет,
+                # вопрос надо задать заново.
+                self._scene_say(session, line, ask=(again != "unknown"))
                 return True
             # второй раз не поняли: не застреваем — «OK.» и шаг идёт дальше
             print("🎬 Сцена: не понял дважды (%.40r) — идём дальше"
@@ -2404,12 +2409,15 @@ class EnglishTeacherApp:
         except Exception:
             pass
 
-    def _scene_say(self, session, line, finish=False):
+    def _scene_say(self, session, line, finish=False, ask=True):
         """Озвучить РЕАКЦИЮ, и только ПОСЛЕ неё — следующий вопрос или итог.
 
         Решение ученика (03.11.2026): реакция озвучивается голосом ВСЕГДА, и
         сразу после неё идёт следующий вопрос. Озвучка в фоне, поэтому шаг
         ждёт её конца — иначе tts.speak оборвёт реакцию на полуслове.
+
+        ask=False — вопрос уже прозвучал внутри реплики (переспрос), второй
+        раз его не задаём.
         """
         line = str(line or "").strip()
 
@@ -2418,7 +2426,7 @@ class EnglishTeacherApp:
                 try:
                     if finish:
                         self._scene_finish(session)
-                    else:
+                    elif ask:
                         self._scene_ask(session)
                 except Exception as exc:
                     print("⚠️ Сцена: следующий шаг не пошёл: %s" % exc)
@@ -2432,7 +2440,11 @@ class EnglishTeacherApp:
             mark = self.add_message(self.teacher_name, line)
 
             def _after():
-                self._replay_after(mark)
+                # значок 🔊 — украшение: его сбой не должен обрывать диалог
+                try:
+                    self._replay_after(mark)
+                except Exception as exc:
+                    print("⚠️ Значок 🔊 не поставлен: %s" % exc)
                 _next()
 
             try:
