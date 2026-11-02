@@ -190,7 +190,8 @@ check("реакцию отдаёт движок",
       "reaction = react_mod.reply_to(slot, sense) or" in src)
 check("реакция → следующий вопрос (один вход)",
       "self._scene_say(session, reaction, finish=done)" in src)
-check("озвучка ждёт конца реакции", "_say(line, on_done=_next)" in src)
+check("озвучка ждёт конца реакции",
+      "_say(line, on_done=_after)" in src and "_next()" in src)
 check("модель в сцене не зовётся",
       "_send_to_teacher" not in src[src.find("def _scene_reply"):
                                     src.find("def _scene_say")])

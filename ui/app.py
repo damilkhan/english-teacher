@@ -895,11 +895,9 @@ class EnglishTeacherApp:
         # предложение, в голове переводит и говорит по-английски в микрофон.
         # Английского на экране нет: en у чипа нужен только движку реакций.
         # Показывается только в сцене (сама прячется, как lesson_bar).
-        self.chip_builder = ChipBuilder(self.chat_tab, p,
-                                        on_record=self._start_recording,
-                                        on_record_release=self._stop_recording,
-                                        on_replay=self._scene_replay_question,
-                                        before=self.chat_view)
+        # Кнопки микрофона и 🔊 в панели НЕ дублируем (решение ученика 03.11.2026):
+        # «Запись» уже есть внизу окна, 🔊 — в облачке каждой реплики Вербота.
+        self.chip_builder = ChipBuilder(self.chat_tab, p, before=self.chat_view)
 
         # ---------- кнопки на старте (решение ученика 27.10.2026) ----------
         # Пока ученик ничего не сделал, ему не надо угадывать, что писать:
@@ -2277,16 +2275,17 @@ class EnglishTeacherApp:
                   % (session.scene_step, session.scene_q))
             return False
         english = str(item.get("en") or "").strip()
-        self.add_message(self.teacher_name, english)
         print("🎬 Сцена: шаг %d/%d, вопрос №%d"
               % (item.get("step"), item.get("of_steps"), item.get("number")))
         # Чипы — по слоту ТЕКУЩЕГО вопроса: набор зависит от места диалога
         try:
-            self.chip_builder.show_slot(item.get("slot"), english)
+            self.chip_builder.show_slot(item.get("slot"))
         except Exception as exc:
             print("⚠️ Чипы конструктора не построены: %s" % exc)
+        # 🔊 в облачке вопроса — когда звук доиграл (как у реплик урока)
+        mark = self.add_message(self.teacher_name, english)
         try:
-            self._say(english)          # вопрос — вслух, по-английски
+            self._say(english, on_done=lambda: self._replay_after(mark))
         except Exception:
             pass
         return True
@@ -2387,12 +2386,16 @@ class EnglishTeacherApp:
         self._scene_say(session, reaction, finish=done)
         return True
 
-    def _scene_replay_question(self, text):
-        """Кнопка 🔊 в конструкторе: повторить вопрос вслух (без модели)."""
+    def _replay_after(self, mark):
+        """Звук доиграл — поставить 🔊 в облачко реплики Вербота.
+
+        Живёт у САМОЙ реплики (решение ученика 03.11.2026), как в уроке:
+        кнопки в панели-конструкторе больше нет.
+        """
         try:
-            self._say(text)
+            self._dispatch(lambda: self.chat_view.enable_replay(mark))
         except Exception as exc:
-            print("⚠️ Вопрос не озвучен повторно: %s" % exc)
+            print("⚠️ Значок 🔊 не поставлен: %s" % exc)
 
     def _scene_chips_off(self):
         """Сцена кончилась: убрать конструктор с экрана."""
@@ -2426,9 +2429,14 @@ class EnglishTeacherApp:
                 _run()
 
         if line:
-            self.add_message(self.teacher_name, line)
+            mark = self.add_message(self.teacher_name, line)
+
+            def _after():
+                self._replay_after(mark)
+                _next()
+
             try:
-                self._say(line, on_done=_next)
+                self._say(line, on_done=_after)
                 return True
             except Exception as exc:
                 print("⚠️ Сцена: реакция не озвучена: %s" % exc)

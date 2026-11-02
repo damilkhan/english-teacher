@@ -101,23 +101,28 @@ check("ChipBuilder импортируется", "from ui.widgets.chip_builder im
 check("панель создаётся над чатом",
       "self.chip_builder = ChipBuilder(self.chat_tab, p," in src)
 check("чипы строятся на КАЖДЫЙ вопрос сцены",
-      'self.chip_builder.show_slot(item.get("slot"), english)' in src)
+      'self.chip_builder.show_slot(item.get("slot"))' in src)
 check("набор зависит от слота текущего вопроса",
       src.find("show_slot(item.get") > src.find("item = scenes_mod.question"))
 check("панель прячется в конце сцены",
       src.find("self._scene_chips_off()      # конструктор") > 0)
 check("панель прячется при выходе из урока",
       src.find("_scene_chips_off()         # конструктор прячется") > 0)
-check("кнопка 🔊 повторяет вопрос",
-      "def _scene_replay_question" in src and "self._say(text)" in src)
+check("🔊 стоит в облачке реплики Вербота, а не в панели",
+      "def _replay_after" in src
+      and "self._say(english, on_done=lambda: self._replay_after(mark))" in src)
 check("тема применяется", "self.chip_builder.apply_theme(p)" in src)
 
 print("6) виджет: только русские подписи и микрофон")
 widget = io.open(os.path.join(ROOT, "ui", "widgets", "chip_builder.py"),
                  encoding="utf-8").read()
-check("кнопка «сказать» есть", "MIC_TEXT" in widget)
-check("кнопка повтора вопроса есть", "REPLAY_TEXT" in widget)
-check("сброс выбора есть", "def reset" in widget)
+check("кнопки микрофона в панели НЕТ (есть «Запись» внизу)",
+      "MIC_TEXT" not in widget and "on_record" not in widget)
+check("кнопки 🔊 в панели НЕТ (живёт в облачке реплики)",
+      "REPLAY_TEXT" not in widget and "_on_replay" not in widget)
+check("сброс выбора — крестик «✕» с подсказкой «Очистить»",
+      'CLEAR_TEXT = "✕"' in widget and "Очистить" in widget
+      and "def reset" in widget)
 check("строка «Ты собрал» есть", 'Ты собрал' in widget)
 check("в строке «Ты собрал» только русский",
       'text=("Ты собрал: «%s»" % text) if text else EMPTY_TEXT' in widget

@@ -9,22 +9,29 @@
 Набор чипов зависит от слота ТЕКУЩЕГО вопроса сцены (scene_chips.py).
 Панель САМА прячется, когда сцены нет (как lesson_bar / hint_bar).
 
-Раскладка: чипы в 1–2 строки (перенос по оценке ширины — Tk не умеет
-flow-раскладку), ниже строка «Ты собрал: «…»» и кнопки 🔊 / ↺ / 🎤.
+Кнопок в панели всего ДВЕ, и обе — про собранное предложение:
+  • «✕»       — снять выбор (подсказка при наведении «Очистить»);
+  • «Отправить» — общая кнопка окна, ниже панели.
+Микрофон и 🔊 не дублируем (решение ученика 03.11.2026): «Запись» уже есть
+внизу окна, а 🔊 живёт в облачке каждой реплики Вербота.
 """
 
 from __future__ import annotations
 
-from typing import Callable, List, Optional
+from typing import List
 
 import customtkinter as ctk
 
 import scene_chips
 import theme
 
-MIC_TEXT = "🎤 сказать"
-REPLAY_TEXT = "🔊"
-RESET_TEXT = "↺"
+try:
+    from ui.widgets import tooltip as _tooltip
+except Exception:                                      # pragma: no cover
+    _tooltip = None
+
+CLEAR_TEXT = "✕"
+CLEAR_TIP = "Очистить"
 EMPTY_TEXT = "Ты собрал: —"
 
 # Ширина на «одну букву» и добавка на отступы кнопки: Tk не сообщает ширину
@@ -35,23 +42,15 @@ ROW_BUDGET = 980
 
 
 class ChipBuilder(ctk.CTkFrame):
-    """Панель-конструктор: чипы по-русски → «Ты собрал» → 🎤 сказать."""
+    """Панель-конструктор: чипы по-русски → строка «Ты собрал» → ✕."""
 
-    def __init__(self, parent, palette,
-                 on_record: Optional[Callable[[], None]] = None,
-                 on_record_release: Optional[Callable[[], None]] = None,
-                 on_replay: Optional[Callable[[], None]] = None,
-                 before=None):
+    def __init__(self, parent, palette, before=None):
         super().__init__(parent, fg_color=palette["surface_alt"],
                          corner_radius=theme.R["block"])
         self.palette = palette
-        self._on_record = on_record
-        self._on_record_release = on_record_release
-        self._on_replay = on_replay
         self._before = before
         self._visible = False
         self._slot = ""
-        self._replay_text = ""
         self._picked: List[dict] = []
         self._buttons: List[tuple] = []      # [(кнопка, чип)]
 
@@ -59,36 +58,23 @@ class ChipBuilder(ctk.CTkFrame):
         self._chips_box = ctk.CTkFrame(self, fg_color="transparent")
         self._chips_box.pack(side="top", fill="x", padx=10, pady=(6, 0))
 
-        # ---- низ панели: что собрано + кнопки ----
+        # ---- низ панели: что собрано + одна кнопка «Очистить» ----
         bottom = ctk.CTkFrame(self, fg_color="transparent")
         bottom.pack(side="top", fill="x", padx=10, pady=(4, 6))
 
-        self.mic_btn = ctk.CTkButton(
-            bottom, text=MIC_TEXT, width=120, height=30,
-            fg_color=palette["accent"], hover_color=palette["accent_hover"],
-            text_color=palette["text"], cursor="hand2",
-            corner_radius=theme.R["button"], font=theme.FONT_SMALL)
-        self.mic_btn.pack(side="right", padx=(8, 0))
-        # Микрофон — «нажми и держи», как кнопка «Запись» внизу окна.
-        self.mic_btn.bind("<ButtonPress-1>", lambda _e: self._record(True), add="+")
-        self.mic_btn.bind("<ButtonRelease-1>", lambda _e: self._record(False), add="+")
-
-        self.replay_btn = ctk.CTkButton(
-            bottom, text=REPLAY_TEXT, width=36, height=30,
-            fg_color=palette["btn"], hover_color=palette["btn_hover"],
-            text_color=palette["text"], cursor="hand2",
-            corner_radius=theme.R["button"], border_width=1,
-            border_color=palette["border"], font=theme.FONT_SMALL,
-            command=self._replay)
-        self.replay_btn.pack(side="right", padx=(8, 0))
-
-        self.reset_btn = ctk.CTkButton(
-            bottom, text=RESET_TEXT, width=36, height=30,
+        self.clear_btn = ctk.CTkButton(
+            bottom, text=CLEAR_TEXT, width=32, height=30,
             fg_color="transparent", hover_color=palette["btn_hover"],
             text_color=palette["muted"], cursor="hand2",
-            corner_radius=theme.R["button"], font=theme.FONT_SMALL,
+            corner_radius=theme.R["button"], border_width=1,
+            border_color=palette["border"], font=theme.FONT_SMALL,
             command=self.reset)
-        self.reset_btn.pack(side="right", padx=(8, 0))
+        self.clear_btn.pack(side="right", padx=(8, 0))
+        if _tooltip is not None:
+            try:
+                _tooltip.ToolTip(self.clear_btn, CLEAR_TIP, palette)
+            except Exception:
+                pass
 
         self.picked_label = ctk.CTkLabel(
             bottom, text=EMPTY_TEXT, anchor="w", justify="left", height=0,
@@ -96,18 +82,13 @@ class ChipBuilder(ctk.CTkFrame):
         self.picked_label.pack(side="left", fill="x", expand=True)
 
     # ---------- данные ----------
-    def show_slot(self, slot, replay_text="", title=""):
-        """Построить чипы под слот текущего вопроса и показать панель.
-
-        replay_text — английский вопрос: он НЕ показывается, а только
-        запоминается, чтобы 🔊 прочитал его ещё раз.
-        """
+    def show_slot(self, slot):
+        """Построить чипы под слот текущего вопроса и показать панель."""
         slot = str(slot or "")
         if not slot or not scene_chips.has(slot):
             self.clear()
             return False
         self._slot = slot
-        self._replay_text = str(replay_text or "")
         self.reset()
         rows = scene_chips.groups(slot)
         self._build_chips(rows)
@@ -115,7 +96,7 @@ class ChipBuilder(ctk.CTkFrame):
         return True
 
     def reset(self):
-        """Снять выбор (кнопка ↺)."""
+        """Снять выбор (кнопка ✕ «Очистить»)."""
         self._picked = []
         self._paint()
         try:
@@ -126,7 +107,6 @@ class ChipBuilder(ctk.CTkFrame):
     def clear(self):
         """Панель не нужна (сцена кончилась): убрать всё и спрятаться."""
         self._slot = ""
-        self._replay_text = ""
         self._picked = []
         self._clear_chips()
         self._hide()
@@ -212,24 +192,6 @@ class ChipBuilder(ctk.CTkFrame):
     def visible(self):
         return self._visible
 
-    # ---------- кнопки ----------
-    def _replay(self):
-        if self._on_replay is None or not self._replay_text:
-            return
-        try:
-            self._on_replay(self._replay_text)
-        except Exception as exc:                       # noqa: BLE001
-            print("⚠️ Вопрос не озвучен повторно: %s" % exc)
-
-    def _record(self, start: bool):
-        cb = self._on_record if start else self._on_record_release
-        if cb is None:
-            return
-        try:
-            cb()
-        except Exception as exc:                       # noqa: BLE001
-            print("⚠️ Микрофон панели: %s" % exc)
-
     # ---------- видимость ----------
     def _show(self):
         if self._visible:
@@ -256,15 +218,9 @@ class ChipBuilder(ctk.CTkFrame):
     def apply_theme(self, palette):
         self.palette = palette
         self.configure(fg_color=palette["surface_alt"])
-        self.mic_btn.configure(fg_color=palette["accent"],
-                               hover_color=palette["accent_hover"],
-                               text_color=palette["text"])
-        self.replay_btn.configure(fg_color=palette["btn"],
-                                  hover_color=palette["btn_hover"],
-                                  text_color=palette["text"],
-                                  border_color=palette["border"])
-        self.reset_btn.configure(hover_color=palette["btn_hover"],
-                                 text_color=palette["muted"])
+        self.clear_btn.configure(hover_color=palette["btn_hover"],
+                                 text_color=palette["muted"],
+                                 border_color=palette["border"])
         self.picked_label.configure(text_color=palette["text"])
         self._paint()
         for btn, _chip in list(self._buttons):
