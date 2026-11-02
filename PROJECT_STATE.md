@@ -3945,3 +3945,80 @@ preposition 2, spelling 2, article 1, aux_verb 1.
 **ВЖИВУЮ НЕ ПРОВЕРЕНО:** насколько точно 4B ловит ошибки в КОРОТКИХ ответах
 («two peoples»), не считает ли ошибкой нормальное «Yes, please», и не пустой
 ли будет разбор на чистой сцене. Сервер на момент правок не был запущен.
+
+## §57. ДВИЖОК РЕАКЦИЙ В СЦЕНАХ — СДЕЛАНО 03.11.2026 (`27d8757`)
+
+### Задача
+
+Жалоба ученика 03.11.2026: бот спросил «Can I get you something to drink?», ученик
+ответил «i would like some beer. what do you have?», а бот ПРОМОЛЧАЛ про пиво и
+выдал заготовку шага 2. Причина: сцена читает скрипт подряд и не реагирует.
+
+Решение (ученик, решение 100): скриптуем НЕ фразы ученика (их бесконечность), а
+**намерения**; словари ОБЩИЕ на уровень, один файл на все сцены. Не понял →
+переспрос, не молчание. Модель в сцене по-прежнему не зовётся.
+
+### `data/reactions_a2.json` (НОВЫЙ, 409 строк, LF, в git через `git add -f`)
+
+`words` (yes/no/thanks/bill/toilet/repeat/dontknow/recommend/whatyouhave/howmuch/
+complaint/goodbye), `numbers` (34 фразы: one…ten, 1…10, alone, just me, two of us,
+me and my wife), `universal` (общие заглушки), `slots` — 15 слотов ресторана
+(people, table, drink, menu, ready, starter, main, side, thanks, food_ok, bread,
+dessert, anything, payment, goodbye). Поля слота: `ask`, `items`, `echo_one`,
+`echo`, `plurals`, `yes`, `no`, `thanks`, `have`, `recommend`, `price`,
+`fallback` (свой переспрос), `numbers` (bool), `words` (свои слова).
+
+### `scene_reactions.py` (НОВЫЙ, 293 строки, LF, ни Tk, ни модели)
+
+`library`, `reload`, `slot_names`, `has_slot`, `ask`, `tokens`,
+`intent(slot, text)` → `Intent(kind, item, count)`, `reply`, `reply_to`, `unknown`.
+
+Намерения: item / number / yes / no / thanks / bill / toilet / recommend / have /
+price / complaint / dontknow / repeat / other / empty.
+
+**Порядок правил (это и есть весь движок):**
+жалоба → туалет → цена → рекомендация → **ПРЕДМЕТ** → счёт → «что есть» → число →
+свои слова слота → нет → благодарность → да → не знаю → переспрос.
+
+Почему такой порядок — из живых багов прототипа (`logs/_reaction_proto2.py`):
+«just water thanks» было благодарностью, «pay by card» — счётом, «how much is
+coffee?» — предметом, «for me chicken please» — согласием («please» считалось
+«да»), «sorry, latte» — переспросом. Все пять пойманы и закрыты тестом.
+
+Мелочи: ответы с заглавной буквы; `two beers` → `Two beers, coming up.`
+(множественное из `plurals`); «один человек» — отдельный шаблон `echo_one`
+(«Just one? Right this way, please.»).
+
+### ⚠️ Имя `reactions.py` ЗАНЯТО
+
+Старый модуль «реакции лица» (удивление → улыбка после 3 промахов, коммит
+`44eec45`) импортируют `ui/app.py` и `tests/test_reactions.py`. Новый движок
+назван **`scene_reactions.py`**, тест — `tests/test_scene_reactions.py`.
+Не путать.
+
+### `data/scenes_a2.json`
+
+У всех 15 вопросов ресторана метка `slot`. Плюс закрыт долг §56: «Would you like
+a few minutes?» → **«…a few minutes to look at it?»**.
+
+### Проверки
+
+`tests/test_scene_reactions.py` — **54 проверки, зелёные** (данные и метки /
+намерения / порядок правил / переспрос и незнакомое слово / шаблоны / метки в
+новой сцене без правки кода). Замер прототипа на 30 живых репликах: 27 понял,
+3 — переспрос по делу.
+
+### ВЖИВУЮ НЕ ПРОВЕРЕНО (долг)
+
+1. В окне приложения движок НЕ подключён — задача следующего чата.
+2. Как STT слышит «two beers» (может дать «2 beers» / «to beers»).
+3. Вторая сцена (магазин) — существует ли движок без правки кода.
+
+### Решение 101 — КОНСТРУКТОР НА РУССКОМ (идея ученика, ещё не сделано)
+
+Под чатом панель с чипами **только по-русски**: ученик собирает русское
+предложение, В ГОЛОВЕ переводит, произносит по-английски в микрофон.
+Английский на экран не попадает НИКОГДА. Чипы лежат в
+`reactions_a2.json` → `slots.<slot>.chips`: группы `start` / `count` / `item` /
+`end` / `short`; у `item` пары `{"ru","en"}` — `en` только для движка реакций.
+Набор зависит от слота ТЕКУЩЕГО вопроса (контекст диалога), а не один на сцену.
