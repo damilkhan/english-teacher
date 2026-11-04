@@ -197,14 +197,24 @@ def test_retry():
         check("ответ получен", ok is True and reply.startswith("Hello"), (ok, reply))
         check("было ДВА запроса (первый + повтор)", len(llm.calls) == 2, len(llm.calls))
         first, second = llm.calls[0], llm.calls[1]
-        check("в первом истории 4 строки", len(first) == 1 + 4 + 1, len(first))
+        # 04.11.2026: промпт собирается двумя частями, и меняющийся хвост
+        # (время, задание, RAG-заметки) идёт ОТДЕЛЬНЫМ system-сообщением перед
+        # репликой ученика — иначе кэш сервера промахивался на каждой фразе.
+        # Поэтому считаем не все сообщения, а именно историю диалога.
+        def hist_len(msgs):
+            return len([m for m in msgs[1:-1] if m["role"] in ("user", "assistant")])
+
+        def full_text(msgs):
+            return "".join(str(m.get("content") or "") for m in msgs)
+
+        check("в первом вся история (4 реплики)", hist_len(first) == 4, hist_len(first))
         check("в повторе истории не больше CONTEXT_RETRY_LINES",
-              len(second) == 1 + int(config.CONTEXT_RETRY_LINES) + 1, len(second))
+              hist_len(second) <= int(config.CONTEXT_RETRY_LINES), hist_len(second))
         check("реплика ученика в повторе осталась",
               second[-1]["content"] == "Hello teacher!", second[-1])
-        check("системный промпт в повторе короче (RAG убран)",
-              len(second[0]["content"]) <= len(first[0]["content"]),
-              (len(first[0]["content"]), len(second[0]["content"])))
+        check("промпт в повторе короче (RAG убран)",
+              len(full_text(second)) <= len(full_text(first)),
+              (len(full_text(first)), len(full_text(second))))
 
     print("\n[4b] Выключатель CONTEXT_RETRY_RAG=False оставляет RAG")
     real = config.CONTEXT_RETRY_RAG

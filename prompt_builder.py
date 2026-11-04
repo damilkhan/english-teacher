@@ -754,7 +754,77 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
             + _exam_block(exam, exam_questions, exam_asked))
 
 
-def build_messages(system_prompt, history, user_text):
+
+
+
+# ---------- краткость ответа (04.11.2026) ----------
+# Замер: реплика учителя вырастала до 60-110 токенов с эмодзи, а на этом
+# железе 8 ток/с => 8-13 с ожидания. Ученику A2 длинная реплика ещё и вредна.
+BRIEF_BLOCK = (
+    "\n\nSTYLE - this rule wins over everything else:"
+    "\n- answer with ONE short sentence, 12 words at most;"
+    "\n- no emojis at all;"
+    "\n- simple A2 words, no long explanations;"
+    "\n- never repeat what the student said back to them; just respond."
+    "\n")
+
+
+def _strip_emoji_offer(text):
+    """Убрать из персоны предложение про эмодзи (когда BRIEF_REPLIES).
+
+    В персоне есть строка «Use colorful emojis ... {EMOJIS}» со списком из 16
+    эмодзи. Она спорит с правилом «без эмодзи» и побеждает: замер 04.11 -
+    ответы шли с 🍞👍😊 даже при явном запрете. Эмодзи стоят токенов (время!)
+    и всё равно вырезаются озвучкой.
+    """
+    text = str(text or "")
+    text = text.replace(
+        "Use colorful emojis to make conversation more engaging and friendly "
+        "(like in messengers): " + EMOJIS,
+        "Keep it short, no emojis.")
+    text = text.replace("Use emojis freely: " + EMOJIS, "")
+    text = text.replace(
+        "Keep responses short (2-3 sentences).",
+        "Keep responses short: one sentence.")
+    return text
+
+def build_prompt_parts(mode, profile, lang="en", level=None, student=None,
+                       context=None, plan=None, lesson=None, now=None,
+                       variety=False, english_only=False, words=None,
+                       american=False, teacher=None, exam=False,
+                       exam_questions=None, hesitation=False,
+                       exam_asked=None, word_forms=False, logic=False):
+    """Промпт ДВУМЯ частями: stable (не меняется по ходу урока) и dynamic.
+
+    Зачем (замер 04.11.2026). llama-server кэширует префикс промпта: если
+    промпт не изменился, 2800 токенов НЕ читаются заново. Но в уроке
+    менялось почти всё: время с минутами (_now_block), номер задания
+    (_lesson_block), методические заметки RAG (по фразе ученика) и слова.
+    Кэш промахивался на КАЖДОЙ реплике: 1 из 2758 токенов, чтение промпта
+    13-22 с вместо 0,5 с.
+
+    Отсюда правило: в stable - всё постоянное, в dynamic - всё, что меняется,
+    и dynamic уходит ОТДЕЛЬНЫМ сообщением перед репликой ученика. Префикс
+    тогда не меняется, и ученик ждёт только генерацию.
+
+    Возвращает {"stable": ..., "dynamic": ...}. concat(stable+dynamic) НЕ
+    равен build_system_prompt по порядку блоков - это осознанно: меняющееся
+    должно стоять ближе к реплике ученика.
+    """
+    prompt = build_system_prompt(
+        mode, profile, lang=lang, level=level, student=student,
+        context=None, plan=None, lesson=None, now=None, variety=variety,
+        english_only=english_only, words=None, american=american,
+        teacher=teacher, exam=False, hesitation=hesitation,
+        word_forms=word_forms, logic=logic)
+    dynamic = (_plan_block(plan) + _lesson_block(lesson) + _now_block(now)
+               + _knowledge_block(context) + _words_block(words)
+               + _exam_block(exam, exam_questions, exam_asked))
+    if getattr(config, "BRIEF_REPLIES", True):
+        prompt = _strip_emoji_offer(prompt) + BRIEF_BLOCK
+    return {"stable": prompt, "dynamic": dynamic}
+
+def build_messages(system_prompt, history, user_text, tail=""):
     """Собирает СПИСОК сообщений (OpenAI-формат) для нашего llm_client.
 
     Возвращает [{"role": "system", ...}, {"role": "user"/"assistant", ...}, …,
@@ -773,6 +843,11 @@ def build_messages(system_prompt, history, user_text):
             messages.append({"role": "user", "content": line[9:]})
         elif line.startswith("Assistant: "):
             messages.append({"role": "assistant", "content": line[11:]})
+    # Меняющийся хвост (время, задание, RAG-заметки, слова) — ПОСЛЕ истории,
+    # но перед репликой ученика: префикс промпта остаётся тем же, и сервер
+    # переиспользует кэш вместо повторного чтения всех 2800 токенов.
+    if tail and str(tail).strip():
+        messages.append({"role": "system", "content": str(tail)})
     messages.append({"role": "user", "content": user_text})
     return messages
 

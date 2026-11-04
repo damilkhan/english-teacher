@@ -241,7 +241,11 @@ class ChatController:
         words = self._prompt_words()
         # «сейчас» и «не повторяйся» — так Джейн знает дату/время и не задаёт
         # один и тот же вопрос про завтрак при каждом знакомстве
-        system_prompt = prompt_builder.build_system_prompt(
+        # Промпт собираем ДВУМЯ частями: постоянная уходит в system (её сервер
+        # кэширует), меняющаяся (время, задание, RAG-заметки, слова) - в хвост
+        # перед репликой ученика. Иначе кэш промахивался на каждой фразе и
+        # промпт на 2800 токенов читался заново: 13-22 с ожидания (04.11.2026).
+        parts = prompt_builder.build_prompt_parts(
             self.mode, profile_store.load(self.user_id), lang,
             level=level, student=student, context=context, plan=plan_text,
             lesson=lesson_block, now=datetime.now(), variety=True,
@@ -253,10 +257,11 @@ class ChatController:
             word_forms=True,          # lie/lay и прочие слова с двумя значениями
             logic=True,               # вопрос должен иметь смысл (26.10.2026)
             exam_asked=(self._exam_asked if exam_mode else None))   # повтор — не ошибка
+        system_prompt, tail = parts["stable"], parts["dynamic"]
 
         print(f"📤 Язык ответа: {'РУССКИЙ' if lang == 'ru' else 'ENGLISH'}")
 
-        ok, raw = self._ask_model(system_prompt, user_text)
+        ok, raw = self._ask_model(system_prompt, user_text, tail=tail)
         if not ok and llm_client.is_context_error(raw):
             # Запрос не влез в память модели. Сервер сам ничего не обрезает —
             # повторяем с КОРОТКОЙ историей (и, если надо, без RAG), чтобы
@@ -299,7 +304,7 @@ class ChatController:
                 cleaned = prompt_builder.strip_trailing_question(cleaned)
         return True, cleaned
 
-    def _ask_model(self, system_prompt, user_text, short_history=False):
+    def _ask_model(self, system_prompt, user_text, short_history=False, tail=""):
         """Один вызов Учителя: промпт + история + реплика ученика.
 
         short_history=True — оставить только последние строки истории
@@ -310,7 +315,8 @@ class ChatController:
         if short_history:
             keep = max(0, int(getattr(config, "CONTEXT_RETRY_LINES", 2) or 0))
             history = self.history[-keep:] if keep else []
-        messages = prompt_builder.build_messages(system_prompt, history, user_text)
+        messages = prompt_builder.build_messages(system_prompt, history, user_text,
+                                                tail=tail)
         return self.llm.complete(
             messages,
             max_tokens=config.LLM_CHAT_MAX_TOKENS,
