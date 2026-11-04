@@ -1,0 +1,3213 @@
+{
+ "version": 2,
+ "level": "a2",
+ "intents_universal": [
+  "item",
+  "number",
+  "yes",
+  "no",
+  "thanks",
+  "bill",
+  "toilet",
+  "recommend",
+  "have",
+  "price",
+  "complaint",
+  "dontknow",
+  "repeat",
+  "other"
+ ],
+ "library": {
+  "note": "ОБЩИЕ слова и шаблоны реакций на уровень A2. Один файл на все сцены. Скриптов на фразы ученика НЕТ (решение 100). Код только читает: слова -> намерение -> шаблон из данных.",
+  "words": {
+   "yes": [
+    "yes",
+    "yeah",
+    "yep",
+    "sure",
+    "ok",
+    "okay",
+    "alright",
+    "of course",
+    "certainly",
+    "gladly"
+   ],
+   "no": [
+    "no",
+    "nope",
+    "nothing",
+    "not",
+    "never"
+   ],
+   "thanks": [
+    "thank",
+    "thanks",
+    "thx"
+   ],
+   "bill": [
+    "bill",
+    "check",
+    "pay"
+   ],
+   "toilet": [
+    "toilet",
+    "bathroom",
+    "restroom",
+    "wc"
+   ],
+   "repeat": [
+    "sorry",
+    "again",
+    "repeat",
+    "pardon"
+   ],
+   "dontknow": [
+    "don't know",
+    "dont know",
+    "no idea",
+    "not sure",
+    "i don't know"
+   ],
+   "recommend": [
+    "recommend",
+    "suggest",
+    "advice",
+    "advise",
+    "advise me",
+    "what do you advise",
+    "recommendation"
+   ],
+   "whatyouhave": [
+    "what do you have",
+    "what have you got",
+    "what is there",
+    "what kind"
+   ],
+   "howmuch": [
+    "how much",
+    "how many dollars",
+    "price"
+   ],
+   "complaint": [
+    "cold",
+    "hot",
+    "wrong",
+    "bad",
+    "dirty",
+    "burnt",
+    "raw",
+    "salty",
+    "sweet",
+    "sour",
+    "not fresh",
+    "not good",
+    "don't like",
+    "dont like",
+    "too long",
+    "not tasty"
+   ],
+   "goodbye": [
+    "bye",
+    "goodbye",
+    "see you",
+    "good night"
+   ]
+  },
+  "numbers": {
+   "1": "One",
+   "2": "Two",
+   "3": "Three",
+   "4": "Four",
+   "5": "Five",
+   "6": "Six",
+   "7": "Seven",
+   "8": "Eight",
+   "9": "Nine",
+   "10": "Ten",
+   "one": "One",
+   "two": "Two",
+   "three": "Three",
+   "four": "Four",
+   "five": "Five",
+   "six": "Six",
+   "seven": "Seven",
+   "eight": "Eight",
+   "nine": "Nine",
+   "ten": "Ten",
+   "alone": "One",
+   "just me": "One",
+   "just myself": "One",
+   "only me": "One",
+   "two of us": "Two",
+   "three of us": "Three",
+   "with my wife": "Two",
+   "with my friend": "Two",
+   "with a friend": "Two",
+   "me and my wife": "Two",
+   "me and my friend": "Two",
+   "and my friend": "Two",
+   "my friend and me": "Two",
+   "with my family": "Three"
+  },
+  "universal": {
+   "yes": "Yes, sure.",
+   "no": "No problem.",
+   "thanks": "You're welcome.",
+   "dontknow": "No problem. Take your time.",
+   "repeat": "Sorry, could you say that again?",
+   "bill": "Here is your bill.",
+   "toilet": "It's over there, on the right.",
+   "complaint": "I'm sorry about that. I'll take it back to the kitchen.",
+   "recommend": "I recommend the chicken. It's very good.",
+   "have": "We have beer, wine, juice and coffee.",
+   "price": "It's about ten dollars."
+  }
+ },
+ "worlds": {
+  "a2.restaurant": {
+   "title": "At the Restaurant",
+   "title_ru": "В ресторане",
+   "lesson": "city/2.1",
+   "point": "city/point_2",
+   "persona": {
+    "ru": "Официант в небольшом американском ресторане. Его работа: принять заказ, принести еду и напитки, принести счёт, попрощаться. Говорит коротко и вежливо. Он НЕ друг гостю: про жизнь, семью, работу и планы не спрашивает — его дело столик и еда.",
+    "en": "You are the waiter in a small American restaurant. Your job is to take the order, bring the food and drinks, bring the bill and say goodbye. You speak short and polite. You are NOT a friend of the guest: you never ask about their life, family, job or plans — your job is the table and the food.",
+    "knows": [
+     "people",
+     "table",
+     "drink",
+     "starter",
+     "main",
+     "side",
+     "dessert",
+     "anything",
+     "payment"
+    ],
+    "ignorant": [],
+    "off_world": "I'm not sure about that. Let me check.",
+    "max_words": 12
+   },
+   "card": {
+    "role": "waiter",
+    "ru": "Официант в небольшом американском ресторане. Его работа: принять заказ, принести еду и напитки, принести счёт, попрощаться. Говорит коротко и вежливо. Он НЕ друг гостю: про жизнь, семью, работу и планы не спрашивает — его дело столик и еда.",
+    "en": "You are the waiter in a small American restaurant. Your job is to take the order, bring the food and drinks, bring the bill and say goodbye. You speak short and polite. You are NOT a friend of the guest: you never ask about their life, family, job or plans — your job is the table and the food."
+   },
+   "steps": [
+    {
+     "n": 1,
+     "title": "Приветствие и посадка"
+    },
+    {
+     "n": 2,
+     "title": "Меню"
+    },
+    {
+     "n": 3,
+     "title": "Заказ"
+    },
+    {
+     "n": 4,
+     "title": "Принесли еду"
+    },
+    {
+     "n": 5,
+     "title": "Десерт"
+    },
+    {
+     "n": 6,
+     "title": "Счёт и уход"
+    }
+   ],
+   "entities": {
+    "people": {
+     "ru": "",
+     "kind": "number",
+     "items": {}
+    },
+    "table": {
+     "ru": "",
+     "kind": "item",
+     "items": {
+      "window": {
+       "en": "by the window",
+       "plural": "",
+       "ru": ""
+      },
+      "by the window": {
+       "en": "by the window",
+       "plural": "",
+       "ru": ""
+      },
+      "corner": {
+       "en": "in the corner",
+       "plural": "",
+       "ru": ""
+      },
+      "outside": {
+       "en": "outside",
+       "plural": "",
+       "ru": ""
+      },
+      "terrace": {
+       "en": "on the terrace",
+       "plural": "",
+       "ru": ""
+      },
+      "table": {
+       "en": "this table",
+       "plural": "",
+       "ru": ""
+      }
+     }
+    },
+    "drink": {
+     "ru": "",
+     "kind": "item",
+     "items": {
+      "beer": {
+       "en": "beer",
+       "plural": "beers",
+       "ru": "пиво"
+      },
+      "wine": {
+       "en": "wine",
+       "plural": "wines",
+       "ru": "вино"
+      },
+      "water": {
+       "en": "water",
+       "plural": "waters",
+       "ru": "воду"
+      },
+      "juice": {
+       "en": "juice",
+       "plural": "juices",
+       "ru": "сок"
+      },
+      "coffee": {
+       "en": "coffee",
+       "plural": "coffees",
+       "ru": "кофе"
+      },
+      "tea": {
+       "en": "tea",
+       "plural": "teas",
+       "ru": ""
+      },
+      "cola": {
+       "en": "cola",
+       "plural": "colas",
+       "ru": ""
+      },
+      "coke": {
+       "en": "cola",
+       "plural": "",
+       "ru": ""
+      },
+      "lemonade": {
+       "en": "lemonade",
+       "plural": "lemonades",
+       "ru": ""
+      },
+      "milk": {
+       "en": "milk",
+       "plural": "milks",
+       "ru": ""
+      },
+      "soda": {
+       "en": "soda",
+       "plural": "sodas",
+       "ru": ""
+      },
+      "milkshake": {
+       "en": "milkshake",
+       "plural": "milkshakes",
+       "ru": ""
+      },
+      "champagne": {
+       "en": "champagne",
+       "plural": "",
+       "ru": ""
+      }
+     }
+    },
+    "starter": {
+     "ru": "",
+     "kind": "item",
+     "items": {
+      "soup": {
+       "en": "soup",
+       "plural": "soups",
+       "ru": "суп"
+      },
+      "salad": {
+       "en": "salad",
+       "plural": "salads",
+       "ru": "салат"
+      },
+      "bread": {
+       "en": "bread",
+       "plural": "breads",
+       "ru": ""
+      },
+      "cheese": {
+       "en": "cheese",
+       "plural": "cheese",
+       "ru": ""
+      },
+      "shrimp": {
+       "en": "shrimps",
+       "plural": "",
+       "ru": ""
+      },
+      "prawns": {
+       "en": "shrimps",
+       "plural": "",
+       "ru": ""
+      },
+      "onion rings": {
+       "en": "onion rings",
+       "plural": "onion rings",
+       "ru": ""
+      },
+      "rings": {
+       "en": "onion rings",
+       "plural": "",
+       "ru": ""
+      },
+      "wings": {
+       "en": "chicken wings",
+       "plural": "chicken wings",
+       "ru": ""
+      },
+      "garlic bread": {
+       "en": "garlic bread",
+       "plural": "garlic bread",
+       "ru": ""
+      }
+     }
+    },
+    "main": {
+     "ru": "",
+     "kind": "item",
+     "items": {
+      "steak": {
+       "en": "steak",
+       "plural": "steaks",
+       "ru": "стейк"
+      },
+      "chicken": {
+       "en": "chicken",
+       "plural": "chicken",
+       "ru": "курицу"
+      },
+      "fish": {
+       "en": "fish",
+       "plural": "fish",
+       "ru": "рыбу"
+      },
+      "pizza": {
+       "en": "pizza",
+       "plural": "pizzas",
+       "ru": ""
+      },
+      "pasta": {
+       "en": "pasta",
+       "plural": "pasta",
+       "ru": "пасту"
+      },
+      "burger": {
+       "en": "a burger",
+       "plural": "burgers",
+       "ru": ""
+      },
+      "hamburger": {
+       "en": "a burger",
+       "plural": "",
+       "ru": ""
+      },
+      "rice": {
+       "en": "rice",
+       "plural": "rice",
+       "ru": ""
+      },
+      "fries": {
+       "en": "fries",
+       "plural": "fries",
+       "ru": ""
+      },
+      "sandwich": {
+       "en": "a sandwich",
+       "plural": "sandwiches",
+       "ru": ""
+      },
+      "eggs": {
+       "en": "eggs",
+       "plural": "eggs",
+       "ru": ""
+      },
+      "pancakes": {
+       "en": "pancakes",
+       "plural": "pancakes",
+       "ru": ""
+      },
+      "seafood": {
+       "en": "seafood",
+       "plural": "",
+       "ru": ""
+      }
+     }
+    },
+    "side": {
+     "ru": "",
+     "kind": "item",
+     "items": {
+      "soup": {
+       "en": "soup",
+       "plural": "soups",
+       "ru": "суп"
+      },
+      "salad": {
+       "en": "salad",
+       "plural": "salads",
+       "ru": "салат"
+      },
+      "fries": {
+       "en": "fries",
+       "plural": "fries",
+       "ru": ""
+      },
+      "potatoes": {
+       "en": "potatoes",
+       "plural": "potatoes",
+       "ru": ""
+      },
+      "rice": {
+       "en": "rice",
+       "plural": "rice",
+       "ru": ""
+      },
+      "vegetables": {
+       "en": "vegetables",
+       "plural": "vegetables",
+       "ru": ""
+      }
+     }
+    },
+    "dessert": {
+     "ru": "",
+     "kind": "item",
+     "items": {
+      "cake": {
+       "en": "cake",
+       "plural": "cakes",
+       "ru": ""
+      },
+      "ice": {
+       "en": "ice cream",
+       "plural": "",
+       "ru": ""
+      },
+      "ice cream": {
+       "en": "ice cream",
+       "plural": "ice creams",
+       "ru": ""
+      },
+      "tiramisu": {
+       "en": "tiramisu",
+       "plural": "tiramisu",
+       "ru": ""
+      },
+      "pie": {
+       "en": "pie",
+       "plural": "pies",
+       "ru": ""
+      },
+      "chocolate": {
+       "en": "chocolate",
+       "plural": "chocolates",
+       "ru": ""
+      },
+      "fruit": {
+       "en": "fruit",
+       "plural": "fruit",
+       "ru": ""
+      },
+      "coffee": {
+       "en": "coffee",
+       "plural": "coffees",
+       "ru": "кофе"
+      },
+      "tea": {
+       "en": "tea",
+       "plural": "teas",
+       "ru": ""
+      }
+     }
+    },
+    "anything": {
+     "ru": "",
+     "kind": "item",
+     "items": {
+      "beer": {
+       "en": "beer",
+       "plural": "beers",
+       "ru": "пиво"
+      },
+      "water": {
+       "en": "water",
+       "plural": "waters",
+       "ru": "воду"
+      },
+      "coffee": {
+       "en": "coffee",
+       "plural": "coffees",
+       "ru": "кофе"
+      },
+      "tea": {
+       "en": "tea",
+       "plural": "teas",
+       "ru": ""
+      },
+      "bread": {
+       "en": "bread",
+       "plural": "breads",
+       "ru": ""
+      },
+      "cake": {
+       "en": "cake",
+       "plural": "cakes",
+       "ru": ""
+      },
+      "dessert": {
+       "en": "dessert",
+       "plural": "desserts",
+       "ru": ""
+      }
+     }
+    },
+    "payment": {
+     "ru": "",
+     "kind": "choice",
+     "items": {
+      "card": {
+       "en": "by card",
+       "plural": "",
+       "ru": "картой"
+      },
+      "cash": {
+       "en": "in cash",
+       "plural": "",
+       "ru": "наличными"
+      },
+      "credit": {
+       "en": "by card",
+       "plural": "",
+       "ru": "картой"
+      },
+      "debit": {
+       "en": "by card",
+       "plural": "",
+       "ru": "картой"
+      },
+      "visa": {
+       "en": "by card",
+       "plural": "",
+       "ru": "картой"
+      },
+      "mastercard": {
+       "en": "by card",
+       "plural": "",
+       "ru": "картой"
+      }
+     }
+    }
+   },
+   "intents": {
+    "minutes": {
+     "said": "minutes",
+     "reply": "Take your time. I'll come back in a few minutes.",
+     "slot": "menu"
+    },
+    "minute": {
+     "said": "minute",
+     "reply": "Take your time. I'll come back in a few minutes.",
+     "slot": "menu"
+    },
+    "a_moment": {
+     "said": "a moment",
+     "reply": "Sure. I'll come back in a moment.",
+     "slot": "menu"
+    },
+    "moment": {
+     "said": "moment",
+     "reply": "Sure. I'll come back in a moment.",
+     "slot": "menu"
+    },
+    "we_are_ready": {
+     "said": "we are ready",
+     "reply": "Good.",
+     "slot": "menu"
+    },
+    "ready": {
+     "said": "ready",
+     "reply": "Good.",
+     "slot": "menu"
+    },
+    "let_me_look": {
+     "said": "let me look",
+     "reply": "Take your time. I'll be right back.",
+     "slot": "menu"
+    },
+    "i_m_ready": {
+     "said": "i'm ready",
+     "reply": "Good.",
+     "slot": "menu"
+    },
+    "more_time": {
+     "said": "more time",
+     "reply": "OK. Take your time.",
+     "slot": "ready"
+    },
+    "menu_again": {
+     "said": "menu again",
+     "reply": "Of course. Here is the menu.",
+     "slot": "ready"
+    },
+    "menu": {
+     "said": "menu",
+     "reply": "Of course. Here is the menu.",
+     "slot": "ready"
+    },
+    "yes_we_are": {
+     "said": "yes we are",
+     "reply": "Great. Let's start.",
+     "slot": "ready"
+    },
+    "both": {
+     "said": "both",
+     "reply": "Both. Good choice. Is that all?",
+     "slot": "side"
+    },
+    "both_please": {
+     "said": "both please",
+     "reply": "Both. Good choice. Is that all?",
+     "slot": "side"
+    },
+    "you_are_welcome": {
+     "said": "you are welcome",
+     "reply": "Enjoy your meal!",
+     "slot": "thanks"
+    },
+    "delicious": {
+     "said": "delicious",
+     "reply": "I'm glad you like it!",
+     "slot": "food_ok"
+    },
+    "tasty": {
+     "said": "tasty",
+     "reply": "I'm glad you like it!",
+     "slot": "food_ok"
+    },
+    "everything_is_fine": {
+     "said": "everything is fine",
+     "reply": "Very good. I'm glad you like it.",
+     "slot": "food_ok"
+    },
+    "all_good": {
+     "said": "all good",
+     "reply": "Very good. I'm glad you like it.",
+     "slot": "food_ok"
+    },
+    "fine": {
+     "said": "fine",
+     "reply": "Very good. I'm glad you like it.",
+     "slot": "food_ok"
+    },
+    "very_good": {
+     "said": "very good",
+     "reply": "I'm glad you like it.",
+     "slot": "food_ok"
+    },
+    "great": {
+     "said": "great",
+     "reply": "I'm glad you like it.",
+     "slot": "food_ok"
+    },
+    "bye": {
+     "said": "bye",
+     "reply": "Have a nice evening!",
+     "slot": "goodbye"
+    },
+    "goodbye": {
+     "said": "goodbye",
+     "reply": "Have a nice evening!",
+     "slot": "goodbye"
+    },
+    "see_you": {
+     "said": "see you",
+     "reply": "See you!",
+     "slot": "goodbye"
+    },
+    "good_night": {
+     "said": "good night",
+     "reply": "Good night!",
+     "slot": "goodbye"
+    },
+    "thanks_for": {
+     "said": "thanks for",
+     "reply": "You're welcome. Thank you!",
+     "slot": "goodbye"
+    },
+    "have_a_nice_evening": {
+     "said": "have a nice evening",
+     "reply": "You too! Thank you.",
+     "slot": "goodbye"
+    },
+    "nice_evening": {
+     "said": "nice evening",
+     "reply": "You too! Thank you.",
+     "slot": "goodbye"
+    },
+    "good_evening": {
+     "said": "good evening",
+     "reply": "Good evening!",
+     "slot": "goodbye"
+    }
+   },
+   "turns": [
+    {
+     "id": "t1",
+     "step": 1,
+     "slot": "people",
+     "ask": "Good evening! How many people are with you?",
+     "ru": "сколько вас",
+     "entity": "people"
+    },
+    {
+     "id": "t2",
+     "step": 1,
+     "slot": "table",
+     "ask": "Would you like a table by the window?",
+     "ru": "у окна?",
+     "entity": "table"
+    },
+    {
+     "id": "t3",
+     "step": 1,
+     "slot": "drink",
+     "ask": "Here is your table. Can I get you something to drink?",
+     "ru": "что-нибудь выпить?",
+     "entity": "drink"
+    },
+    {
+     "id": "t4",
+     "step": 2,
+     "slot": "menu",
+     "ask": "Here is the menu. Would you like a few minutes to look at it?",
+     "ru": "посмотреть меню?",
+     "entity": "",
+     "intents": [
+      "minutes",
+      "minute",
+      "a_moment",
+      "moment",
+      "we_are_ready",
+      "ready",
+      "let_me_look",
+      "i_m_ready"
+     ]
+    },
+    {
+     "id": "t5",
+     "step": 2,
+     "slot": "ready",
+     "ask": "Are you ready to order?",
+     "ru": "готовы заказать?",
+     "entity": "",
+     "intents": [
+      "minute",
+      "minutes",
+      "more_time",
+      "menu_again",
+      "menu",
+      "ready",
+      "we_are_ready",
+      "i_m_ready",
+      "yes_we_are"
+     ]
+    },
+    {
+     "id": "t6",
+     "step": 3,
+     "slot": "starter",
+     "ask": "What would you like to start with?",
+     "ru": "с чего начнёте?",
+     "entity": "starter"
+    },
+    {
+     "id": "t7",
+     "step": 3,
+     "slot": "main",
+     "ask": "And for the main course?",
+     "ru": "горячее?",
+     "entity": "main"
+    },
+    {
+     "id": "t8",
+     "step": 3,
+     "slot": "side",
+     "ask": "Would you like soup or salad with that?",
+     "ru": "суп или салат?",
+     "entity": "side"
+    },
+    {
+     "id": "t9",
+     "step": 4,
+     "slot": "thanks",
+     "ask": "Here is your food. Enjoy your meal!",
+     "ru": "поблагодари",
+     "entity": "",
+     "intents": [
+      "you_are_welcome"
+     ]
+    },
+    {
+     "id": "t10",
+     "step": 4,
+     "slot": "food_ok",
+     "ask": "Is everything all right with your food?",
+     "ru": "всё в порядке?",
+     "entity": "",
+     "intents": [
+      "delicious",
+      "tasty",
+      "everything_is_fine",
+      "all_good",
+      "fine",
+      "very_good",
+      "great"
+     ]
+    },
+    {
+     "id": "t11",
+     "step": 4,
+     "slot": "bread",
+     "ask": "Would you like some more bread?",
+     "ru": "ещё хлеба?",
+     "entity": "",
+     "intents": []
+    },
+    {
+     "id": "t12",
+     "step": 5,
+     "slot": "dessert",
+     "ask": "Would you like to see the dessert menu?",
+     "ru": "десерт?",
+     "entity": "dessert"
+    },
+    {
+     "id": "t13",
+     "step": 6,
+     "slot": "anything",
+     "ask": "Would you like anything else?",
+     "ru": "ещё что-нибудь?",
+     "entity": "anything"
+    },
+    {
+     "id": "t14",
+     "step": 6,
+     "slot": "payment",
+     "ask": "Here is your bill. Card or cash?",
+     "ru": "картой или наличными?",
+     "entity": "payment"
+    },
+    {
+     "id": "t15",
+     "step": 6,
+     "slot": "goodbye",
+     "ask": "Thank you. Have a nice evening!",
+     "ru": "попрощайся",
+     "entity": "",
+     "intents": [
+      "bye",
+      "goodbye",
+      "see_you",
+      "good_night",
+      "thanks_for",
+      "have_a_nice_evening",
+      "nice_evening",
+      "good_evening"
+     ]
+    }
+   ],
+   "slots": {
+    "people": {
+     "ask": "How many people are with you?",
+     "numbers": true,
+     "echo_one": "Just one? Right this way, please.",
+     "echo": "{num} people? Right this way, please.",
+     "yes": "This way, please.",
+     "no": "Let me find you a table.",
+     "fallback": "Sorry, how many of you are there?",
+     "chips": {
+      "count": [
+       {
+        "ru": "один",
+        "en": "one"
+       },
+       {
+        "ru": "два",
+        "en": "two"
+       },
+       {
+        "ru": "три",
+        "en": "three"
+       },
+       {
+        "ru": "четыре",
+        "en": "four"
+       }
+      ],
+      "short": [
+       {
+        "ru": "Только я",
+        "en": "Just me"
+       },
+       {
+        "ru": "Нас двое",
+        "en": "Two of us"
+       },
+       {
+        "ru": "С женой",
+        "en": "With my wife"
+       }
+      ]
+     }
+    },
+    "table": {
+     "ask": "Would you like a table by the window?",
+     "echo": "{item}? Good choice. This way, please.",
+     "yes": "This way, please.",
+     "no": "OK, this table is fine. Right this way, please.",
+     "chips": {
+      "short": [
+       {
+        "ru": "Да, пожалуйста",
+        "en": "Yes, please"
+       },
+       {
+        "ru": "Лучше у окна",
+        "en": "A table by the window, please"
+       },
+       {
+        "ru": "Нет, спасибо",
+        "en": "No, thanks"
+       }
+      ]
+     },
+     "items": {
+      "window": "by the window",
+      "by the window": "by the window",
+      "corner": "in the corner",
+      "outside": "outside",
+      "terrace": "on the terrace",
+      "table": "this table"
+     }
+    },
+    "drink": {
+     "ask": "Something to drink?",
+     "echo_one": "One {item}, coming up.",
+     "echo": "{n} {item_plural}, coming up.",
+     "yes": "What would you like? We have beer, wine, juice and coffee.",
+     "no": "No problem.",
+     "fallback": "Sorry, what would you like to drink?",
+     "chips": {
+      "start": [
+       {
+        "ru": "Я бы хотел",
+        "en": "I would like"
+       },
+       {
+        "ru": "Можно",
+        "en": "Can I have"
+       }
+      ],
+      "count": [
+       {
+        "ru": "один",
+        "en": "one"
+       },
+       {
+        "ru": "два",
+        "en": "two"
+       }
+      ],
+      "item": [
+       {
+        "ru": "пиво",
+        "en": "beer"
+       },
+       {
+        "ru": "вино",
+        "en": "wine"
+       },
+       {
+        "ru": "воду",
+        "en": "water"
+       },
+       {
+        "ru": "сок",
+        "en": "juice"
+       },
+       {
+        "ru": "кофе",
+        "en": "coffee"
+       }
+      ],
+      "end": [
+       {
+        "ru": "спасибо",
+        "en": "thanks"
+       }
+      ],
+      "short": [
+       {
+        "ru": "Просто воду",
+        "en": "Just water"
+       },
+       {
+        "ru": "Ничего, спасибо",
+        "en": "Nothing, thanks"
+       }
+      ]
+     },
+     "have": "beer, wine, juice, coffee, tea and cola",
+     "recommend": "I recommend our lemonade. It's very good.",
+     "price": "Coffee is three dollars, beer is five dollars.",
+     "items": {
+      "beer": "beer",
+      "wine": "wine",
+      "water": "water",
+      "juice": "juice",
+      "coffee": "coffee",
+      "tea": "tea",
+      "cola": "cola",
+      "coke": "cola",
+      "lemonade": "lemonade",
+      "milk": "milk",
+      "soda": "soda",
+      "milkshake": "milkshake",
+      "champagne": "champagne"
+     },
+     "plurals": {
+      "beer": "beers",
+      "wine": "wines",
+      "water": "waters",
+      "juice": "juices",
+      "coffee": "coffees",
+      "tea": "teas",
+      "cola": "colas",
+      "lemonade": "lemonades",
+      "milk": "milks",
+      "soda": "sodas",
+      "milkshake": "milkshakes"
+     }
+    },
+    "menu": {
+     "ask": "Would you like a few minutes to look at the menu?",
+     "yes": "Take your time. I'll come back in a few minutes.",
+     "no": "OK.",
+     "chips": {
+      "short": [
+       {
+        "ru": "Да, пожалуйста",
+        "en": "Yes, please"
+       },
+       {
+        "ru": "Дайте пару минут",
+        "en": "A few minutes, please"
+       },
+       {
+        "ru": "Мы готовы",
+        "en": "We are ready"
+       }
+      ]
+     },
+     "words": {
+      "minutes": "Take your time. I'll come back in a few minutes.",
+      "minute": "Take your time. I'll come back in a few minutes.",
+      "a moment": "Sure. I'll come back in a moment.",
+      "moment": "Sure. I'll come back in a moment.",
+      "we are ready": "Good.",
+      "ready": "Good.",
+      "let me look": "Take your time. I'll be right back.",
+      "i'm ready": "Good."
+     }
+    },
+    "ready": {
+     "ask": "Are you ready to order?",
+     "yes": "Great.",
+     "no": "Take your time. I'll come back in a few minutes.",
+     "chips": {
+      "short": [
+       {
+        "ru": "Да, готовы",
+        "en": "Yes, we are ready"
+       },
+       {
+        "ru": "Ещё минутку",
+        "en": "One more minute"
+       },
+       {
+        "ru": "Можно меню ещё раз?",
+        "en": "Can I have the menu again?"
+       }
+      ]
+     },
+     "words": {
+      "minute": "OK. Take your time.",
+      "minutes": "OK. Take your time.",
+      "more time": "OK. Take your time.",
+      "menu again": "Of course. Here is the menu.",
+      "menu": "Of course. Here is the menu.",
+      "ready": "Great. Let's start.",
+      "we are ready": "Great. Let's start.",
+      "i'm ready": "Great. Let's start.",
+      "yes we are": "Great. Let's start."
+     },
+     "dontknow": "No problem. Take your time. I'll come back in a few minutes."
+    },
+    "starter": {
+     "ask": "What would you like to start with?",
+     "echo": "{item} to start. Very good.",
+     "yes": "We have soup, salad, onion rings and garlic bread.",
+     "no": "No starter? OK.",
+     "fallback": "Sorry, what would you like to start with?",
+     "chips": {
+      "start": [
+       {
+        "ru": "Я бы хотел",
+        "en": "I would like"
+       },
+       {
+        "ru": "Можно",
+        "en": "Can I have"
+       }
+      ],
+      "count": [
+       {
+        "ru": "один",
+        "en": "one"
+       },
+       {
+        "ru": "два",
+        "en": "two"
+       }
+      ],
+      "item": [
+       {
+        "ru": "суп",
+        "en": "soup"
+       },
+       {
+        "ru": "салат",
+        "en": "salad"
+       },
+       {
+        "ru": "креветки",
+        "en": "shrimp"
+       }
+      ],
+      "end": [
+       {
+        "ru": "пожалуйста",
+        "en": "please"
+       }
+      ],
+      "short": [
+       {
+        "ru": "Ничего, спасибо",
+        "en": "Nothing, thanks"
+       }
+      ]
+     },
+     "have": "soup, salad, onion rings and garlic bread",
+     "recommend": "I recommend the onion rings. They're very good.",
+     "price": "Soup is five dollars, salad is six dollars.",
+     "items": {
+      "soup": "soup",
+      "salad": "salad",
+      "bread": "bread",
+      "cheese": "cheese",
+      "shrimp": "shrimps",
+      "prawns": "shrimps",
+      "onion rings": "onion rings",
+      "rings": "onion rings",
+      "wings": "chicken wings",
+      "garlic bread": "garlic bread"
+     },
+     "plurals": {
+      "soup": "soups",
+      "salad": "salads",
+      "bread": "breads",
+      "cheese": "cheese",
+      "onion rings": "onion rings",
+      "wings": "chicken wings",
+      "garlic bread": "garlic bread",
+      "shrimps": "shrimps"
+     }
+    },
+    "main": {
+     "ask": "And for the main course?",
+     "echo": "{item} for the main course. Good choice.",
+     "yes": "What would you like? We have steak, chicken, fish, pizza and pasta.",
+     "no": "OK.",
+     "fallback": "Sorry, what would you like for the main course?",
+     "chips": {
+      "start": [
+       {
+        "ru": "Я бы хотел",
+        "en": "I would like"
+       },
+       {
+        "ru": "Мне",
+        "en": "For me"
+       }
+      ],
+      "item": [
+       {
+        "ru": "стейк",
+        "en": "steak"
+       },
+       {
+        "ru": "курицу",
+        "en": "chicken"
+       },
+       {
+        "ru": "рыбу",
+        "en": "fish"
+       },
+       {
+        "ru": "пасту",
+        "en": "pasta"
+       },
+       {
+        "ru": "бургер",
+        "en": "burger"
+       }
+      ],
+      "end": [
+       {
+        "ru": "пожалуйста",
+        "en": "please"
+       }
+      ],
+      "short": [
+       {
+        "ru": "Что посоветуете?",
+        "en": "What do you recommend?"
+       }
+      ]
+     },
+     "have": "steak, chicken, fish, pizza and pasta",
+     "recommend": "I recommend the steak. It's our best dish.",
+     "price": "The steak is twenty dollars, the chicken is fourteen.",
+     "items": {
+      "steak": "steak",
+      "chicken": "chicken",
+      "fish": "fish",
+      "pizza": "pizza",
+      "pasta": "pasta",
+      "burger": "a burger",
+      "hamburger": "a burger",
+      "rice": "rice",
+      "fries": "fries",
+      "sandwich": "a sandwich",
+      "eggs": "eggs",
+      "pancakes": "pancakes",
+      "seafood": "seafood"
+     },
+     "plurals": {
+      "steak": "steaks",
+      "chicken": "chicken",
+      "fish": "fish",
+      "pizza": "pizzas",
+      "pasta": "pasta",
+      "burger": "burgers",
+      "rice": "rice",
+      "fries": "fries",
+      "sandwich": "sandwiches",
+      "eggs": "eggs",
+      "pancakes": "pancakes"
+     }
+    },
+    "side": {
+     "ask": "Would you like soup or salad with that?",
+     "echo": "With {item}. Very good.",
+     "yes": "Both are good. Which one?",
+     "no": "No side dish. OK, that's all.",
+     "chips": {
+      "start": [
+       {
+        "ru": "Я бы хотел",
+        "en": "I would like"
+       }
+      ],
+      "item": [
+       {
+        "ru": "суп",
+        "en": "soup"
+       },
+       {
+        "ru": "салат",
+        "en": "salad"
+       }
+      ],
+      "end": [
+       {
+        "ru": "пожалуйста",
+        "en": "please"
+       }
+      ],
+      "short": [
+       {
+        "ru": "И то и другое",
+        "en": "Both, please"
+       }
+      ]
+     },
+     "words": {
+      "both": "Both. Good choice. Is that all?",
+      "both please": "Both. Good choice. Is that all?"
+     },
+     "have": "soup, salad, fries, potatoes and rice",
+     "items": {
+      "soup": "soup",
+      "salad": "salad",
+      "fries": "fries",
+      "potatoes": "potatoes",
+      "rice": "rice",
+      "vegetables": "vegetables"
+     },
+     "plurals": {
+      "soup": "soups",
+      "salad": "salads",
+      "fries": "fries",
+      "potatoes": "potatoes",
+      "rice": "rice",
+      "vegetables": "vegetables"
+     }
+    },
+    "thanks": {
+     "yes": "Very good.",
+     "chips": {
+      "short": [
+       {
+        "ru": "Спасибо",
+        "en": "Thank you"
+       },
+       {
+        "ru": "Спасибо, выглядит отлично",
+        "en": "Thank you, it looks great"
+       }
+      ]
+     },
+     "words": {
+      "you are welcome": "Enjoy your meal!"
+     },
+     "thanks": "You're welcome."
+    },
+    "food_ok": {
+     "ask": "Is everything all right with your food?",
+     "yes": "Very good. I'm glad you like it.",
+     "no": "Oh, I'm sorry! I'll take it back to the kitchen.",
+     "chips": {
+      "short": [
+       {
+        "ru": "Да, всё хорошо",
+        "en": "Yes, everything is fine"
+       },
+       {
+        "ru": "Очень вкусно",
+        "en": "It's delicious"
+       },
+       {
+        "ru": "Нет, еда холодная",
+        "en": "No, the food is cold"
+       }
+      ]
+     },
+     "words": {
+      "delicious": "I'm glad you like it!",
+      "tasty": "I'm glad you like it!",
+      "everything is fine": "Very good. I'm glad you like it.",
+      "all good": "Very good. I'm glad you like it.",
+      "fine": "Very good. I'm glad you like it.",
+      "very good": "I'm glad you like it.",
+      "great": "I'm glad you like it."
+     },
+     "thanks": "You're welcome. Enjoy your meal!"
+    },
+    "bread": {
+     "ask": "Would you like some more bread?",
+     "yes": "Here you are. More bread for you.",
+     "no": "No more bread. OK.",
+     "chips": {
+      "short": [
+       {
+        "ru": "Да, пожалуйста",
+        "en": "Yes, please"
+       },
+       {
+        "ru": "Нет, спасибо",
+        "en": "No, thanks"
+       }
+      ]
+     },
+     "thanks": "You're welcome."
+    },
+    "dessert": {
+     "ask": "Would you like to see the dessert menu?",
+     "echo": "{item}, then. Very good.",
+     "yes": "Here is the dessert menu. Our cake is very good.",
+     "no": "No dessert. OK.",
+     "chips": {
+      "short": [
+       {
+        "ru": "Да, покажите",
+        "en": "Yes, please show me"
+       },
+       {
+        "ru": "Нет, спасибо",
+        "en": "No, thanks"
+       },
+       {
+        "ru": "Что посоветуете?",
+        "en": "What do you recommend?"
+       }
+      ]
+     },
+     "have": "cake, ice cream, pie and fruit",
+     "recommend": "I recommend the cake with ice cream. It's very good.",
+     "price": "Cake is six dollars, ice cream is five dollars.",
+     "items": {
+      "cake": "cake",
+      "ice": "ice cream",
+      "ice cream": "ice cream",
+      "tiramisu": "tiramisu",
+      "pie": "pie",
+      "chocolate": "chocolate",
+      "fruit": "fruit",
+      "coffee": "coffee",
+      "tea": "tea"
+     },
+     "plurals": {
+      "cake": "cakes",
+      "ice cream": "ice creams",
+      "tiramisu": "tiramisu",
+      "pie": "pies",
+      "chocolate": "chocolates",
+      "fruit": "fruit",
+      "coffee": "coffees",
+      "tea": "teas"
+     }
+    },
+    "anything": {
+     "ask": "Would you like anything else?",
+     "echo": "One {item}, coming up.",
+     "yes": "OK.",
+     "no": "OK, no problem.",
+     "chips": {
+      "short": [
+       {
+        "ru": "Нет, спасибо",
+        "en": "No, thanks"
+       },
+       {
+        "ru": "Счёт, пожалуйста",
+        "en": "The bill, please"
+       },
+       {
+        "ru": "Ещё воды, пожалуйста",
+        "en": "Some more water, please"
+       }
+      ]
+     },
+     "bill": "Of course. Right away.",
+     "items": {
+      "beer": "beer",
+      "water": "water",
+      "coffee": "coffee",
+      "tea": "tea",
+      "bread": "bread",
+      "cake": "cake",
+      "dessert": "dessert"
+     },
+     "plurals": {
+      "beer": "beers",
+      "water": "waters",
+      "coffee": "coffees",
+      "tea": "teas",
+      "bread": "breads",
+      "cake": "cakes",
+      "dessert": "desserts"
+     }
+    },
+    "payment": {
+     "ask": "Card or cash?",
+     "echo": "{item}. Fine, thank you.",
+     "yes": "By card? Fine, thank you.",
+     "no": "OK, no problem. Thank you.",
+     "fallback": "Sorry, will you pay by card or in cash?",
+     "chips": {
+      "item": [
+       {
+        "ru": "картой",
+        "en": "by card"
+       },
+       {
+        "ru": "наличными",
+        "en": "in cash"
+       }
+      ],
+      "short": []
+     },
+     "items": {
+      "card": "by card",
+      "cash": "in cash",
+      "credit": "by card",
+      "debit": "by card",
+      "visa": "by card",
+      "mastercard": "by card"
+     }
+    },
+    "goodbye": {
+     "yes": "Have a nice evening!",
+     "no": "Have a nice evening!",
+     "chips": {
+      "short": [
+       {
+        "ru": "Спасибо",
+        "en": "Thank you"
+       },
+       {
+        "ru": "До свидания",
+        "en": "Goodbye"
+       },
+       {
+        "ru": "Хорошего вечера",
+        "en": "Have a nice evening"
+       }
+      ]
+     },
+     "words": {
+      "bye": "Have a nice evening!",
+      "goodbye": "Have a nice evening!",
+      "see you": "See you!",
+      "good night": "Good night!",
+      "thanks for": "You're welcome. Thank you!",
+      "have a nice evening": "You too! Thank you.",
+      "nice evening": "You too! Thank you.",
+      "good evening": "Good evening!"
+     },
+     "thanks": "Thank you. Have a nice evening!"
+    }
+   }
+  },
+  "a2.shop": {
+   "title": "In the Shop",
+   "title_ru": "В магазине",
+   "lesson": "city/3.1",
+   "point": "city/point_3",
+   "persona": {
+    "ru": "Продавец в небольшом магазине одежды. Его работа: спросить, что нужно, подсказать размер и цвет, показать примерочную, назвать цену, принять оплату, отдать пакет и чек, попрощаться. Говорит коротко и вежливо. Он НЕ друг покупателю: про жизнь, семью и планы не спрашивает — его дело товар и деньги.",
+    "en": "You are the shop assistant in a small clothes shop. Your job is to ask what the customer needs, help with size and colour, show the changing room, tell the price, take the payment, give a bag and a receipt and say goodbye. You speak short and polite. You are NOT a friend of the customer: you never ask about their life, family or plans — your job is the goods and the money.",
+    "knows": [
+     "shop_help",
+     "shop_item",
+     "shop_size",
+     "shop_colour",
+     "shop_like",
+     "shop_fit",
+     "shop_bigger",
+     "shop_price",
+     "shop_pay",
+     "shop_card",
+     "shop_bag",
+     "shop_receipt"
+    ],
+    "ignorant": [],
+    "off_world": "I'm not sure about that. Let me check.",
+    "max_words": 12
+   },
+   "card": {
+    "role": "shop assistant",
+    "ru": "Продавец в небольшом магазине одежды. Его работа: спросить, что нужно, подсказать размер и цвет, показать примерочную, назвать цену, принять оплату, отдать пакет и чек, попрощаться. Говорит коротко и вежливо. Он НЕ друг покупателю: про жизнь, семью и планы не спрашивает — его дело товар и деньги.",
+    "en": "You are the shop assistant in a small clothes shop. Your job is to ask what the customer needs, help with size and colour, show the changing room, tell the price, take the payment, give a bag and a receipt and say goodbye. You speak short and polite. You are NOT a friend of the customer: you never ask about their life, family or plans — your job is the goods and the money."
+   },
+   "steps": [
+    {
+     "n": 1,
+     "title": "Продавец здоровается"
+    },
+    {
+     "n": 2,
+     "title": "Размер и цвет"
+    },
+    {
+     "n": 3,
+     "title": "Примерка"
+    },
+    {
+     "n": 4,
+     "title": "Цена"
+    },
+    {
+     "n": 5,
+     "title": "Оплата"
+    },
+    {
+     "n": 6,
+     "title": "Пакет, чек, уход"
+    }
+   ],
+   "entities": {
+    "shop_help": {
+     "ru": "",
+     "kind": "item",
+     "items": {
+      "jacket": {
+       "en": "jacket",
+       "plural": "jackets",
+       "ru": ""
+      },
+      "coat": {
+       "en": "coat",
+       "plural": "coats",
+       "ru": ""
+      },
+      "shirt": {
+       "en": "shirt",
+       "plural": "shirts",
+       "ru": ""
+      },
+      "t-shirt": {
+       "en": "t-shirt",
+       "plural": "t-shirts",
+       "ru": ""
+      },
+      "tshirt": {
+       "en": "t-shirt",
+       "plural": "",
+       "ru": ""
+      },
+      "jeans": {
+       "en": "jeans",
+       "plural": "jeans",
+       "ru": "джинсы"
+      },
+      "trousers": {
+       "en": "trousers",
+       "plural": "trousers",
+       "ru": ""
+      },
+      "pants": {
+       "en": "pants",
+       "plural": "pants",
+       "ru": ""
+      },
+      "dress": {
+       "en": "dress",
+       "plural": "dresses",
+       "ru": ""
+      },
+      "skirt": {
+       "en": "skirt",
+       "plural": "skirts",
+       "ru": ""
+      },
+      "sweater": {
+       "en": "sweater",
+       "plural": "sweaters",
+       "ru": ""
+      },
+      "jumper": {
+       "en": "sweater",
+       "plural": "",
+       "ru": ""
+      },
+      "shoes": {
+       "en": "shoes",
+       "plural": "shoes",
+       "ru": "туфли"
+      },
+      "boots": {
+       "en": "boots",
+       "plural": "boots",
+       "ru": ""
+      },
+      "hat": {
+       "en": "hat",
+       "plural": "hats",
+       "ru": ""
+      },
+      "cap": {
+       "en": "cap",
+       "plural": "caps",
+       "ru": ""
+      },
+      "bag": {
+       "en": "bag",
+       "plural": "bags",
+       "ru": ""
+      },
+      "scarf": {
+       "en": "scarf",
+       "plural": "scarves",
+       "ru": ""
+      }
+     }
+    },
+    "shop_item": {
+     "ru": "",
+     "kind": "item",
+     "items": {
+      "jacket": {
+       "en": "jacket",
+       "plural": "jackets",
+       "ru": ""
+      },
+      "coat": {
+       "en": "coat",
+       "plural": "coats",
+       "ru": ""
+      },
+      "shirt": {
+       "en": "shirt",
+       "plural": "shirts",
+       "ru": ""
+      },
+      "t-shirt": {
+       "en": "t-shirt",
+       "plural": "t-shirts",
+       "ru": ""
+      },
+      "tshirt": {
+       "en": "t-shirt",
+       "plural": "",
+       "ru": ""
+      },
+      "jeans": {
+       "en": "jeans",
+       "plural": "",
+       "ru": "джинсы"
+      },
+      "trousers": {
+       "en": "trousers",
+       "plural": "",
+       "ru": ""
+      },
+      "pants": {
+       "en": "pants",
+       "plural": "",
+       "ru": ""
+      },
+      "dress": {
+       "en": "dress",
+       "plural": "dresses",
+       "ru": ""
+      },
+      "skirt": {
+       "en": "skirt",
+       "plural": "skirts",
+       "ru": ""
+      },
+      "sweater": {
+       "en": "sweater",
+       "plural": "sweaters",
+       "ru": ""
+      },
+      "jumper": {
+       "en": "sweater",
+       "plural": "",
+       "ru": ""
+      },
+      "shoes": {
+       "en": "shoes",
+       "plural": "",
+       "ru": "туфли"
+      },
+      "boots": {
+       "en": "boots",
+       "plural": "",
+       "ru": ""
+      },
+      "hat": {
+       "en": "hat",
+       "plural": "hats",
+       "ru": ""
+      },
+      "cap": {
+       "en": "cap",
+       "plural": "caps",
+       "ru": ""
+      },
+      "bag": {
+       "en": "bag",
+       "plural": "bags",
+       "ru": ""
+      },
+      "scarf": {
+       "en": "scarf",
+       "plural": "scarves",
+       "ru": ""
+      }
+     }
+    },
+    "shop_size": {
+     "ru": "",
+     "kind": "choice",
+     "items": {
+      "30": {
+       "en": "30",
+       "plural": "",
+       "ru": ""
+      },
+      "32": {
+       "en": "32",
+       "plural": "",
+       "ru": ""
+      },
+      "34": {
+       "en": "34",
+       "plural": "",
+       "ru": ""
+      },
+      "36": {
+       "en": "36",
+       "plural": "",
+       "ru": ""
+      },
+      "38": {
+       "en": "38",
+       "plural": "",
+       "ru": ""
+      },
+      "40": {
+       "en": "40",
+       "plural": "",
+       "ru": ""
+      },
+      "42": {
+       "en": "42",
+       "plural": "",
+       "ru": ""
+      },
+      "44": {
+       "en": "44",
+       "plural": "",
+       "ru": ""
+      },
+      "46": {
+       "en": "46",
+       "plural": "",
+       "ru": ""
+      },
+      "48": {
+       "en": "48",
+       "plural": "",
+       "ru": ""
+      },
+      "50": {
+       "en": "50",
+       "plural": "",
+       "ru": ""
+      },
+      "small": {
+       "en": "small",
+       "plural": "",
+       "ru": "маленький"
+      },
+      "medium": {
+       "en": "medium",
+       "plural": "",
+       "ru": "средний"
+      },
+      "large": {
+       "en": "large",
+       "plural": "",
+       "ru": "большой"
+      },
+      "extra large": {
+       "en": "extra large",
+       "plural": "",
+       "ru": ""
+      },
+      "xl": {
+       "en": "XL",
+       "plural": "",
+       "ru": ""
+      },
+      "xxl": {
+       "en": "XXL",
+       "plural": "",
+       "ru": ""
+      },
+      "s": {
+       "en": "S",
+       "plural": "",
+       "ru": ""
+      },
+      "m": {
+       "en": "M",
+       "plural": "",
+       "ru": ""
+      },
+      "l": {
+       "en": "L",
+       "plural": "",
+       "ru": ""
+      },
+      "thirty eight": {
+       "en": "38",
+       "plural": "",
+       "ru": ""
+      },
+      "forty": {
+       "en": "40",
+       "plural": "",
+       "ru": ""
+      },
+      "forty two": {
+       "en": "42",
+       "plural": "",
+       "ru": ""
+      },
+      "forty four": {
+       "en": "44",
+       "plural": "",
+       "ru": ""
+      },
+      "forty six": {
+       "en": "46",
+       "plural": "",
+       "ru": ""
+      },
+      "forty eight": {
+       "en": "48",
+       "plural": "",
+       "ru": ""
+      },
+      "fifty": {
+       "en": "50",
+       "plural": "",
+       "ru": ""
+      }
+     }
+    },
+    "shop_colour": {
+     "ru": "",
+     "kind": "item",
+     "items": {
+      "black": {
+       "en": "black",
+       "plural": "",
+       "ru": "чёрный"
+      },
+      "white": {
+       "en": "white",
+       "plural": "",
+       "ru": "белый"
+      },
+      "blue": {
+       "en": "blue",
+       "plural": "",
+       "ru": "синий"
+      },
+      "red": {
+       "en": "red",
+       "plural": "",
+       "ru": "красный"
+      },
+      "green": {
+       "en": "green",
+       "plural": "",
+       "ru": "зелёный"
+      },
+      "grey": {
+       "en": "grey",
+       "plural": "",
+       "ru": ""
+      },
+      "gray": {
+       "en": "grey",
+       "plural": "",
+       "ru": ""
+      },
+      "brown": {
+       "en": "brown",
+       "plural": "",
+       "ru": ""
+      },
+      "yellow": {
+       "en": "yellow",
+       "plural": "",
+       "ru": ""
+      },
+      "pink": {
+       "en": "pink",
+       "plural": "",
+       "ru": ""
+      },
+      "orange": {
+       "en": "orange",
+       "plural": "",
+       "ru": ""
+      },
+      "beige": {
+       "en": "beige",
+       "plural": "",
+       "ru": ""
+      }
+     }
+    },
+    "shop_like": {
+     "ru": "",
+     "kind": "item",
+     "items": {
+      "black": {
+       "en": "black",
+       "plural": "",
+       "ru": "чёрный"
+      },
+      "white": {
+       "en": "white",
+       "plural": "",
+       "ru": "белый"
+      },
+      "blue": {
+       "en": "blue",
+       "plural": "",
+       "ru": "синий"
+      },
+      "red": {
+       "en": "red",
+       "plural": "",
+       "ru": "красный"
+      },
+      "green": {
+       "en": "green",
+       "plural": "",
+       "ru": "зелёный"
+      },
+      "grey": {
+       "en": "grey",
+       "plural": "",
+       "ru": ""
+      },
+      "gray": {
+       "en": "grey",
+       "plural": "",
+       "ru": ""
+      },
+      "brown": {
+       "en": "brown",
+       "plural": "",
+       "ru": ""
+      },
+      "yellow": {
+       "en": "yellow",
+       "plural": "",
+       "ru": ""
+      },
+      "pink": {
+       "en": "pink",
+       "plural": "",
+       "ru": ""
+      },
+      "orange": {
+       "en": "orange",
+       "plural": "",
+       "ru": ""
+      },
+      "beige": {
+       "en": "beige",
+       "plural": "",
+       "ru": ""
+      }
+     }
+    },
+    "shop_fit": {
+     "ru": "",
+     "kind": "item",
+     "items": {
+      "small": {
+       "en": "small",
+       "plural": "",
+       "ru": "маленький"
+      },
+      "big": {
+       "en": "big",
+       "plural": "",
+       "ru": ""
+      },
+      "tight": {
+       "en": "tight",
+       "plural": "",
+       "ru": ""
+      },
+      "loose": {
+       "en": "loose",
+       "plural": "",
+       "ru": ""
+      },
+      "bigger": {
+       "en": "bigger",
+       "plural": "",
+       "ru": ""
+      },
+      "smaller": {
+       "en": "smaller",
+       "plural": "",
+       "ru": ""
+      }
+     }
+    },
+    "shop_bigger": {
+     "ru": "",
+     "kind": "item",
+     "items": {
+      "smaller": {
+       "en": "smaller",
+       "plural": "",
+       "ru": ""
+      },
+      "small": {
+       "en": "small",
+       "plural": "",
+       "ru": "маленький"
+      },
+      "bigger": {
+       "en": "bigger",
+       "plural": "",
+       "ru": ""
+      },
+      "larger": {
+       "en": "larger",
+       "plural": "",
+       "ru": ""
+      }
+     }
+    },
+    "shop_price": {
+     "ru": "",
+     "kind": "item",
+     "items": {
+      "discount": {
+       "en": "a discount",
+       "plural": "",
+       "ru": ""
+      },
+      "sale": {
+       "en": "a sale",
+       "plural": "",
+       "ru": ""
+      },
+      "cheaper": {
+       "en": "a cheaper one",
+       "plural": "",
+       "ru": ""
+      },
+      "card": {
+       "en": "by card",
+       "plural": "",
+       "ru": "картой"
+      },
+      "cash": {
+       "en": "in cash",
+       "plural": "",
+       "ru": "наличными"
+      }
+     }
+    },
+    "shop_pay": {
+     "ru": "",
+     "kind": "choice",
+     "items": {
+      "card": {
+       "en": "by card",
+       "plural": "",
+       "ru": "картой"
+      },
+      "cash": {
+       "en": "in cash",
+       "plural": "",
+       "ru": "наличными"
+      },
+      "credit": {
+       "en": "by card",
+       "plural": "",
+       "ru": "картой"
+      },
+      "debit": {
+       "en": "by card",
+       "plural": "",
+       "ru": "картой"
+      },
+      "visa": {
+       "en": "by card",
+       "plural": "",
+       "ru": "картой"
+      },
+      "mastercard": {
+       "en": "by card",
+       "plural": "",
+       "ru": "картой"
+      },
+      "phone": {
+       "en": "by phone",
+       "plural": "",
+       "ru": ""
+      }
+     }
+    },
+    "shop_card": {
+     "ru": "",
+     "kind": "item",
+     "items": {
+      "card": {
+       "en": "card",
+       "plural": "",
+       "ru": ""
+      },
+      "phone": {
+       "en": "phone",
+       "plural": "",
+       "ru": ""
+      }
+     }
+    },
+    "shop_bag": {
+     "ru": "",
+     "kind": "item",
+     "items": {
+      "bag": {
+       "en": "bag",
+       "plural": "",
+       "ru": ""
+      }
+     }
+    },
+    "shop_receipt": {
+     "ru": "",
+     "kind": "item",
+     "items": {
+      "receipt": {
+       "en": "a receipt",
+       "plural": "",
+       "ru": ""
+      }
+     }
+    }
+   },
+   "intents": {
+    "just_looking": {
+     "said": "just looking",
+     "reply": "No problem. Take your time.",
+     "slot": "shop_help"
+    },
+    "look_around": {
+     "said": "look around",
+     "reply": "No problem. Take your time.",
+     "slot": "shop_help"
+    },
+    "any_colour": {
+     "said": "any colour",
+     "reply": "OK, I'll pick a nice one for you.",
+     "slot": "shop_colour"
+    },
+    "any_color": {
+     "said": "any color",
+     "reply": "OK, I'll pick a nice one for you.",
+     "slot": "shop_colour"
+    },
+    "any": {
+     "said": "any",
+     "reply": "OK, I'll pick a nice one for you.",
+     "slot": "shop_colour"
+    },
+    "another_colour": {
+     "said": "another colour",
+     "reply": "Yes, we have it in blue and black.",
+     "slot": "shop_like"
+    },
+    "another_color": {
+     "said": "another color",
+     "reply": "Yes, we have it in blue and black.",
+     "slot": "shop_like"
+    },
+    "other_colours": {
+     "said": "other colours",
+     "reply": "Yes, we have it in blue and black.",
+     "slot": "shop_like"
+    },
+    "other_colors": {
+     "said": "other colors",
+     "reply": "Yes, we have it in blue and black.",
+     "slot": "shop_like"
+    },
+    "expensive": {
+     "said": "expensive",
+     "reply": "I understand. We have cheaper ones too.",
+     "slot": "shop_price"
+    },
+    "too_expensive": {
+     "said": "too expensive",
+     "reply": "I understand. We have cheaper ones too.",
+     "slot": "shop_price"
+    },
+    "take_it": {
+     "said": "take it",
+     "reply": "Great! How would you like to pay?",
+     "slot": "shop_take"
+    },
+    "i_will_take_it": {
+     "said": "i will take it",
+     "reply": "Great! How would you like to pay?",
+     "slot": "shop_take"
+    },
+    "take_them": {
+     "said": "take them",
+     "reply": "Great! How would you like to pay?",
+     "slot": "shop_take"
+    },
+    "think_about_it": {
+     "said": "think about it",
+     "reply": "OK. Take your time.",
+     "slot": "shop_take"
+    },
+    "think": {
+     "said": "think",
+     "reply": "OK. Take your time.",
+     "slot": "shop_take"
+    },
+    "here_you_are": {
+     "said": "here you are",
+     "reply": "Thank you. Please enter your PIN.",
+     "slot": "shop_card"
+    },
+    "here_it_is": {
+     "said": "here it is",
+     "reply": "Thank you. Please enter your PIN.",
+     "slot": "shop_card"
+    },
+    "here": {
+     "said": "here",
+     "reply": "Thank you. Please enter your PIN.",
+     "slot": "shop_card"
+    },
+    "bye": {
+     "said": "bye",
+     "reply": "Have a nice day!",
+     "slot": "shop_bye"
+    },
+    "goodbye": {
+     "said": "goodbye",
+     "reply": "Have a nice day!",
+     "slot": "shop_bye"
+    },
+    "see_you": {
+     "said": "see you",
+     "reply": "See you! Goodbye!",
+     "slot": "shop_bye"
+    },
+    "good_night": {
+     "said": "good night",
+     "reply": "Good night!",
+     "slot": "shop_bye"
+    },
+    "have_a_nice_day": {
+     "said": "have a nice day",
+     "reply": "Thank you! You too!",
+     "slot": "shop_bye"
+    },
+    "nice_day": {
+     "said": "nice day",
+     "reply": "Thank you! You too!",
+     "slot": "shop_bye"
+    }
+   },
+   "turns": [
+    {
+     "id": "t1",
+     "step": 1,
+     "slot": "shop_help",
+     "ask": "Good morning! Can I help you?",
+     "ru": "помочь?",
+     "entity": "shop_help"
+    },
+    {
+     "id": "t2",
+     "step": 1,
+     "slot": "shop_item",
+     "ask": "What are you looking for?",
+     "ru": "что ищете?",
+     "entity": "shop_item"
+    },
+    {
+     "id": "t3",
+     "step": 2,
+     "slot": "shop_size",
+     "ask": "What size do you wear?",
+     "ru": "какой размер?",
+     "entity": "shop_size"
+    },
+    {
+     "id": "t4",
+     "step": 2,
+     "slot": "shop_colour",
+     "ask": "What colour would you like?",
+     "ru": "какой цвет?",
+     "entity": "shop_colour"
+    },
+    {
+     "id": "t5",
+     "step": 2,
+     "slot": "shop_like",
+     "ask": "We have this one in black. Do you like it?",
+     "ru": "нравится?",
+     "entity": "shop_like"
+    },
+    {
+     "id": "t6",
+     "step": 3,
+     "slot": "shop_try",
+     "ask": "Would you like to try it on?",
+     "ru": "примерите?",
+     "entity": "",
+     "intents": []
+    },
+    {
+     "id": "t7",
+     "step": 3,
+     "slot": "shop_fit",
+     "ask": "The changing room is over there. Is the size OK?",
+     "ru": "размер подходит?",
+     "entity": "shop_fit"
+    },
+    {
+     "id": "t8",
+     "step": 3,
+     "slot": "shop_bigger",
+     "ask": "Do you want a bigger size?",
+     "ru": "размер побольше?",
+     "entity": "shop_bigger"
+    },
+    {
+     "id": "t9",
+     "step": 4,
+     "slot": "shop_price",
+     "ask": "It costs forty dollars. Is that OK?",
+     "ru": "сорок долларов, хорошо?",
+     "entity": "shop_price"
+    },
+    {
+     "id": "t10",
+     "step": 4,
+     "slot": "shop_take",
+     "ask": "Do you want to take it?",
+     "ru": "берёте?",
+     "entity": "",
+     "intents": [
+      "take_it",
+      "i_will_take_it",
+      "take_them",
+      "think_about_it",
+      "think"
+     ]
+    },
+    {
+     "id": "t11",
+     "step": 5,
+     "slot": "shop_pay",
+     "ask": "How would you like to pay?",
+     "ru": "как платите?",
+     "entity": "shop_pay"
+    },
+    {
+     "id": "t12",
+     "step": 5,
+     "slot": "shop_card",
+     "ask": "Can I have your card, please?",
+     "ru": "дайте карту",
+     "entity": "shop_card"
+    },
+    {
+     "id": "t13",
+     "step": 6,
+     "slot": "shop_bag",
+     "ask": "Do you need a bag?",
+     "ru": "нужен пакет?",
+     "entity": "shop_bag"
+    },
+    {
+     "id": "t14",
+     "step": 6,
+     "slot": "shop_receipt",
+     "ask": "Would you like a receipt?",
+     "ru": "нужен чек?",
+     "entity": "shop_receipt"
+    },
+    {
+     "id": "t15",
+     "step": 6,
+     "slot": "shop_bye",
+     "ask": "Thank you for your visit. Have a nice day!",
+     "ru": "до свидания",
+     "entity": "",
+     "intents": [
+      "bye",
+      "goodbye",
+      "see_you",
+      "good_night",
+      "have_a_nice_day",
+      "nice_day"
+     ]
+    }
+   ],
+   "slots": {
+    "shop_help": {
+     "ask": "Can I help you?",
+     "echo_one": "{item}? This way, please.",
+     "echo": "{num} {item_plural}? This way, please.",
+     "yes": "Good.",
+     "no": "No problem. Call me if you need anything.",
+     "fallback": "Sorry, how can I help you?",
+     "chips": {
+      "short": [
+       {
+        "ru": "Да, помогите пожалуйста",
+        "en": "Yes, please"
+       },
+       {
+        "ru": "Я просто смотрю",
+        "en": "I'm just looking"
+       },
+       {
+        "ru": "Я ищу куртку",
+        "en": "I'm looking for a jacket"
+       }
+      ]
+     },
+     "words": {
+      "just looking": "No problem. Take your time.",
+      "look around": "No problem. Take your time."
+     },
+     "have": "We have jackets, shirts, jeans and shoes.",
+     "recommend": "I recommend this jacket. It's very good.",
+     "price": "Jackets are forty dollars, shirts are twenty.",
+     "thanks": "You're welcome.",
+     "bill": "You can pay at the cash desk over there.",
+     "complaint": "I'm sorry about that. What's wrong with it?",
+     "items": {
+      "jacket": "jacket",
+      "coat": "coat",
+      "shirt": "shirt",
+      "t-shirt": "t-shirt",
+      "tshirt": "t-shirt",
+      "jeans": "jeans",
+      "trousers": "trousers",
+      "pants": "pants",
+      "dress": "dress",
+      "skirt": "skirt",
+      "sweater": "sweater",
+      "jumper": "sweater",
+      "shoes": "shoes",
+      "boots": "boots",
+      "hat": "hat",
+      "cap": "cap",
+      "bag": "bag",
+      "scarf": "scarf"
+     },
+     "plurals": {
+      "jacket": "jackets",
+      "coat": "coats",
+      "shirt": "shirts",
+      "t-shirt": "t-shirts",
+      "jeans": "jeans",
+      "trousers": "trousers",
+      "pants": "pants",
+      "dress": "dresses",
+      "skirt": "skirts",
+      "sweater": "sweaters",
+      "shoes": "shoes",
+      "boots": "boots",
+      "hat": "hats",
+      "cap": "caps",
+      "bag": "bags",
+      "scarf": "scarves"
+     }
+    },
+    "shop_item": {
+     "ask": "What are you looking for?",
+     "echo_one": "{item}? Over here, please.",
+     "echo": "{num} {item_plural}? Over here, please.",
+     "yes": "Everything is here. Look, please.",
+     "no": "OK. Look around, please.",
+     "fallback": "Sorry, what would you like to buy?",
+     "chips": {
+      "start": [
+       {
+        "ru": "Я ищу",
+        "en": "I'm looking for"
+       },
+       {
+        "ru": "Мне нужна",
+        "en": "I need"
+       }
+      ],
+      "item": [
+       {
+        "ru": "куртку",
+        "en": "a jacket"
+       },
+       {
+        "ru": "рубашку",
+        "en": "a shirt"
+       },
+       {
+        "ru": "джинсы",
+        "en": "jeans"
+       },
+       {
+        "ru": "туфли",
+        "en": "shoes"
+       }
+      ],
+      "short": [
+       {
+        "ru": "Просто смотрю",
+        "en": "I'm just looking"
+       }
+      ]
+     },
+     "words": {
+      "just looking": "No problem. Take your time."
+     },
+     "have": "We have jackets, shirts, jeans and shoes.",
+     "recommend": "I recommend this jacket. It's very good.",
+     "price": "From twenty to sixty dollars.",
+     "bill": "You can pay at the cash desk over there.",
+     "complaint": "I'm sorry about that. What's wrong with it?",
+     "items": {
+      "jacket": "jacket",
+      "coat": "coat",
+      "shirt": "shirt",
+      "t-shirt": "t-shirt",
+      "tshirt": "t-shirt",
+      "jeans": "jeans",
+      "trousers": "trousers",
+      "pants": "pants",
+      "dress": "dress",
+      "skirt": "skirt",
+      "sweater": "sweater",
+      "jumper": "sweater",
+      "shoes": "shoes",
+      "boots": "boots",
+      "hat": "hat",
+      "cap": "cap",
+      "bag": "bag",
+      "scarf": "scarf"
+     },
+     "plurals": {
+      "jacket": "jackets",
+      "coat": "coats",
+      "shirt": "shirts",
+      "t-shirt": "t-shirts",
+      "dress": "dresses",
+      "skirt": "skirts",
+      "sweater": "sweaters",
+      "hat": "hats",
+      "cap": "caps",
+      "bag": "bags",
+      "scarf": "scarves"
+     }
+    },
+    "shop_size": {
+     "ask": "What size do you wear?",
+     "echo_one": "Size {item}. Here you are.",
+     "echo": "Size {item}. Here you are.",
+     "yes": "Medium? Here you are.",
+     "no": "Let me find your size.",
+     "fallback": "Sorry, what size do you wear? Small, medium or large?",
+     "chips": {
+      "item": [
+       {
+        "ru": "маленький",
+        "en": "small"
+       },
+       {
+        "ru": "средний",
+        "en": "medium"
+       },
+       {
+        "ru": "большой",
+        "en": "large"
+       }
+      ],
+      "short": [
+       {
+        "ru": "Сорок восьмой",
+        "en": "Forty eight"
+       },
+       {
+        "ru": "Не знаю",
+        "en": "I don't know"
+       }
+      ]
+     },
+     "have": "We have small, medium, large and extra large.",
+     "recommend": "Take medium. It's the most common size.",
+     "price": "This one is forty dollars.",
+     "thanks": "You're welcome.",
+     "items": {
+      "30": "30",
+      "32": "32",
+      "34": "34",
+      "36": "36",
+      "38": "38",
+      "40": "40",
+      "42": "42",
+      "44": "44",
+      "46": "46",
+      "48": "48",
+      "50": "50",
+      "small": "small",
+      "medium": "medium",
+      "large": "large",
+      "extra large": "extra large",
+      "xl": "XL",
+      "xxl": "XXL",
+      "s": "S",
+      "m": "M",
+      "l": "L",
+      "thirty eight": "38",
+      "forty": "40",
+      "forty two": "42",
+      "forty four": "44",
+      "forty six": "46",
+      "forty eight": "48",
+      "fifty": "50"
+     }
+    },
+    "shop_colour": {
+     "ask": "What colour would you like?",
+     "echo_one": "In {item}. Here you are.",
+     "echo": "In {item}. Here you are.",
+     "yes": "This one, then. In black.",
+     "no": "OK. We have it in other colours too.",
+     "fallback": "Sorry, what colour would you like?",
+     "chips": {
+      "item": [
+       {
+        "ru": "чёрный",
+        "en": "black"
+       },
+       {
+        "ru": "белый",
+        "en": "white"
+       },
+       {
+        "ru": "синий",
+        "en": "blue"
+       },
+       {
+        "ru": "красный",
+        "en": "red"
+       },
+       {
+        "ru": "зелёный",
+        "en": "green"
+       }
+      ],
+      "short": [
+       {
+        "ru": "Любой",
+        "en": "Any colour"
+       }
+      ]
+     },
+     "words": {
+      "any colour": "OK, I'll pick a nice one for you.",
+      "any color": "OK, I'll pick a nice one for you.",
+      "any": "OK, I'll pick a nice one for you."
+     },
+     "have": "We have it in black, white, blue and red.",
+     "recommend": "Black is the best choice.",
+     "price": "The same price, forty dollars.",
+     "thanks": "You're welcome.",
+     "items": {
+      "black": "black",
+      "white": "white",
+      "blue": "blue",
+      "red": "red",
+      "green": "green",
+      "grey": "grey",
+      "gray": "grey",
+      "brown": "brown",
+      "yellow": "yellow",
+      "pink": "pink",
+      "orange": "orange",
+      "beige": "beige"
+     }
+    },
+    "shop_like": {
+     "ask": "Do you like it?",
+     "echo_one": "In {item}? Good choice.",
+     "echo": "In {item}? Good choice.",
+     "yes": "Great! I'm glad you like it.",
+     "no": "No problem. We have it in other colours.",
+     "fallback": "Sorry, do you like this one?",
+     "chips": {
+      "short": [
+       {
+        "ru": "Да, нравится",
+        "en": "Yes, I like it"
+       },
+       {
+        "ru": "Нет, не нравится",
+        "en": "No, I don't like it"
+       },
+       {
+        "ru": "Есть другой цвет?",
+        "en": "Do you have another colour?"
+       }
+      ]
+     },
+     "words": {
+      "another colour": "Yes, we have it in blue and black.",
+      "another color": "Yes, we have it in blue and black.",
+      "other colours": "Yes, we have it in blue and black.",
+      "other colors": "Yes, we have it in blue and black."
+     },
+     "recommend": "Take the black one. It looks very good.",
+     "price": "It costs forty dollars.",
+     "thanks": "You're welcome.",
+     "complaint": "I'm sorry. What don't you like about it?",
+     "items": {
+      "black": "black",
+      "white": "white",
+      "blue": "blue",
+      "red": "red",
+      "green": "green",
+      "grey": "grey",
+      "gray": "grey",
+      "brown": "brown",
+      "yellow": "yellow",
+      "pink": "pink",
+      "orange": "orange",
+      "beige": "beige"
+     }
+    },
+    "shop_try": {
+     "ask": "Would you like to try it on?",
+     "yes": "The changing room is over there, on the right.",
+     "no": "OK.",
+     "fallback": "Sorry, do you want to try it on?",
+     "chips": {
+      "short": [
+       {
+        "ru": "Да, можно",
+        "en": "Yes, please"
+       },
+       {
+        "ru": "Нет, не надо",
+        "en": "No, thanks"
+       }
+      ]
+     },
+     "price": "It costs forty dollars.",
+     "thanks": "You're welcome."
+    },
+    "shop_fit": {
+     "ask": "Is the size OK?",
+     "echo_one": "It's {item}. Let me bring another one.",
+     "echo": "It's {item}. Let me bring another one.",
+     "yes": "Very good!",
+     "no": "No problem. Let me check.",
+     "fallback": "Sorry, is the size OK for you?",
+     "chips": {
+      "short": [
+       {
+        "ru": "Да, подходит",
+        "en": "Yes, it fits"
+       },
+       {
+        "ru": "Нет, слишком большой",
+        "en": "No, it's too big"
+       },
+       {
+        "ru": "Нет, слишком маленький",
+        "en": "No, it's too small"
+       }
+      ]
+     },
+     "thanks": "You're welcome.",
+     "complaint": "I'm sorry. I'll bring another size.",
+     "items": {
+      "small": "small",
+      "big": "big",
+      "tight": "tight",
+      "loose": "loose",
+      "bigger": "bigger",
+      "smaller": "smaller"
+     }
+    },
+    "shop_bigger": {
+     "ask": "Do you want a bigger size?",
+     "echo_one": "A {item} one? One moment, please.",
+     "echo": "A {item} one? One moment, please.",
+     "yes": "Here is a bigger size. Try this one.",
+     "no": "OK, this size, then.",
+     "fallback": "Sorry, do you want a bigger size?",
+     "chips": {
+      "short": [
+       {
+        "ru": "Да, побольше",
+        "en": "Yes, a bigger one"
+       },
+       {
+        "ru": "Нет, этот подходит",
+        "en": "No, this one is fine"
+       },
+       {
+        "ru": "Можно поменьше?",
+        "en": "Can I have a smaller one?"
+       }
+      ]
+     },
+     "thanks": "You're welcome.",
+     "items": {
+      "smaller": "smaller",
+      "small": "small",
+      "bigger": "bigger",
+      "larger": "larger"
+     }
+    },
+    "shop_price": {
+     "ask": "Is that OK?",
+     "echo_one": "With {item}? One moment, please.",
+     "echo": "With {item}? One moment, please.",
+     "yes": "Good.",
+     "no": "It's a good price.",
+     "fallback": "Sorry, is forty dollars OK for you?",
+     "chips": {
+      "short": [
+       {
+        "ru": "Да, нормально",
+        "en": "Yes, that's OK"
+       },
+       {
+        "ru": "Дорого",
+        "en": "It's too expensive"
+       },
+       {
+        "ru": "Есть скидка?",
+        "en": "Is there a discount?"
+       }
+      ]
+     },
+     "words": {
+      "expensive": "I understand. We have cheaper ones too.",
+      "too expensive": "I understand. We have cheaper ones too."
+     },
+     "have": "We have cheaper ones too, from twenty dollars.",
+     "recommend": "This one is the best for the price.",
+     "price": "It costs forty dollars.",
+     "complaint": "I understand. We have cheaper ones too.",
+     "items": {
+      "discount": "a discount",
+      "sale": "a sale",
+      "cheaper": "a cheaper one",
+      "card": "by card",
+      "cash": "in cash"
+     }
+    },
+    "shop_take": {
+     "ask": "Do you want to take it?",
+     "yes": "Great!",
+     "no": "No problem. Maybe next time.",
+     "fallback": "Sorry, do you want to take it?",
+     "chips": {
+      "short": [
+       {
+        "ru": "Да, беру",
+        "en": "Yes, I'll take it"
+       },
+       {
+        "ru": "Нет, не буду",
+        "en": "No, thank you"
+       },
+       {
+        "ru": "Я подумаю",
+        "en": "I'll think about it"
+       }
+      ]
+     },
+     "words": {
+      "take it": "Great! How would you like to pay?",
+      "i will take it": "Great! How would you like to pay?",
+      "take them": "Great! How would you like to pay?",
+      "think about it": "OK. Take your time.",
+      "think": "OK. Take your time."
+     },
+     "price": "Forty dollars, please.",
+     "thanks": "You're welcome."
+    },
+    "shop_pay": {
+     "ask": "How would you like to pay?",
+     "echo_one": "{item}. Fine, thank you.",
+     "echo": "{item}. Fine, thank you.",
+     "yes": "By card? Fine.",
+     "no": "In cash? Fine. The cash desk is over there.",
+     "fallback": "Sorry, will you pay by card or in cash?",
+     "chips": {
+      "item": [
+       {
+        "ru": "картой",
+        "en": "by card"
+       },
+       {
+        "ru": "наличными",
+        "en": "in cash"
+       }
+      ],
+      "short": []
+     },
+     "price": "Forty dollars, please.",
+     "thanks": "You're welcome.",
+     "bill": "It's forty dollars. Card or cash?",
+     "items": {
+      "card": "by card",
+      "cash": "in cash",
+      "credit": "by card",
+      "debit": "by card",
+      "visa": "by card",
+      "mastercard": "by card",
+      "phone": "by phone"
+     }
+    },
+    "shop_card": {
+     "ask": "Can I have your card, please?",
+     "echo_one": "Here is your {item} back. Thank you.",
+     "echo": "Here is your {item} back. Thank you.",
+     "yes": "Thank you. Please enter your PIN.",
+     "no": "OK. Then pay in cash at the cash desk.",
+     "fallback": "Sorry, can I have your card, please?",
+     "chips": {
+      "short": [
+       {
+        "ru": "Вот, пожалуйста",
+        "en": "Here you are"
+       },
+       {
+        "ru": "Можно наличными?",
+        "en": "Can I pay in cash?"
+       }
+      ]
+     },
+     "words": {
+      "here you are": "Thank you. Please enter your PIN.",
+      "here it is": "Thank you. Please enter your PIN.",
+      "here": "Thank you. Please enter your PIN."
+     },
+     "thanks": "You're welcome. Please enter your PIN.",
+     "items": {
+      "card": "card",
+      "phone": "phone"
+     }
+    },
+    "shop_bag": {
+     "ask": "Do you need a bag?",
+     "echo_one": "{item}? Here you are.",
+     "yes": "Here is a bag.",
+     "no": "OK, no bag. Here is your receipt.",
+     "fallback": "Sorry, do you need a bag?",
+     "chips": {
+      "short": [
+       {
+        "ru": "Да, нужен",
+        "en": "Yes, please"
+       },
+       {
+        "ru": "Нет, не нужен",
+        "en": "No, thanks"
+       }
+      ]
+     },
+     "thanks": "You're welcome.",
+     "items": {
+      "bag": "bag"
+     }
+    },
+    "shop_receipt": {
+     "ask": "Would you like a receipt?",
+     "echo_one": "Here is your {item}. Thank you!",
+     "echo": "Here is your {item}. Thank you!",
+     "yes": "Here you are. Thank you!",
+     "no": "OK. Thank you.",
+     "fallback": "Sorry, would you like a receipt?",
+     "chips": {
+      "short": [
+       {
+        "ru": "Да, пожалуйста",
+        "en": "Yes, please"
+       },
+       {
+        "ru": "Нет, спасибо",
+        "en": "No, thanks"
+       }
+      ]
+     },
+     "thanks": "You're welcome. Thank you.",
+     "items": {
+      "receipt": "a receipt"
+     }
+    },
+    "shop_bye": {
+     "ask": "Have a nice day!",
+     "yes": "Thank you! Have a nice day!",
+     "no": "OK. Thank you! Have a nice day!",
+     "fallback": "Sorry, thank you and have a nice day!",
+     "chips": {
+      "short": [
+       {
+        "ru": "Спасибо",
+        "en": "Thank you"
+       },
+       {
+        "ru": "До свидания",
+        "en": "Goodbye"
+       },
+       {
+        "ru": "Хорошего дня",
+        "en": "Have a nice day"
+       }
+      ]
+     },
+     "words": {
+      "bye": "Have a nice day!",
+      "goodbye": "Have a nice day!",
+      "see you": "See you! Goodbye!",
+      "good night": "Good night!",
+      "have a nice day": "Thank you! You too!",
+      "nice day": "Thank you! You too!"
+     },
+     "price": "Thank you! Have a nice day!",
+     "thanks": "You're welcome. Have a nice day!"
+    }
+   }
+  }
+ }
+}

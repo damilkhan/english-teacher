@@ -53,7 +53,11 @@
     "recommend": [
       "recommend",
       "suggest",
-      "advice"
+      "advice",
+      "advise",
+      "advise me",
+      "what do you advise",
+      "recommendation"
     ],
     "whatyouhave": [
       "what do you have",
@@ -143,12 +147,12 @@
   "slots": {
     "people": {
       "ask": "How many people are with you?",
-      "numbers": true,
       "echo_one": "Just one? Right this way, please.",
       "echo": "{num} people? Right this way, please.",
       "yes": "This way, please.",
       "no": "Let me find you a table.",
       "fallback": "Sorry, how many of you are there?",
+      "numbers": true,
       "chips": {
         "count": [
           {
@@ -317,6 +321,16 @@
       "ask": "Would you like a few minutes to look at the menu?",
       "yes": "Take your time. I'll come back in a few minutes.",
       "no": "OK.",
+      "words": {
+        "minutes": "Take your time. I'll come back in a few minutes.",
+        "minute": "Take your time. I'll come back in a few minutes.",
+        "a moment": "Sure. I'll come back in a moment.",
+        "moment": "Sure. I'll come back in a moment.",
+        "we are ready": "Good.",
+        "ready": "Good.",
+        "let me look": "Take your time. I'll be right back.",
+        "i'm ready": "Good."
+      },
       "chips": {
         "short": [
           {
@@ -332,16 +346,6 @@
             "en": "We are ready"
           }
         ]
-      },
-      "words": {
-        "minutes": "Take your time. I'll come back in a few minutes.",
-        "minute": "Take your time. I'll come back in a few minutes.",
-        "a moment": "Sure. I'll come back in a moment.",
-        "moment": "Sure. I'll come back in a moment.",
-        "we are ready": "Good.",
-        "ready": "Good.",
-        "let me look": "Take your time. I'll be right back.",
-        "i'm ready": "Good."
       }
     },
     "ready": {
@@ -349,6 +353,17 @@
       "yes": "Great.",
       "no": "Take your time. I'll come back in a few minutes.",
       "dontknow": "No problem. Take your time. I'll come back in a few minutes.",
+      "words": {
+        "minute": "OK. Take your time.",
+        "minutes": "OK. Take your time.",
+        "more time": "OK. Take your time.",
+        "menu again": "Of course. Here is the menu.",
+        "menu": "Of course. Here is the menu.",
+        "ready": "Great. Let's start.",
+        "we are ready": "Great. Let's start.",
+        "i'm ready": "Great. Let's start.",
+        "yes we are": "Great. Let's start."
+      },
       "chips": {
         "short": [
           {
@@ -364,17 +379,6 @@
             "en": "Can I have the menu again?"
           }
         ]
-      },
-      "words": {
-        "minute": "OK. Take your time.",
-        "minutes": "OK. Take your time.",
-        "more time": "OK. Take your time.",
-        "menu again": "Of course. Here is the menu.",
-        "menu": "Of course. Here is the menu.",
-        "ready": "Great. Let's start.",
-        "we are ready": "Great. Let's start.",
-        "i'm ready": "Great. Let's start.",
-        "yes we are": "Great. Let's start."
       }
     },
     "starter": {
@@ -563,6 +567,10 @@
         "rice": "rice",
         "vegetables": "vegetables"
       },
+      "words": {
+        "both": "Both. Good choice. Is that all?",
+        "both please": "Both. Good choice. Is that all?"
+      },
       "chips": {
         "start": [
           {
@@ -592,15 +600,14 @@
             "en": "Both, please"
           }
         ]
-      },
-      "words": {
-        "both": "Both. Good choice. Is that all?",
-        "both please": "Both. Good choice. Is that all?"
       }
     },
     "thanks": {
-      "thanks": "You're welcome.",
       "yes": "Very good.",
+      "thanks": "You're welcome.",
+      "words": {
+        "you are welcome": "Enjoy your meal!"
+      },
       "chips": {
         "short": [
           {
@@ -612,9 +619,6 @@
             "en": "Thank you, it looks great"
           }
         ]
-      },
-      "words": {
-        "you are welcome": "Enjoy your meal!"
       }
     },
     "food_ok": {
@@ -622,6 +626,15 @@
       "yes": "Very good. I'm glad you like it.",
       "no": "Oh, I'm sorry! I'll take it back to the kitchen.",
       "thanks": "You're welcome. Enjoy your meal!",
+      "words": {
+        "delicious": "I'm glad you like it!",
+        "tasty": "I'm glad you like it!",
+        "everything is fine": "Very good. I'm glad you like it.",
+        "all good": "Very good. I'm glad you like it.",
+        "fine": "Very good. I'm glad you like it.",
+        "very good": "I'm glad you like it.",
+        "great": "I'm glad you like it."
+      },
       "chips": {
         "short": [
           {
@@ -637,15 +650,6 @@
             "en": "No, the food is cold"
           }
         ]
-      },
-      "words": {
-        "delicious": "I'm glad you like it!",
-        "tasty": "I'm glad you like it!",
-        "everything is fine": "Very good. I'm glad you like it.",
-        "all good": "Very good. I'm glad you like it.",
-        "fine": "Very good. I'm glad you like it.",
-        "very good": "I'm glad you like it.",
-        "great": "I'm glad you like it."
       }
     },
     "bread": {
@@ -726,6 +730,7 @@
       "echo": "One {item}, coming up.",
       "yes": "OK.",
       "no": "OK, no problem.",
+      "bill": "Of course. Right away.",
       "plurals": {
         "beer": "beers",
         "water": "waters",
@@ -750,8 +755,7 @@
             "en": "Some more water, please"
           }
         ]
-      },
-      "bill": "Of course. Right away."
+      }
     },
     "payment": {
       "ask": "Card or cash?",
@@ -778,22 +782,13 @@
             "en": "in cash"
           }
         ],
-        "short": [
-          {
-            "ru": "Картой",
-            "en": "By card"
-          },
-          {
-            "ru": "Наличными",
-            "en": "In cash"
-          }
-        ]
+        "short": []
       }
     },
     "goodbye": {
-      "thanks": "Thank you. Have a nice evening!",
       "yes": "Have a nice evening!",
       "no": "Have a nice evening!",
+      "thanks": "Thank you. Have a nice evening!",
       "words": {
         "bye": "Have a nice evening!",
         "goodbye": "Have a nice evening!",
@@ -845,6 +840,15 @@
       },
       "echo_one": "{item}? This way, please.",
       "echo": "{num} {item_plural}? This way, please.",
+      "yes": "Good.",
+      "no": "No problem. Call me if you need anything.",
+      "thanks": "You're welcome.",
+      "have": "We have jackets, shirts, jeans and shoes.",
+      "recommend": "I recommend this jacket. It's very good.",
+      "price": "Jackets are forty dollars, shirts are twenty.",
+      "bill": "You can pay at the cash desk over there.",
+      "complaint": "I'm sorry about that. What's wrong with it?",
+      "fallback": "Sorry, how can I help you?",
       "plurals": {
         "jacket": "jackets",
         "coat": "coats",
@@ -863,15 +867,6 @@
         "bag": "bags",
         "scarf": "scarves"
       },
-      "yes": "Good.",
-      "no": "No problem. Call me if you need anything.",
-      "thanks": "You're welcome.",
-      "have": "We have jackets, shirts, jeans and shoes.",
-      "recommend": "I recommend this jacket. It's very good.",
-      "price": "Jackets are forty dollars, shirts are twenty.",
-      "bill": "You can pay at the cash desk over there.",
-      "complaint": "I'm sorry about that. What's wrong with it?",
-      "fallback": "Sorry, how can I help you?",
       "words": {
         "just looking": "No problem. Take your time.",
         "look around": "No problem. Take your time."
@@ -917,6 +912,14 @@
       },
       "echo_one": "{item}? Over here, please.",
       "echo": "{num} {item_plural}? Over here, please.",
+      "yes": "Everything is here. Look, please.",
+      "no": "OK. Look around, please.",
+      "have": "We have jackets, shirts, jeans and shoes.",
+      "recommend": "I recommend this jacket. It's very good.",
+      "price": "From twenty to sixty dollars.",
+      "bill": "You can pay at the cash desk over there.",
+      "complaint": "I'm sorry about that. What's wrong with it?",
+      "fallback": "Sorry, what would you like to buy?",
       "plurals": {
         "jacket": "jackets",
         "coat": "coats",
@@ -930,14 +933,9 @@
         "bag": "bags",
         "scarf": "scarves"
       },
-      "yes": "Everything is here. Look, please.",
-      "no": "OK. Look around, please.",
-      "have": "We have jackets, shirts, jeans and shoes.",
-      "recommend": "I recommend this jacket. It's very good.",
-      "price": "From twenty to sixty dollars.",
-      "bill": "You can pay at the cash desk over there.",
-      "complaint": "I'm sorry about that. What's wrong with it?",
-      "fallback": "Sorry, what would you like to buy?",
+      "words": {
+        "just looking": "No problem. Take your time."
+      },
       "chips": {
         "start": [
           {
@@ -973,9 +971,6 @@
             "en": "I'm just looking"
           }
         ]
-      },
-      "words": {
-        "just looking": "No problem. Take your time."
       }
     },
     "shop_size": {
@@ -1035,10 +1030,6 @@
         ],
         "short": [
           {
-            "ru": "Средний",
-            "en": "Medium"
-          },
-          {
             "ru": "Сорок восьмой",
             "en": "Forty eight"
           },
@@ -1074,6 +1065,11 @@
       "recommend": "Black is the best choice.",
       "price": "The same price, forty dollars.",
       "fallback": "Sorry, what colour would you like?",
+      "words": {
+        "any colour": "OK, I'll pick a nice one for you.",
+        "any color": "OK, I'll pick a nice one for you.",
+        "any": "OK, I'll pick a nice one for you."
+      },
       "chips": {
         "item": [
           {
@@ -1103,11 +1099,6 @@
             "en": "Any colour"
           }
         ]
-      },
-      "words": {
-        "any colour": "OK, I'll pick a nice one for you.",
-        "any color": "OK, I'll pick a nice one for you.",
-        "any": "OK, I'll pick a nice one for you."
       }
     },
     "shop_like": {
@@ -1135,6 +1126,12 @@
       "price": "It costs forty dollars.",
       "complaint": "I'm sorry. What don't you like about it?",
       "fallback": "Sorry, do you like this one?",
+      "words": {
+        "another colour": "Yes, we have it in blue and black.",
+        "another color": "Yes, we have it in blue and black.",
+        "other colours": "Yes, we have it in blue and black.",
+        "other colors": "Yes, we have it in blue and black."
+      },
       "chips": {
         "short": [
           {
@@ -1150,12 +1147,6 @@
             "en": "Do you have another colour?"
           }
         ]
-      },
-      "words": {
-        "another colour": "Yes, we have it in blue and black.",
-        "another color": "Yes, we have it in blue and black.",
-        "other colours": "Yes, we have it in blue and black.",
-        "other colors": "Yes, we have it in blue and black."
       }
     },
     "shop_try": {
@@ -1261,6 +1252,10 @@
       "price": "It costs forty dollars.",
       "complaint": "I understand. We have cheaper ones too.",
       "fallback": "Sorry, is forty dollars OK for you?",
+      "words": {
+        "expensive": "I understand. We have cheaper ones too.",
+        "too expensive": "I understand. We have cheaper ones too."
+      },
       "chips": {
         "short": [
           {
@@ -1276,10 +1271,6 @@
             "en": "Is there a discount?"
           }
         ]
-      },
-      "words": {
-        "expensive": "I understand. We have cheaper ones too.",
-        "too expensive": "I understand. We have cheaper ones too."
       }
     },
     "shop_take": {
@@ -1329,8 +1320,8 @@
       "yes": "By card? Fine.",
       "no": "In cash? Fine. The cash desk is over there.",
       "thanks": "You're welcome.",
-      "bill": "It's forty dollars. Card or cash?",
       "price": "Forty dollars, please.",
+      "bill": "It's forty dollars. Card or cash?",
       "fallback": "Sorry, will you pay by card or in cash?",
       "chips": {
         "item": [
@@ -1343,16 +1334,7 @@
             "en": "in cash"
           }
         ],
-        "short": [
-          {
-            "ru": "Картой",
-            "en": "By card"
-          },
-          {
-            "ru": "Наличными",
-            "en": "In cash"
-          }
-        ]
+        "short": []
       }
     },
     "shop_card": {
