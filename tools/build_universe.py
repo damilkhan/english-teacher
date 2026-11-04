@@ -31,6 +31,20 @@ def slug(s):
     s = re.sub(r"[^a-z0-9]+", "_", str(s).lower()).strip("_")
     return s or "x"
 
+def guarded():
+    """Не затирать вселенную, в которую уже правят руками."""
+    if OUT.exists() and "--force" not in sys.argv:
+        try:
+            doc = json.load(open(OUT, encoding="utf-8"))
+        except Exception:
+            doc = {}
+        if int(doc.get("version") or 1) >= 2:
+            print("STOP: %s already version %s (hand-edited)." % (OUT.name, doc.get("version")))
+            print("Use --force only if you really want to rebuild it from old files.")
+            return None
+    return build()
+
+
 def build():
     lib = json.load(open(REACT, encoding="utf-8"))
     sc = json.load(open(SCENES, encoding="utf-8"))
@@ -76,6 +90,8 @@ def build():
                 "off_world": "I'm not sure about that. Let me check.",
                 "max_words": 12,
             },
+            "card": scene.get("card") or {},
+            "steps": [],
             "entities": {},
             "intents": {},
             "turns": [],
@@ -127,7 +143,7 @@ def build():
             for q in step.get("questions") or []:
                 n += 1
                 s = str(q.get("slot") or "")
-                turn = {"id": "t%d" % n, "step": step.get("n"),
+                turn = {"id": "t%d" % n, "step": step.get("n"), "slot": s,
                         "ask": str(q.get("en") or ""), "ru": str(q.get("hint") or "")}
                 if s in w["entities"]:
                     turn["entity"] = s
@@ -135,16 +151,35 @@ def build():
                     turn["entity"] = ""
                     turn["intents"] = SLOT_INTENTS.get(s, [])
                 w["turns"].append(turn)
+        w["steps"] = [{"n": st.get("n"), "title": st.get("title") or ""}
+                      for st in (scene.get("steps") or [])]
 
-    doc = {"version": 1, "level": lib.get("level") or "a2",
-           "intents_universal": UNIVERSAL, "worlds": worlds}
+    # --- Полный перенос: без этого из вселенной не собрать reactions обратно ---
+    KEEP = ("ask", "numbers", "echo_one", "echo", "yes", "no", "fallback", "chips",
+            "words", "have", "recommend", "price", "dontknow", "thanks", "bill",
+            "complaint", "items", "plurals")
+    for sname, conf in slots.items():
+        sid = slot_scene.get(sname)
+        if sid not in worlds:
+            continue
+        bits = {k: conf[k] for k in KEEP if k in conf}
+        if bits:
+            worlds[sid].setdefault("slots", {})[sname] = bits
+    library = {"note": lib.get("note", ""), "words": words,
+               "numbers": lib.get("numbers") or [],
+               "universal": lib.get("universal") or {}}
+
+    doc = {"version": 2, "level": lib.get("level") or "a2",
+           "intents_universal": UNIVERSAL, "library": library, "worlds": worlds}
     OUT.parent.mkdir(parents=True, exist_ok=True)
     json.dump(doc, open(OUT, "w", encoding="utf-8", newline="\n"),
               ensure_ascii=False, indent=1)
     return doc
 
 if __name__ == "__main__":
-    d = build()
+    d = guarded()
+    if d is None:
+        sys.exit(1)
     for sid, w in d["worlds"].items():
         it = sum(len(e.get("items") or {}) for e in w["entities"].values())
         print("%-16s turns=%2d entities=%2d items=%3d intents=%d"
