@@ -17,9 +17,9 @@ SCENES = ROOT / "data" / "scenes_a2.json"
 GEN = ROOT / "logs" / "_reactions_generated.json"
 REPORT = ROOT / "logs" / "_scene_build.txt"
 
-ORDER = ("ask", "items", "echo_one", "echo", "yes", "no", "have", "recommend",
-         "price", "fallback", "plurals", "numbers", "words", "dontknow",
-         "thanks", "bill", "complaint", "chips")
+ORDER = ("ask", "items", "echo_one", "echo", "yes", "no", "thanks", "have",
+         "recommend", "price", "bill", "complaint", "dontknow", "fallback",
+         "plurals", "numbers", "words", "chips")
 EMPTY = (None, "", {}, [])
 
 
@@ -152,7 +152,7 @@ def main(argv):
             print("REFUSED: scenes differ, fix data first (see %s)" % REPORT.name)
             return 2
         for path, obj in ((REACT, gen), (SCENES, gen_sc)):
-            path.write_text(json.dumps(obj, ensure_ascii=False, indent=1) + "\n",
+            path.write_text(json.dumps(obj, ensure_ascii=False, indent=2) + "\n",
                             encoding="utf-8", newline="\n")
         print("written: %s, %s" % (REACT.name, SCENES.name))
     return 0
