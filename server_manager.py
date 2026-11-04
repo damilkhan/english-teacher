@@ -37,6 +37,9 @@ PORT = int(getattr(config, "LLM_PORT", 8080))
 BASE_URL = getattr(config, "LLM_BASE_URL", "http://%s:%d" % (HOST, PORT))
 HEALTH_URL = getattr(config, "LLM_HEALTH_URL", BASE_URL + "/health")
 CONTEXT = int(getattr(config, "SERVER_CONTEXT", 4096))
+GPU_LAYERS = int(getattr(config, "SERVER_GPU_LAYERS", 0))
+PARALLEL = int(getattr(config, "SERVER_PARALLEL", 1))
+THREADS = int(getattr(config, "SERVER_THREADS", 6))
 STARTUP_TIMEOUT = int(getattr(config, "SERVER_STARTUP_TIMEOUT", 240))
 
 # Windows: не создавать окно консоли для дочернего процесса
@@ -166,6 +169,13 @@ def build_args(model):
     mmproj = model.get("mmproj")
     if mmproj:
         args += ["--mmproj", mmproj]
+    # GPU + один слот (04.11.2026): без -np модель считалась в 4 слота, KV-кэш
+    # раздувался, Vulkan-бэкенд сбрасывал часть слоёв в обычную память и
+    # генерация падала с 51 до 2,7 ток/с. Один слот ещё и включает переисполь-
+    # зование кэша промпта: урок не читает 2800 токенов заново каждую реплику.
+    args += ["-ngl", str(int(model.get("gpu_layers", GPU_LAYERS))),
+             "-np", str(int(model.get("parallel", PARALLEL))),
+             "-t", str(int(model.get("threads", THREADS)))]
     args += list(model.get("extra_args") or [])
     return args
 
