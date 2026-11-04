@@ -1146,6 +1146,28 @@ def _piper_play(out, text, lang, samplerate, channels, my_gen) -> bool:
     return played
 
 
+# --- Предохранитель сети (04.11.2026) ---------------------------------
+# Сети (edge-tts) свойственны «волны»: то 403, то таймаут. Каждая неудача
+# стоила до 15 с (поток + 3 попытки по 5 с), и бот МОЛЧАЛ — ученик думал,
+# что Вербот «долго думает». Локальный piper даёт звук за ~1,3 с.
+# Поэтому: одна неудача сети в течение EDGE_DOWN_SECONDS — и сразу piper.
+EDGE_DOWN_SECONDS = 90.0
+_edge_down_until = 0.0
+_edge_lock = threading.Lock()
+
+
+def edge_ok() -> bool:
+    """Жив ли онлайн-голос (после недавней неудачи — нет)."""
+    return time.monotonic() >= _edge_down_until
+
+
+def _edge_fail() -> None:
+    """Отметить, что сеть подвела: столько-то секунд идём локальным голосом."""
+    global _edge_down_until
+    with _edge_lock:
+        _edge_down_until = time.monotonic() + EDGE_DOWN_SECONDS
+
+
 def _play_segment(out, text, voice, samplerate, channels, my_gen,
                   data=None, lang=None, rate=None) -> bool:
     """Проиграть ОДИН кусок так, чтобы НИ ОДНО слово не пропало.
@@ -1165,13 +1187,19 @@ def _play_segment(out, text, voice, samplerate, channels, my_gen,
         return True
     if _stop.is_set() or my_gen != _current_generation():
         return False
+    # Сеть недавно подвела и кусок по-английски — не ждём её снова.
+    if not edge_ok() and str(lang or detect_language(text)) != "ru":
+        if _piper_play(out, text, lang, samplerate, channels, my_gen):
+            return True
     if _decode_stream_into(out, text, voice, samplerate, channels, my_gen, rate):
         return True
+    _edge_fail()
     if _stop.is_set() or my_gen != _current_generation():
         return False
     data = _download(text, voice, rate)          # последняя попытка целиком
     if data and _decode_into(out, data, samplerate, channels, my_gen):
         return True
+    _edge_fail()
     # Последний рубеж: интернета нет — читаем локальным голосом.
     return _piper_play(out, text, lang, samplerate, channels, my_gen)
 

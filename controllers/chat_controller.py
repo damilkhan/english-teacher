@@ -202,6 +202,11 @@ class ChatController:
             return
         # ответ Учителя — в окно сразу, не ждём Аналитика
         self._dispatch(lambda: self._show_reply(user_text, payload))
+        # Разбор — это ВТОРОЙ запрос к модели (10-12 с на этом железе).
+        # Поле ввода освобождаем ДО него: иначе ученик ждёт разбор, чтобы
+        # сказать следующую фразу, хотя ответ уже прозвучал.
+        self.busy = False
+        self._emit(self.on_busy, False)
         analysis = self._safe_analyze(user_text, payload)
         self._dispatch(lambda: self._finish(user_text, payload, analysis))
 

@@ -291,7 +291,7 @@ def parse_analysis(raw: Optional[str]) -> Optional[Dict[str, Any]]:
 class Analyst:
     """Роль-Аналитик: разбирает реплику ученика в структуру (ученику не отвечает)."""
 
-    def __init__(self, llm: Any, timeout: int = 30, max_tokens: int = 260,
+    def __init__(self, llm: Any, timeout: int = 30, max_tokens: int = 140,
                  temperature: float = 0.2) -> None:
         self.llm = llm
         self.timeout = timeout

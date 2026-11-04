@@ -202,7 +202,7 @@ def _profile_summary(profile: Dict[str, Any], level: Optional[str],
 class Planner:
     """Роль-Планировщик: строит короткий план урока (ученику не отвечает)."""
 
-    def __init__(self, llm: Any, timeout: int = 40, max_tokens: int = 500,
+    def __init__(self, llm: Any, timeout: int = 40, max_tokens: int = 300,
                  temperature: float = 0.4) -> None:
         self.llm = llm
         self.timeout = timeout
