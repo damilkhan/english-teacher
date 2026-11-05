@@ -1,6 +1,12 @@
+import os
 import threading
+import time
 
 import numpy as np
+try:
+    from scipy.io import wavfile
+except Exception:                 # noqa: BLE001 — без scipy просто не сохраняем
+    wavfile = None
 from faster_whisper import WhisperModel
 
 import config
@@ -155,6 +161,31 @@ class STTEngine:
             return audio[:0]
         return audio[loud[0] * frame:(loud[-1] + 1) * frame]
 
+
+    def _save_audio(self, audio_data) -> None:
+        """Сохранить запись в logs/stt/ для разбора (см. config.STT_SAVE_AUDIO).
+
+        Нужно, чтобы спорные распознавания проверялись на РЕАЛЬНОМ звуке:
+        сравнить две модели на синтезированной речи мало что даёт.
+        Ошибку сохранения глушим: диагностика не должна ломать урок.
+        """
+        try:
+            if not getattr(config, "STT_SAVE_AUDIO", False):
+                return
+            folder = getattr(config, "LOGS_DIR", "logs")
+            path = os.path.join(folder, "stt")
+            os.makedirs(path, exist_ok=True)
+            name = time.strftime("%Y%m%d_%H%M%S") + ".wav"
+            if wavfile is not None:
+                wavfile.write(os.path.join(path, name), SAMPLE_RATE,
+                              np.frombuffer(audio_data, dtype=np.int16))
+            keep = max(1, int(getattr(config, "STT_AUDIO_KEEP", 8) or 8))
+            files = sorted(f for f in os.listdir(path) if f.endswith(".wav"))
+            for old in files[:-keep]:
+                os.remove(os.path.join(path, old))
+        except Exception as exc:                 # noqa: BLE001
+            print("⚠️ Запись для разбора не сохранена: %s" % exc)
+
     def _transcribe_options(self):
         """Параметры transcribe() из config — единая точка настройки скорости."""
         beam = int(getattr(config, "STT_BEAM_SIZE", 1) or 1)
@@ -183,6 +214,7 @@ class STTEngine:
         Возвращает (текст, язык 'ru'/'en') или None.
         """
         print(f"🔍 Распознаём {len(audio_data)} байт")
+        self._save_audio(audio_data)
 
         if len(audio_data) < 8000:
             print("❌ Слишком коротко")
