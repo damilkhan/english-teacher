@@ -444,6 +444,9 @@ class EnglishTeacherApp:
         # ответить на вопрос, который бот задал уже после конца урока, и фото
         # выскакивало посреди его ответа (живой баг 05.11.2026, урок 2.2).
         self._lesson_closing = False
+        # Какую фразу мы УЖЕ просили повторить (фаза «ждём повтор», §36b).
+        # Без этого приложение просило бы одно и то же на каждый разбор.
+        self._asked_repeat = ""
         self._deferred_finish = None    # сессия урока, ждущая конца ответа
         # ...и до какого момента ждём конца ОЗВУЧКИ (баг 26.10.2026: итог
         # показывался, пока реплика ещё звучала, и глушил её).
@@ -2006,6 +2009,7 @@ class EnglishTeacherApp:
 
     def _end_lesson(self):
         """Свернуть интерфейс занятия (полоса, блокировка, тема промпта)."""
+        self._asked_repeat = ""
         self._scene_chips_off()         # конструктор прячется вместе с уроком
         self._server_task = None        # занятие закрыто — ожидание сервера не нужно
         self._story_context = False     # рассказ был частью урока
@@ -2613,6 +2617,7 @@ class EnglishTeacherApp:
         except Exception as exc:
             print("⚠️ Зачёт задания не получился: %s" % exc)
             return False
+        self._asked_repeat = ""        # новое задание — новая просьба
         print("✅ Задание засчитано: %d/%d%s (реплика: %.60r)"
               % (session.tasks_done, session.tasks_total,
                  " с подсказкой" if getattr(session, "tasks_marked", 0) else "",
@@ -2658,6 +2663,38 @@ class EnglishTeacherApp:
             print("ℹ️ Предел реплик: заданий добрано с подсказкой — %d" % added)
         return added
 
+
+    def _ask_repeat_if_needed(self):
+        """Попросить ВЕРНЫЙ ПОВТОР самим приложением (живой баг 05.11.2026).
+
+        Почему не модель: в фазе «ждём повтор» промпт прямо запрещает ей
+        что-либо спрашивать («just wait for the repeat»). Модель честно
+        молчит, а приложение ждёт повтор — которого никто не попросил.
+        На живом уроке 2.3 это дало тупик: ученик ответил, бот похвалил
+        и замолчал, задание 3/3 осталось несданным, урок встал.
+
+        Фразу-образец держит КОД (она уже лежит в session.repeat_expected),
+        поэтому просьба звучит всегда и всегда с правильным текстом.
+        """
+        session = self.lesson.current()
+        if session is None or not getattr(session, "is_active", False):
+            return False
+        if str(getattr(session, "task_phase", "") or "") != lesson_mod.TASK_FIX:
+            return False
+        want = [str(w).strip() for w in
+                (getattr(session, "repeat_expected", None) or []) if str(w).strip()]
+        if not want:
+            return False
+        key = "|".join(want)
+        if key == getattr(self, "_asked_repeat", ""):
+            return False
+        self._asked_repeat = key
+        phrase = want[0]
+        text = ('✏️ Almost! Now say it once more, please: "%s".' % phrase)
+        mark = self.add_message(self.teacher_name, text)
+        self._say_after_current("Now say it once more, please. " + phrase,
+                                mark=mark)
+        return True
 
     def _task_from_analysis(self, result):
         """Вариант Б: разбор Аналитика решает, сдано ли задание (§36).
@@ -3768,6 +3805,8 @@ class EnglishTeacherApp:
                 self._note_mistakes(len(errors))
         # §36: разбор решает, сдано ли ТЕКУЩЕЕ задание урока (вариант Б)
         self._task_from_analysis(result)
+        # §36b: если задание ждёт ПОВТОРА — попросить его самим (модель молчит)
+        self._ask_repeat_if_needed()
         # ЭКЗАМЕН: разбор пришёл — теперь можно поставить балл за ответ
         step = self._exam_score_answer(result)
         if step is not None and step.get("finished"):
