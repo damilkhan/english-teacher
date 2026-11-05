@@ -40,6 +40,7 @@ CONTEXT = int(getattr(config, "SERVER_CONTEXT", 4096))
 GPU_LAYERS = int(getattr(config, "SERVER_GPU_LAYERS", 0))
 PARALLEL = int(getattr(config, "SERVER_PARALLEL", 1))
 THREADS = int(getattr(config, "SERVER_THREADS", 6))
+DEVICE = str(getattr(config, "SERVER_DEVICE", "") or "")
 STARTUP_TIMEOUT = int(getattr(config, "SERVER_STARTUP_TIMEOUT", 240))
 
 # Windows: не создавать окно консоли для дочернего процесса
@@ -176,6 +177,12 @@ def build_args(model):
     args += ["-ngl", str(int(model.get("gpu_layers", GPU_LAYERS))),
              "-np", str(int(model.get("parallel", PARALLEL))),
              "-t", str(int(model.get("threads", THREADS)))]
+    # Устройство ЯВНО: в машине два Vulkan-адаптера (RX 6600 и встроенная
+    # Radeon Graphics). Без -dev бэкенд может раскидать слои на оба, и тогда
+    # генерация идёт на слабой встроенной (замер: 5 против 51 ток/с).
+    dev = str(model.get("device", DEVICE) or "").strip()
+    if dev:
+        args += ["-dev", dev]
     args += list(model.get("extra_args") or [])
     return args
 
