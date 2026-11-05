@@ -177,6 +177,10 @@ WORD_SLOW_RATE = "-50%"       # медленный повтор слова в п
 # выбрасывает первые ~100-200 мс, а первое слово короткое («Hi») —
 # поэтому оно и пропадало в начале разговора (замер 25.10.2026).
 LEAD_SILENCE_MS = 200
+# Честный замер: когда РЕАЛЬНО пошёл первый звук. Раньше в лог писалось
+# время после того, как ПЕРВЫЙ КУСОК ДОИГРАЛ, и «первый звук через 8 с»
+# пугало: на деле там 1,5 с задержки и 4 с самой фразы.
+_first_audio_at = None
 DOWNLOAD_TIMEOUT = 5.0        # ТОЛЬКО скачивание (проигрывание — отдельно)
 DOWNLOAD_BUDGET = 7.0         # общий предел на ВСЕ повторы одного куска
 PLAYBACK_TICK = 0.05          # шаг опроса get_busy (для прерывания речи)
@@ -380,7 +384,11 @@ LEVEL_STALE = 0.25           # дольше — считаем, что звук�
 
 def _report_level(mean_abs: float) -> None:
     """Обновить уровень по средней амплитуде буфера (int16)."""
-    global _level, _level_at
+    # Заодно фиксируем момент ПЕРВОГО настоящего звука: по нему лог честно
+    # показывает задержку озвучки (раньше мерилось до конца первого куска).
+    global _level, _level_at, _first_audio_at
+    if _first_audio_at is None and mean_abs > 0.5:
+        _first_audio_at = time.monotonic()
     try:
         # средняя амплитуда речи ~1500..4000 → 37..100 по шкале 0..100
         _level = max(0.0, min(100.0, float(mean_abs) / 40.0))
@@ -551,7 +559,8 @@ def speak(text: str, name=None, name_latin=None, parts=None, on_part=None,
     if not segments:                       # только цифры/знаки/эмодзи
         return False
 
-    global last_failure
+    global last_failure, _first_audio_at
+    _first_audio_at = None
     my_gen = _bump_generation()
     stop()                                     # новая реплика прерывает старую
     with _lock:
@@ -1276,8 +1285,9 @@ def _stream_play_segments(segments, my_gen, tracker=None, rate=None) -> bool:
             if _play_segment(out, chunk0, voice_for(lang0),
                              samplerate, channels, my_gen, lang=lang0, rate=rate):
                 played = True
-                _say("TTS: первый звук через %.2f с (включая %.0f мс тишины)"
-                     % (time.monotonic() - t_open, LEAD_SILENCE_MS))
+                first = (_first_audio_at - t_open) if _first_audio_at else 0.0
+                _say("TTS: звук через %.2f с, весь кусок %.2f с (тишина %.0f мс)"
+                     % (first, time.monotonic() - t_open, LEAD_SILENCE_MS))
             # остальные куски — из предзагрузки (без пауз между языками)
             for i in range(1, len(segments)):
                 if _stop.is_set() or my_gen != _current_generation():
