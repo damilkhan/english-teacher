@@ -17,6 +17,7 @@
 
 import json
 import os
+import random
 import re
 
 import config
@@ -106,14 +107,23 @@ def pictures_for_level(level, catalog=None):
 
 
 def pick_picture(level, used=None, catalog=None):
-    """Ключ фото для уровня, по возможности НЕ повторяя уже показанные."""
+    """Ключ фото для уровня, по возможности НЕ повторяя уже показанные.
+
+    §62 (жалоба ученика 07.11.2026): раньше всегда брался ПЕРВЫЙ по алфавиту
+    ключ, и задание «опиши фото» каждый урок показывало автобусную станцию
+    (bus-stop). Теперь из непоказанных берём СЛУЧАЙНОЕ; когда все фото уровня
+    показаны — начинаем круг заново (тоже случайно).
+    """
     catalog = load_catalog() if catalog is None else catalog
     keys = pictures_for_level(level, catalog)
     if not keys:
         return None
     used = set(used or ())
     fresh = [k for k in keys if k not in used]
-    return (fresh or keys)[0]
+    pool = fresh or keys
+    if len(pool) == 1:
+        return pool[0]
+    return random.choice(pool)
 
 
 # ---------- порог букв и защита от накрутки ----------
@@ -180,13 +190,17 @@ def check_description(text, level):
     }
 
 
-def describe_task(level, catalog=None):
-    """Данные задания для одного фото: тема, пункты, путь, порог."""
+def describe_task(level, catalog=None, used=None):
+    """Данные задания для одного фото: тема, пункты, путь, порог.
+
+    used — ключи уже показанных фото (профиль ученика), чтобы не повторяться.
+    """
     catalog = load_catalog() if catalog is None else catalog
-    key = pick_picture(level, catalog=catalog)
+    key = pick_picture(level, used=used, catalog=catalog)
     if not key:
         return None
     entry = dict(catalog[key])
+    entry["key"] = key
     entry["threshold"] = threshold_for(level)
     entry["level"] = level_for_threshold(level)
     return entry

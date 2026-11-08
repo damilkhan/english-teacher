@@ -1829,7 +1829,16 @@ class EnglishTeacherApp:
         Ответ принимается и голосом, и письмом — путь один (текст
         реплики), поэтому проверка тоже одна (_picture_reply).
         """
-        task = picture_task.describe_task(self._picture_level())
+        # §62 (жалоба ученика 07.11.2026): фото каждый урок одно и то же —
+        # брался первый ключ по алфавиту (bus-stop). Теперь показываем по кругу,
+        # список показанных лежит в профиле ученика.
+        user_id = (self.current_user or {}).get("id")
+        try:
+            used = profile_store.pictures_used(user_id)
+        except Exception as exc:
+            print("⚠️ Список показанных фото не прочитан: %s" % exc)
+            used = []
+        task = picture_task.describe_task(self._picture_level(), used=used)
         if not task:
             print("ℹ️ Фото для задания не найдено (§18: assets/pictures)")
             # Фото нет — урок всё равно кончился: снимаем блокировку, иначе
@@ -1838,6 +1847,10 @@ class EnglishTeacherApp:
             return False
         self._picture = task
         self._lesson_closing = False        # фото показано — реплики снова идут
+        try:
+            profile_store.mark_picture_shown(task.get("key"), user_id=user_id)
+        except Exception as exc:
+            print("⚠️ Показанное фото не записано: %s" % exc)
         # Текст задания — ПО-АНГЛИЙСКИ (просьба ученика 26.10.2026):
         # русская реплика учителя в истории переключает урок на русский.
         text = ("📷 New task: describe what you see in the photo. "

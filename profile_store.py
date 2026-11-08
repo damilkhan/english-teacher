@@ -54,6 +54,7 @@ EMPTY_PROFILE = {
     "level_tests": [],
     "weak_topics": [],
     "completed_lessons": [],   # id пройденных уроков карты (progress_map)
+    "pictures_used": [],       # ключи показанных фото задания «опиши фото»
 }
 
 
@@ -112,6 +113,7 @@ def default_profile():
         "vocabulary": [],        # карточки слов для повторения (vocabulary.py)
         "vocab_last_session": None,   # дата последнего захода повторения слов
         "exams": {},             # итоги экзаменов: {id урока: {score,passed}}
+        "pictures_used": [],     # ключи показанных фото (круг по 9 картинкам)
     }
 
 
@@ -606,6 +608,29 @@ def _weak_topics(level_tests):
     weak.sort(key=lambda c: (c["correct"] - c["total"], -c["total"]))
     return weak[:MAX_WEAK_TOPICS]
 
+
+def pictures_used(user_id=None):
+    """Ключи фото, которые ученик уже описывал (для круга по картинкам)."""
+    profile = load(user_id)
+    used = profile.get("pictures_used")
+    return [str(k) for k in used] if isinstance(used, list) else []
+
+
+def mark_picture_shown(key, user_id=None):
+    """Запомнить показанное фото. НЕ трогает счётчик занятий (не save())."""
+    key = str(key or "").strip()
+    if not key:
+        return pictures_used(user_id)
+    profile = load(user_id)
+    used = profile.get("pictures_used")
+    if not isinstance(used, list):
+        used = []
+    used = [k for k in used if k != key]
+    used.append(key)
+    keep = max(4, int(getattr(config, "PICTURE_ROTATE_KEEP", 12)))
+    profile["pictures_used"] = used[-keep:]
+    _write(profile, progress_path(user_id))
+    return profile["pictures_used"]
 
 def _write(profile, path=None):
     path = path or progress_path()
