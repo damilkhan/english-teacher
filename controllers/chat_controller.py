@@ -20,6 +20,7 @@
 # =========================================================
 
 import logging
+import re
 import threading
 from datetime import datetime
 
@@ -453,6 +454,44 @@ class ChatController:
             print(f"⚠️ Аналитик недоступен: {exc}")
             return None
 
+    def _only_target_errors(self, analysis):
+        """§62: в фазе «ждём повтор» в базу ошибок идёт ТОЛЬКО целевая правка.
+
+        Живой урок 2.3 (07.11.2026): дрилл был на «advise me», а в базу попали
+        «to people», «for dinner», «it's -> It is» — посторонние ошибки той же
+        реплики. База пробелов раздулась, и следующее занятие снова начиналось
+        с того же «advise» — ученик видел один и тот же вопрос уроками подряд.
+
+        Посторонние ошибки не теряем совсем: их поймает обычная фаза задания.
+        """
+        lesson = self._lesson if isinstance(self._lesson, dict) else {}
+        phase = str(lesson.get("task_phase") or "").strip().lower()
+        if phase not in ("fix", "drill"):
+            return analysis
+        target = str(lesson.get("repeat_expected") or "")
+        words = set(re.findall(r"[a-z']+", target.lower()))
+        if not words:
+            return analysis
+        errors = analysis.get("errors") or []
+        keep = []
+        for item in errors:
+            if not isinstance(item, dict):
+                continue
+            # правка упоминает слово из целевой фразы — она про задание
+            said = set(re.findall(r"[a-z']+",
+                                  str(item.get("wrong") or "").lower()))
+            fix = set(re.findall(r"[a-z']+",
+                                 str(item.get("correct") or "").lower()))
+            if (said | fix) & words:
+                keep.append(item)
+        if len(keep) == len(errors):
+            return analysis
+        print("🎯 Посторонние ошибки в фазе повтора не в базу: %d -> %d"
+              % (len(errors), len(keep)))
+        data = dict(analysis)
+        data["errors"] = keep
+        return data
+
     def _with_origin(self, analysis):
         """Отметить, ОТКУДА пришла ошибка: экзамен или обычный урок (§55).
 
@@ -472,6 +511,7 @@ class ChatController:
         """Прогресс: есть разбор Аналитика → структурно, иначе — прежняя эвристика."""
         if analysis and analysis.get("ok"):
             try:
+                analysis = self._only_target_errors(analysis)
                 return profile_store.record_analysis(
                     self._with_origin(analysis), user_text, response, self.user_id)
             except Exception as exc:
