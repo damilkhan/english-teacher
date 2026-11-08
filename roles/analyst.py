@@ -93,6 +93,13 @@ Rules:
   ("the park in the park", "I I think"). A repetition, a restart or a stutter is
   NOT an error — never report it, not even as "redundant". Report only real
   language problems.
+- THIS IS SPEECH, not writing: the message is speech-to-text output. Capital
+  letters, full stops at the end, missing commas, apostrophes and the choice
+  between a contraction and the full form ("it's" / "it is", "I'm" / "I am")
+  are NEVER errors. Never report "capitalization", "punctuation" or
+  "use the full form" — a speaking student cannot type capitals.
+  (Live lesson 07.11.2026: the student said "it's a simple hamburger." and got
+  errors=1 for "capitalization and full form" — a correct answer marked wrong.)
 - The student often writes in RUSSIAN. Analyse ONLY the student's ENGLISH.
   If the message is NOT in English, return "errors": [] (do NOT report Russian
   mistakes as English errors) and do not force status A/P.
@@ -189,6 +196,58 @@ def is_disfluency(wrong: Any, correct: Any) -> bool:
                 return True
     return False
 
+# §62: сокращение ↔ полная форма. Для РЕЧИ это одно и то же (жалоба ученика:
+# «it's a simple hamburger» → «It is a simple hamburger.» считалось ошибкой).
+_CONTRACTIONS = {
+    "it's": "it is", "that's": "that is", "what's": "what is",
+    "there's": "there is", "here's": "here is", "let's": "let us",
+    "i'm": "i am", "i've": "i have", "i'll": "i will", "i'd": "i would",
+    "you're": "you are", "you've": "you have", "you'll": "you will",
+    "we're": "we are", "we've": "we have", "they're": "they are",
+    "they've": "they have", "he's": "he is", "she's": "she is",
+    "isn't": "is not", "aren't": "are not", "wasn't": "was not",
+    "weren't": "were not", "don't": "do not", "doesn't": "does not",
+    "didn't": "did not", "can't": "cannot", "won't": "will not",
+    "haven't": "have not", "hasn't": "has not", "wouldn't": "would not",
+    "couldn't": "could not", "shouldn't": "should not",
+}
+
+# Те же сокращения БЕЗ апострофа: распознавание речи часто теряет апостроф
+# («dont worry», «im fine»). Берём только неоднозначные исключения.
+_AMBIGUOUS = {"its", "were", "lets", "ill", "id"}
+_NO_APOSTROPHE = {k.replace("'", ""): v for k, v in _CONTRACTIONS.items()
+                  if k.replace("'", "") not in _AMBIGUOUS}
+
+
+def _speech_form(text: Any) -> str:
+    """Текст в «речевом» виде: без регистра, знаков и сокращений.
+
+    «It's a simple hamburger.» → «it is a simple hamburger»
+    """
+    raw = str(text or "").lower().replace(chr(8217), "'")
+    words_out: List[str] = []
+    for word in re.findall(r"[a-z0-9']+", raw):
+        word = word.strip("'")
+        if word:
+            words_out.append(_CONTRACTIONS.get(word)
+                             or _NO_APOSTROPHE.get(word, word))
+    return " ".join(words_out)
+
+
+def is_speech_artifact(wrong: Any, correct: Any) -> bool:
+    """«Ошибка» — только регистр/пунктуация/сокращение? Тогда это не ошибка.
+
+    Ученик ГОВОРИТ: заглавных букв, точек и выбора «it's / it is» в речи нет.
+    Живой урок 2.3 (07.11.2026): «it's a simple hamburger.» получило ошибку
+    «capitalization and full form», хотя это верный английский. Сравниваем
+    тексты в речевом виде: разница только в записи → это не ошибка.
+    Настоящая ошибка («go» → «went», «advise to me» → «advise me») остаётся.
+    """
+    w, c = _speech_form(wrong), _speech_form(correct)
+    if not w or not c:
+        return False            # пустое «правильно» может быть настоящей ошибкой
+    return w == c
+
 def _clean_errors(value: Any) -> List[Dict[str, str]]:
     """Нормализует список ошибок: типы, правило (§46), длины, пустое."""
     out: List[Dict[str, str]] = []
@@ -210,6 +269,8 @@ def _clean_errors(value: Any) -> List[Dict[str, str]]:
             continue
         if is_disfluency(wrong, correct):
             continue            # запинка/повтор — не ошибка
+        if is_speech_artifact(wrong, correct):
+            continue            # регистр/пунктуация/сокращение — это РЕЧЬ, не ошибка
         if etype not in ERROR_TYPES:
             etype = "grammar"
         # §46: правило из закрытого списка. Модель не назвала — догадка
