@@ -2172,13 +2172,39 @@ class EnglishTeacherApp:
         """
         current = session.drill_current()
         if not current:
-            return False
+            # §62 (живой урок 2.3, 07.11.2026): у правила нет библиотеки фраз
+            # (например «can you advise to me?»), и дрилл МОЛЧА ждал точную
+            # фразу «Can you advise me?» — ученик не видел задания, говорил
+            # своё, приложение три раза просило «скажи ещё раз», задание ушло
+            # «с подсказкой». Теперь задание показываем САМИ.
+            return self._drill_ask_single(session)
         self.add_message(self.teacher_name,
                          "🎯 Дрилл %d/%d. %s" % (current["index"],
                                                 current["total"],
                                                 current["ru"]))
         print("🎯 Дрилл %d/%d: %r" % (current["index"], current["total"],
                                        current["en"]))
+        return True
+
+    def _drill_ask_single(self, session):
+        """Дрилл без библиотеки фраз: показываем задание сами (§62)."""
+        want = ""
+        for item in (getattr(session, "repeat_expected", None) or []):
+            text = str(item or "").strip()
+            if text:
+                want = text
+                break
+        if not want:
+            return False
+        wrong = str(getattr(session, "drill_wrong", "") or "").strip()
+        if wrong:
+            text = ("🎯 Задание %d/%d. Ты сказал: «%s». Как правильно?"
+                    % (session.task_index, session.tasks_total, wrong))
+        else:
+            text = ("🎯 Задание %d/%d. Скажи правильно: «%s»."
+                    % (session.task_index, session.tasks_total, want))
+        self.add_message(self.teacher_name, text)
+        print("🎯 Дрилл (одна фраза): %r" % want)
         return True
 
     def _drill_reply(self, text):
@@ -2192,7 +2218,10 @@ class EnglishTeacherApp:
         if getattr(session, "task_phase", "") != lesson_mod.TASK_DRILL:
             return False
         if not getattr(session, "drill_phrases", None):
-            return False            # старая одна фраза — путь прежний
+            # §62: дрилл из ОДНОЙ фразы (правила нет в библиотеке пар).
+            # Раньше реплика уходила модели, задание ждало точную фразу —
+            # отсюда «три раза одно и то же» на живом уроке 2.3.
+            return self._drill_reply_single(session, text)
         try:
             res = session.drill_check(text)
         except Exception as exc:
@@ -2230,6 +2259,44 @@ class EnglishTeacherApp:
         elif res.get("next") and result != "wrong_side":
             # при другой стороне пары ситуацию уже повторили в той же строке
             self._drill_ask(session)
+        return True
+
+    def _drill_reply_single(self, session, text):
+        """Ответ в дрилле из ОДНОЙ фразы: проверяет приложение (§62).
+
+        Зачёт — по тексту (lesson.says_fix), модель не зовём: фраза эталонная
+        и лежит в коде. Промах не молчит: показываем эталон и идём дальше,
+        чтобы ученик не повторял одно и то же третий раз.
+        """
+        want = ""
+        for item in (getattr(session, "repeat_expected", None) or []):
+            phrase = str(item or "").strip()
+            if phrase:
+                want = phrase
+                break
+        if not want:
+            return False
+        try:
+            said_ok = lesson_mod.says_fix(text, [want])
+        except Exception as exc:
+            print("⚠️ Проверка дрилла сбилась: %s" % exc)
+            said_ok = False
+        if said_ok:
+            self.add_message(self.teacher_name, "✅ " + want)
+            self._say_after_current(want)
+            print("🏁 Дрилл (одна фраза) пройден: %r" % text)
+            self._credit_task(session, text, marked=False)
+            return True
+        tries = session.note_task_attempt()
+        if tries >= lesson_mod.MAX_TASK_ATTEMPTS:
+            # попытки кончились: показываем эталон и засчитываем с пометкой
+            self.add_message(self.teacher_name, "👉 Правильно: " + want)
+            self._say_after_current(want)
+            self._credit_task(session, text, marked=True)
+            return True
+        self.add_message(self.teacher_name,
+                         "🤏 Пока не то. Надо сказать: «%s»." % want)
+        print("🤏 Дрилл (одна фраза), попытка %d: %r" % (tries, text))
         return True
 
     def _drill_finish(self, session):
@@ -2733,13 +2800,25 @@ class EnglishTeacherApp:
         # ошибок → задание сдано, каким бы ни был answer_state (кроме
         # unclear: «не понял, ответ ли это»).
         no_errors = not errors and state != lesson_mod.ANSWER_UNCLEAR
+        try:
+            target_ok = session.target_repeated(text)
+        except Exception as exc:
+            print("⚠️ Проверка целевой правки сбилась: %s" % exc)
+            target_ok = False
+        credited = state == lesson_mod.ANSWER_REPEAT_OK or no_errors or target_ok
         print("🎯 Задание %d/%d: фаза=%s состояние=%s ошибок=%d -> %s"
               % (session.task_index, session.tasks_total, session.task_phase,
                  state or "-", len(errors),
-                 "зачёт" if (state == lesson_mod.ANSWER_REPEAT_OK or no_errors)
-                 else "ждём повтор"))
+                 ("зачёт" + (" (целевая правка повторилась)" if (target_ok
+                              and not no_errors) else ""))
+                 if credited else "ждём повтор"))
         if session.task_phase in (lesson_mod.TASK_FIX, lesson_mod.TASK_DRILL):
-            if state == lesson_mod.ANSWER_REPEAT_OK or no_errors:
+            # §62: зачёт даёт ЦЕЛЕВАЯ правка. Посторонняя ошибка в той же
+            # реплике (артикль, порядок слов) верный повтор не отменяет:
+            # живой урок 2.3 (07.11.2026) — дрилл на «advise me», ученик сказал
+            # правку, но задание ушло в «ждём повтор» из-за артикля в другом
+            # месте, и одно и то же пришлось повторять три раза.
+            if credited:
                 return self._credit_task(session, text, marked=False)
             if session.note_task_attempt() >= lesson_mod.MAX_TASK_ATTEMPTS:
                 # ученик так и не повторил верно: засчитываем С ПОМЕТКОЙ,
@@ -2752,7 +2831,9 @@ class EnglishTeacherApp:
         corrections = [item.get("correct") for item in errors
                        if isinstance(item, dict)]
         if state == lesson_mod.ANSWER_NEEDS_FIX or corrections:
-            session.expect_repeat(corrections)
+            wrongs = [item.get("wrong") for item in errors
+                      if isinstance(item, dict)]
+            session.expect_repeat(corrections, wrongs=wrongs)
             self._sync_lesson_prompt()   # «ждём верный повтор этой фразы»
             # первую ошибку попыткой НЕ считаем: попытки — это неудачные
             # ПОВТОРЫ (иначе 3 ошибки подряд «съедали» задание сразу)

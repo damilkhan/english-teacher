@@ -378,6 +378,10 @@ class LessonSession:
         self.task_phase = TASK_ASK if self.tasks_total else ""
         # что просили повторить (вариант В): правильные куски из разбора
         self.repeat_expected = []    # type: List[str]
+        # §62: что было НЕПРАВИЛЬНО в исходной ошибке. Нужно, чтобы в фазе
+        # «ждём повтор» засчитывать ТОЛЬКО целевую правку: посторонняя
+        # мелочь (артикль, заглавная) больше не валит верный повтор.
+        self.repeat_wrong = []       # type: List[str]
         self.last_credited = ""      # текст, за который задание уже засчитано
         # §55: материал дрилла (что ученик сказал раньше и как надо)
         self.drill_wrong = ""
@@ -676,7 +680,7 @@ class LessonSession:
                                       phrase["why"])
         return fail("miss")
 
-    def expect_repeat(self, corrections) -> List[str]:
+    def expect_repeat(self, corrections, wrongs=None) -> List[str]:
         """Запомнить, что просили повторить, и перейти в фазу «ждём повтор».
 
         corrections — правильные куски из разбора Аналитика
@@ -691,7 +695,13 @@ class LessonSession:
             text = str(raw or "").strip()
             if text and text not in items:
                 items.append(text)
+        bad = []                                      # type: List[str]
+        for raw in (wrongs or []):
+            text = str(raw or "").strip()
+            if text and text not in bad:
+                bad.append(text)
         self.repeat_expected = items
+        self.repeat_wrong = bad
         self.task_phase = TASK_FIX
         self.task_attempts = 0
         return items
@@ -717,6 +727,36 @@ class LessonSession:
             if wrong and wrong in said:
                 return False
             return difflib.SequenceMatcher(None, said, want).ratio() >= DRILL_RATIO
+        return says_fix(student_text, self.repeat_expected)
+
+    def target_repeated(self, student_text: Any) -> bool:
+        """Повторил ли ученик ИМЕННО ту правку, которую просили (§62).
+
+        Живой урок 2.3 (07.11.2026): дрилл был на «advise me», ученик сказал
+        «i advise people to eat for dinner hamburger.» — целевая правка на месте,
+        но Аналитик нашёл ДРУГУЮ ошибку (артикль), и задание снова ушло в
+        «ждём повтор». Так ученик три раза повторял одно и то же.
+
+        Правило: в фазе «ждём повтор» зачёт даёт ЦЕЛЕВАЯ правка. Посторонние
+        ошибки в той же реплике — отдельная тема (их разберёт обычный урок),
+        но верный повтор они не отменяют.
+
+        Старая ошибка в реплике всё равно блокирует зачёт («advise to me»
+        рядом с «advise me» — значит не исправил).
+        """
+        if not self.is_active or not self.has_tasks:
+            return False
+        if self.task_phase not in (TASK_FIX, TASK_DRILL):
+            return False
+        said = _flat(student_text)
+        if not said:
+            return False
+        for bad in (self.repeat_wrong or []):
+            mark = _flat(bad)
+            if mark and mark in said:
+                return False        # старая ошибка звучит снова
+        if self.task_phase == TASK_DRILL:
+            return self.says_fix(student_text)
         return says_fix(student_text, self.repeat_expected)
 
     def note_task_attempt(self) -> int:
@@ -749,6 +789,7 @@ class LessonSession:
             self.tasks_marked += 1
         self.last_credited = _flat(student_text)
         self.repeat_expected = []
+        self.repeat_wrong = []
         self.task_attempts = 0
         self.drill_wrong = ""
         self.drill_correct = ""
