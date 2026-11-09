@@ -1,4 +1,5 @@
 import os
+import re
 import threading
 import time
 
@@ -49,6 +50,12 @@ class STTEngine:
         # и автоопределение на одном коротком слове ошибается (27.10.2026).
         self.language = None
         self.model = None
+        # Английская речь распознаётся ОТДЕЛЬНОЙ моделью с жёстким языком
+        # (замер 09.11.2026: base путал "canned food", small — нет).
+        self.english_model_size = str(getattr(config, "STT_ENGLISH_MODEL", "") or "")
+        self._english_model = None
+        self._english_failed = False
+        self._english_lock = threading.Lock()
         self.error = None
         self._ready = threading.Event()   # загрузка завершилась (успех/ошибка)
         self._loading = False
@@ -110,6 +117,11 @@ class STTEngine:
             print("✅ Whisper готов! (будет определять язык автоматически)")
             self._ready.set()
             self._emit("ready", "распознавание готово")
+            if bool(getattr(config, "STT_WARM_ENGLISH", True)):
+                # английскую модель грузим в фоне: иначе первая английская
+                # реплика ждала бы ещё 2-3 с
+                threading.Thread(target=self._ensure_english_model,
+                                 daemon=True).start()
         except Exception as exc:
             self._failed = True
             self.error = str(exc)
@@ -128,6 +140,114 @@ class STTEngine:
         self._loading = True
         self._load()
         return self.model
+
+    def _ensure_english_model(self):
+        """Модель для английской речи (по умолчанию small), лениво и один раз.
+        
+        Замер 09.11.2026: на живых записях ученика base с автоопределением 
+        слышал "i eat and food" вместо "i eat canned food" и три раза решал,
+        что речь немецкая; small с жёстким "en" дал верный текст.
+        Ошибка загрузки не ломает приложение: работаем старой моделью.
+        """
+        if self._english_model is not None or self._english_failed:
+            return self._english_model
+        with self._english_lock:
+            if self._english_model is not None or self._english_failed:
+                return self._english_model
+            size = self.english_model_size
+            if not size or size == self.model_size:
+                self._english_model = self.model      # та же модель — бесплатно
+                return self._english_model
+            try:
+                started = time.time()
+                self._english_model = WhisperModel(size, device="cpu",
+                                                compute_type="int8")
+                print("✅ Английская модель '%s' готова за %.1f с"
+                      % (size, time.time() - started))
+            except Exception as exc:                  # noqa: BLE001
+                self._english_failed = True
+                print("⚠️ Английская модель не загрузилась: %s" % exc)
+        return self._english_model
+
+    def _detect_language(self, model, audio):
+        """Язык записи БЕЗ распознавания: (язык, уверенность).
+        
+        Стоит ~0,46 с (только энкодер). Нужен, чтобы решить, какой моделью
+        распознавать: русская речь — быстрой base, остальная — английской.
+        Не получилось — ("", 0.0), и тогда работает английский путь.
+        """
+        try:
+            lang, prob, _all = model.detect_language(audio=audio)
+            return str(lang or ""), float(prob or 0.0)
+        except Exception as exc:                      # noqa: BLE001
+            print("⚠️ Язык записи не определён: %s" % exc)
+            return "", 0.0
+
+    @staticmethod
+    def _looks_broken(text):
+        """Текст похож на мусор? (много слов из одной буквы или пусто)
+
+        Живой случай 09.11.2026: модель с жёстким языком на непонятной речи
+        выдаёт "R r Pi r S r r u NG r" — такие слова в речи не встречаются.
+        """
+        words = [w for w in re.split(r"[^\w']+", str(text or "")) if w]
+        if not words:
+            return True
+        short = sum(1 for w in words if len(w) <= 1)
+        return float(short) / len(words) >= 0.4
+
+    def _rescue_russian(self, audio):
+        """Резерв: проверить запись как РУССКУЮ базовой моделью.
+
+        Зачем: язык определяется ДО распознавания, и если детектор ошибся,
+        русская просьба («как сказать вилка по-английски») ушла бы в
+        английскую модель и превратилась в мусор. Срабатывает только когда
+        английский текст вышел подозрительным, и только если кириллицы в
+        русском варианте действительно много.
+        """
+        try:
+            segments, _info = self.model.transcribe(
+                audio, **self._transcribe_options("ru"))
+            text = " ".join(seg.text for seg in segments).strip().lower()
+        except Exception as exc:                      # noqa: BLE001
+            print("⚠️ Резервная проверка по-русски не удалась: %s" % exc)
+            return None
+        words = [w for w in re.split(r"[^\w']+", text) if w]
+        cyr = [w for w in words if len(w) >= 3 and all("\u0400" <= ch <= "\u04ff"
+                                                    for ch in w)]
+        if len(cyr) >= 2:
+            print("🔁 Похоже, речь русская — беру вариант базовой модели")
+            return text, "ru"
+        return None
+
+    def _pick_model_and_language(self, audio):
+        """Какая модель и какой язык пойдут в transcribe() (и почему).
+        
+        * язык задан жёстко (set_language) — уважаем его;
+        * иначе он определяется дёшево: русский — base как есть, а всё
+          остальное считается английским и идёт в английскую модель.
+        Возвращает (модель, язык, причина) — причину печатаем в лог.
+        """
+        base_model = self.model
+        forced = self.language
+        if forced:
+            lang = str(forced).lower()
+            if lang.startswith("ru"):
+                return base_model, "ru", "язык задан: ru"
+            english = self._ensure_english_model() or base_model
+            return (english, lang,
+                    "язык задан: %s, модель '%s'"
+                    % (lang, self.english_model_size or self.model_size))
+        detected, prob = self._detect_language(base_model, audio)
+        if detected.startswith("ru"):
+            return (base_model, "ru",
+                    "речь русская (p=%.2f) — модель '%s'"
+                    % (prob, self.model_size))
+        english = self._ensure_english_model() or base_model
+        lang = str(getattr(config, "STT_ENGLISH_LANGUAGE", "en") or "en")
+        return (english, lang,
+                "речь не русская (%s, p=%.2f) — модель '%s'"
+                % (detected or "?", prob, self.english_model_size or self.model_size))
 
     # -----------------------------------------------------
     # Подсказки и подготовка аудио
@@ -186,11 +306,14 @@ class STTEngine:
         except Exception as exc:                 # noqa: BLE001
             print("⚠️ Запись для разбора не сохранена: %s" % exc)
 
-    def _transcribe_options(self):
-        """Параметры transcribe() из config — единая точка настройки скорости."""
+    def _transcribe_options(self, language=None):
+        """Параметры transcribe() из config — единая точка настройки скорости.
+        
+        language: None — не задавать (автоопределение); иначе жёсткий язык.
+        """
         beam = int(getattr(config, "STT_BEAM_SIZE", 1) or 1)
         options = {
-            "language": self.language,  # None — автоопределение языка
+            "language": language or self.language,
             "beam_size": beam,
             "best_of": max(1, beam),    # нужен только при подборе temp > 0
             "without_timestamps": bool(getattr(config, "STT_WITHOUT_TIMESTAMPS", True)),
@@ -210,8 +333,10 @@ class STTEngine:
     # -----------------------------------------------------
     def recognize(self, audio_data):
         """
-        Распознаёт аудио с автоопределением языка.
-        Возвращает (текст, язык 'ru'/'en') или None.
+        Распознаёт аудио и возвращает (текст, язык 'ru'/'en') или None.
+
+        Язык больше НЕ всегда автоопределение: он определяется дёшево, а текст
+        пишет та модель, что слышит этот язык лучше (09.11.2026).
         """
         print(f"🔍 Распознаём {len(audio_data)} байт")
         self._save_audio(audio_data)
@@ -242,15 +367,24 @@ class STTEngine:
                 print("✂️ Обрезал тишину: %.1f с" % (removed / SAMPLE_RATE))
             audio_float = trimmed
 
-        # language=None — автоопределение языка!
-        segments, info = model.transcribe(audio_float, **self._transcribe_options())
+        # Какой моделью и на каком языке распознавать: русская речь — быстрой
+        # base, остальная — английской моделью с жёстким "en" (09.11.2026).
+        run_model, language, why = self._pick_model_and_language(audio_float)
+        print("🔍 Распознаю: %s" % why)
+        segments, info = run_model.transcribe(
+            audio_float, **self._transcribe_options(language))
 
-        # ЯВНО ПЕЧАТАЕМ, ЧТО ОПРЕДЕЛИЛ WHISPER
-        detected_lang = info.language
-        print(f"🔍 Whisper определил язык: {detected_lang}")
+        detected_lang = language or info.language
 
         # Собираем текст из сегментов
         text = " ".join(seg.text for seg in segments).strip().lower()
+
+        # Страховка: английский вариант получился мусором — возможно, речь
+        # русская, а детектор языка ошибся (09.11.2026).
+        if text and detected_lang == "en" and self._looks_broken(text):
+            rescued = self._rescue_russian(audio_float)
+            if rescued:
+                text, detected_lang = rescued
 
         if text:
             print(f"✅ Распознано [{detected_lang}]: {text}")

@@ -51,8 +51,14 @@ class FakeInfo:
 class FakeModel:
     """Заглушка WhisperModel: запоминаем, что пришло на вход."""
 
-    def __init__(self):
+    def __init__(self, lang="en", prob=0.9):
         self.calls = []
+        self.lang = lang
+        self.prob = prob
+
+    def detect_language(self, audio=None, **_kw):
+        # язык определяется БЕЗ распознавания (см. stt_engine 09.11.2026)
+        return self.lang, self.prob, [(self.lang, self.prob)]
 
     def transcribe(self, audio, **kwargs):
         self.calls.append((audio, kwargs))
@@ -63,6 +69,8 @@ def make_engine(**kwargs):
     """STTEngine с уже «загруженной» заглушкой модели (без сети/диска)."""
     eng = stt_engine.STTEngine(**kwargs)
     eng.model = FakeModel()
+    # английскую модель не грузим с диска: по умолчанию — та же заглушка
+    eng._english_model = eng.model
     eng._ready.set()
     return eng
 
@@ -104,7 +112,8 @@ def test_recognize_options():
     check("текст распознан и приведён к нижнему регистру", result == ("hello", "en"), result)
 
     audio, kwargs = eng.model.calls[0]
-    check("language=None (автоопределение)", kwargs.get("language", "?") is None, kwargs)
+    check("язык английской речи задан жёстко (en)",
+          kwargs.get("language") == "en", kwargs)
     check("beam_size из config.STT_BEAM_SIZE",
           kwargs.get("beam_size") == config.STT_BEAM_SIZE, kwargs)
     check("best_of >= beam_size", kwargs.get("best_of", 0) >= kwargs.get("beam_size", 9), kwargs)
@@ -168,14 +177,103 @@ def test_forced_language():
     check("set_language('en') → language='en' в модель",
           kwargs.get("language") == "en", kwargs)
 
-    eng.set_language(None)
-    eng.recognize(data)
-    _, kwargs2 = eng.model.calls[1]
-    check("set_language(None) → снова автоопределение",
-          kwargs2.get("language") is None, kwargs2)
-
     eng.set_language("")
     check("пустая строка тоже сбрасывает язык", eng.language is None, eng.language)
+
+
+def test_english_model():
+    print("\n[7] Английская речь — английской моделью (09.11.2026)")
+    data = pcm(speech_with_silence())
+
+    eng = make_engine()
+    base, english = FakeModel(), FakeModel()
+    eng.model, eng._english_model = base, english
+    eng.recognize(data)
+    check("английская реплика ушла в английскую модель",
+          len(english.calls) == 1 and not base.calls,
+          (len(base.calls), len(english.calls)))
+    _, kwargs = english.calls[0]
+    check("и с жёстким языком en", kwargs.get("language") == "en", kwargs)
+
+    print("\n[8] Русская речь — быстрой базовой моделью, без подмены")
+    eng2 = make_engine()
+    base2, english2 = FakeModel(lang="ru"), FakeModel()
+    eng2.model, eng2._english_model = base2, english2
+    result = eng2.recognize(data)
+    check("русская реплика ушла в базовую модель",
+          len(base2.calls) == 1 and not english2.calls,
+          (len(base2.calls), len(english2.calls)))
+    _, kwargs2 = base2.calls[0]
+    check("язык ru", kwargs2.get("language") == "ru", kwargs2)
+    check("вернулся язык ru", bool(result) and result[1] == "ru", result)
+
+    print("\n[9] Язык не определился — всё равно английский путь")
+    eng3 = make_engine()
+    base3, english3 = FakeModel(lang="", prob=0.0), FakeModel()
+    eng3.model, eng3._english_model = base3, english3
+    eng3.recognize(data)
+    check("работает английская модель", len(english3.calls) == 1,
+          len(english3.calls))
+
+    print("\n[10] Английская модель грузится ОДИН раз")
+    eng4 = stt_engine.STTEngine()
+    eng4.model = FakeModel()
+    eng4._ready.set()
+    calls = []
+
+    def fake_loader(size, device="cpu", compute_type="int8"):
+        calls.append(size)
+        return FakeModel()
+
+    real = stt_engine.WhisperModel
+    stt_engine.WhisperModel = fake_loader
+    try:
+        first = eng4._ensure_english_model()
+        second = eng4._ensure_english_model()
+    finally:
+        stt_engine.WhisperModel = real
+    check("загрузка была ровно одна", len(calls) == 1, calls)
+    check("взята модель из config.STT_ENGLISH_MODEL",
+          calls == [config.STT_ENGLISH_MODEL], calls)
+    check("модель закеширована", first is second and first is not None)
+
+
+def test_rescue():
+    data = pcm(speech_with_silence())
+    print("\n[11] Страховка: мусорный английский текст -> проверка по-русски")
+    eng11 = make_engine()
+    base11, english11 = FakeModel(lang="lt", prob=0.31), FakeModel()
+    english11.transcribe = lambda audio, **kw: ([FakeSegment(" R r Pi r S r ")],
+                                               FakeInfo())
+    eng11.model, eng11._english_model = base11, english11
+    rescued = []
+
+    def fake_rescue(audio):
+        rescued.append(True)
+        return "как сказать вилка по-английски", "ru"
+
+    eng11._rescue_russian = fake_rescue
+    result = eng11.recognize(data)
+    check("страховка сработала", bool(rescued), rescued)
+    check("вернулся русский текст",
+          bool(result) and result[1] == "ru" and "вилка" in result[0], result)
+
+    eng12 = make_engine()
+    base12, english12 = FakeModel(lang="en", prob=0.65), FakeModel()
+    english12.transcribe = lambda audio, **kw: ([FakeSegment(" I eaten canned food ")],
+                                                FakeInfo())
+    eng12.model, eng12._english_model = base12, english12
+    called = []
+    eng12._rescue_russian = lambda audio: called.append(True) or ("нельзя", "ru")
+    result2 = eng12.recognize(data)
+    check("нормальный текст страховку НЕ зовёт", not called, called)
+    check("и остаётся английским",
+          bool(result2) and result2[1] == "en" and "canned" in result2[0], result2)
+
+    check("_looks_broken на бреде",
+          stt_engine.STTEngine._looks_broken("R r Pi r S r r u") is True)
+    check("_looks_broken на живой фразе",
+          stt_engine.STTEngine._looks_broken("i eaten canned food") is False)
 
 
 def main():
@@ -183,12 +281,22 @@ def main():
     print("Проверка распознавания речи (настройка, без реальной модели)")
     print("=" * 60)
 
+    # ВАЖНО: тест не должен писать свои «записи» в logs/stt — там лежат живые
+    # записи ученика, а список держит только 8 последних (09.11.2026: тест
+    # вытеснил три настоящие записи синтетическими).
+    saved_audio = getattr(config, "STT_SAVE_AUDIO", False)
+    config.STT_SAVE_AUDIO = False
+
     test_trim()
     test_recognize_options()
     test_silence_only()
     test_too_short()
     test_hotwords()
     test_forced_language()
+    test_english_model()
+    test_rescue()
+
+    config.STT_SAVE_AUDIO = saved_audio
 
     print("\n" + "=" * 60)
     if FAILED:
