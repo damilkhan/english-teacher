@@ -160,11 +160,14 @@ MISTAKE_WORD = {"grammar": "грамматика", "vocabulary": "лексика
                 "pronunciation": "произношение"}
 
 
-def profile_summary(user, profile, map_progress=(0, 0)):
+def profile_summary(user, profile, map_progress=(0, 0), location_title=""):
     """Строки сводки для вкладки «Профиль»: [(заголовок, значение), …].
 
     Чистая функция (без Tk) — её удобно проверять тестами и пересобирать
     при смене ученика/темы, не трогая логику окна.
+
+    location_title — название локации, где ученик сейчас (раньше здесь
+    жёстко стояла «Пустыня», и в городе профиль тоже писал «Пустыня»).
     """
     user = user or {}
     profile = profile or {}
@@ -178,7 +181,9 @@ def profile_summary(user, profile, map_progress=(0, 0)):
         done, total = int(map_progress[0]), int(map_progress[1])
     except Exception:
         done, total = 0, 0
-    out.append(("Карта «Пустыня»", "пройдено блоков: %d из %d" % (done, total)))
+    map_title = str(location_title or "").strip() or "Пустыня"
+    out.append(("Карта «%s»" % map_title,
+                "пройдено блоков: %d из %d" % (done, total)))
     out.append(("Занятий с %s" % user_manager.teacher_name(user),
                 str(profile.get("total_lessons", 0))))
 
@@ -1128,10 +1133,19 @@ class EnglishTeacherApp:
                                 on_location_change=self._on_location_change)
         self.map_view.pack(fill="both", expand=True, padx=4, pady=4)
         self.map_view.set_active(False)      # стартовая вкладка — «Чат»
+        self._map_location = start_location  # её же покажет вкладка «Профиль»
 
     def _on_location_change(self, location_id):
-        """Ученик посмотрел другую локацию: запоминаем выбор до сессии."""
+        """Ученик посмотрел другую локацию: запоминаем выбор до сессии.
+
+        Заодно обновляем «Профиль»: там название и прогресс ИМЕННО этой
+        локации (а не всегда «Пустыни»).
+        """
         self._map_location = location_id
+        try:
+            self._refresh_profile_tab()
+        except Exception:
+            pass
 
     def _build_profile_tab(self):
         """Вкладка «Профиль»: краткая сводка прогресса ученика."""
@@ -1165,12 +1179,26 @@ class EnglishTeacherApp:
             child.destroy()
         if profile is None:
             profile = self._active_profile()
+        # Локация, где ученик сейчас: та, что открыта на карте, иначе первая
+        # непройденная. Раньше здесь жёстко считалась «Пустыня» — и в городе
+        # профиль показывал прогресс пустыни.
+        location_id = str(getattr(self, "_map_location", "") or "")
+        if not location_id:
+            try:
+                location_id = self.progress_map.first_open_location(profile)
+            except Exception:
+                location_id = ""
         try:
-            done, total = self.progress_map.get_location_progress("desert", profile)
+            done, total = self.progress_map.get_location_progress(location_id, profile)
         except Exception:
             done, total = (0, 0)
+        try:
+            location_title = (self.progress_map.get_location(location_id) or {}).get("title") or ""
+        except Exception:
+            location_title = ""
         p = self.palette
-        for heading, value in profile_summary(self.current_user, profile, (done, total)):
+        for heading, value in profile_summary(self.current_user, profile,
+                                              (done, total), location_title):
             ctk.CTkLabel(box, text=heading, anchor="w",
                          font=theme.FONT_SECTION,
                          text_color=p["muted"]).pack(anchor="w", padx=6, pady=(10, 0))
@@ -1319,9 +1347,12 @@ class EnglishTeacherApp:
             point = self.progress_map.get_point(point_id) or {}
         except Exception:
             point = {}
+        # Название локации — по САМОЙ точке, а не всегда «Пустыня»
+        # (живой баг 09.11.2026: в городе окно блока подписывалось «Пустыня»).
         location_title = ""
         try:
-            location_title = (self.progress_map.get_location("desert") or {}).get("title") or ""
+            location_id = self.progress_map.location_of(point_id)
+            location_title = (self.progress_map.get_location(location_id) or {}).get("title") or ""
         except Exception:
             pass
         chosen = None
@@ -1424,12 +1455,15 @@ class EnglishTeacherApp:
         }
 
     def _point_of_lesson(self, lesson_id):
-        """В каком блоке лежит урок (по данным карты)."""
+        """В каком блоке лежит урок (по всей карте, а не только по «Пустыне»).
+
+        Раньше перебирались блоки одной Пустыни: урок города, начатый кнопкой
+        «Провести урок», оставался без названия блока в теме занятия.
+        """
         try:
-            for point in self.progress_map.points_of("desert"):
-                for item in self.progress_map.lessons_of(str(point.get("id"))):
-                    if str(item.get("id")) == str(lesson_id):
-                        return str(point.get("id"))
+            found = self.progress_map.point_of_lesson(lesson_id)
+            if found:
+                return str(found)
         except Exception:
             pass
         return None
@@ -3362,6 +3396,10 @@ class EnglishTeacherApp:
             pass
         print("📚 Повторение закончено: %s" % (summary or {}))
         self._refresh_side_views()
+        # Живой баг 09.11.2026: после слов в чате не было кнопки «Провести
+        # урок». Ряд возвращаем, если урок не идёт (в уроке он не нужен).
+        if not self.lesson.is_active:
+            self._show_quick()
         if self._arm_after_vocab:
             # заход был частью запуска (после теста уровня) — теперь урок
             self._arm_after_vocab = False

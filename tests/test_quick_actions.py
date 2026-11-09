@@ -14,7 +14,8 @@
 #   3) «Свободное общение» гасит автозапуск урока и говорит по-английски;
 #   4) «Провести урок» начинает СЛЕДУЮЩИЙ урок по карте;
 #   5) первое действие ученика убирает кнопки, «Очистить» возвращает;
-#   6) «Слова» без материала НЕ открывает пустое окно (фраза голосом).
+#   6) «Слова» без материала НЕ открывает пустое окно (фраза голосом);
+#   7) после окна слов ряд кнопок возвращается (в уроке — нет).
 # =========================================================
 
 import os
@@ -195,6 +196,36 @@ def main():
         for _ in range(10):
             app.window.update()
         check("после своей реплики ряда нет", not app.quick_row.winfo_manager(),
+              app.quick_row.winfo_manager())
+
+        print("\n[9] После окна слов ряд вернулся (баг 09.11.2026)")
+        # Раньше выйти из слов можно было только через карту: кнопки «Провести
+        # урок» в чате уже не было.
+        app._hide_quick()
+        for _ in range(5):
+            app.window.update()
+        check("перед закрытием слов ряда нет", not app.quick_row.winfo_manager())
+        app._vocab_finished({})
+        for _ in range(10):
+            app.window.update()
+        check("после слов ряд вернулся", bool(app.quick_row.winfo_manager()),
+              app.quick_row.winfo_manager())
+        check("кнопка «Провести урок» снова доступна",
+              any("Провести урок" in t for t in all_texts(app.quick_row)),
+              all_texts(app.quick_row))
+
+        print("\n[10] В уроке ряд НЕ возвращаем")
+        app._hide_quick()
+        import types
+        real_lesson = app.lesson
+        app.lesson = types.SimpleNamespace(is_active=True)   # идёт урок
+        try:
+            app._vocab_finished({})
+        finally:
+            app.lesson = real_lesson
+        for _ in range(10):
+            app.window.update()
+        check("во время урока ряда нет", not app.quick_row.winfo_manager(),
               app.quick_row.winfo_manager())
     finally:
         try:

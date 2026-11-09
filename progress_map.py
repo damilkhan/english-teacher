@@ -197,6 +197,14 @@ class ProgressMap:
         """Точка (блок) по id. Неизвестный id → пустой словарь."""
         return self._points.get(str(point_id or ""), {})
 
+    def location_of(self, point_id: str) -> str:
+        """id ЛОКАЦИИ, в которой лежит точка (блок). Нет такой → ""."""
+        return self._point_location.get(str(point_id or ""), "")
+
+    def point_of_lesson(self, lesson_id: str) -> str:
+        """id ТОЧКИ (блока), в которой лежит урок. Нет такого → ""."""
+        return self._lesson_point.get(str(lesson_id or ""), "")
+
     def lessons_of(self, point_id: str) -> List[Dict[str, Any]]:
         """Уроки точки по порядку (включая вложенные). Нет данных → []."""
         ids = self._point_lessons.get(str(point_id or ""), [])
