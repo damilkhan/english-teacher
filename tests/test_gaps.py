@@ -206,6 +206,20 @@ def test_top_pair():
           (short or {}).get("correct") == "usually have breakfast", short)
     # выключение дрилла флагом — отдельная проверка в test_lesson_drill
 
+    # 09.11.2026: решает ПОВТОРЯЕМОСТЬ пары, а не её длина. Раньше правило
+    # word_choice с 20 записями отдавало в дрилл одну случайную длинную фразу
+    # («hamburger -> a cold drink or a hot drink»).
+    repeated = rows(
+        ("word_choice", "want to see", "would like to see", "2026-10-01"),
+        ("word_choice", "want to see", "would like to see", "2026-10-02"),
+        ("word_choice", "i am agree with you on that point",
+         "I agree with you on that point", "2026-10-03"),
+    )
+    again = gaps.top_pair(rows=repeated)
+    check("повторявшаяся пара важнее длинной",
+          (again or {}).get("correct") == "would like to see", again)
+    check("частота пары записана", (again or {}).get("pair_count") == 2, again)
+
 def test_aggregate():
     print("\n[3] aggregate")
     result = gaps.aggregate(rows=SAMPLE)

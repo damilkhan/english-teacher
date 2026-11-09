@@ -248,6 +248,65 @@ def is_speech_artifact(wrong: Any, correct: Any) -> bool:
         return False            # пустое «правильно» может быть настоящей ошибкой
     return w == c
 
+# ---------------------------------------------------------
+# Отсев «ошибок», которые на самом деле не ошибки (09.11.2026)
+# ---------------------------------------------------------
+# Живой экзамен city/2.4: в базу ушли «ich ee den kähnets, fuhr -> I ate
+# Kenneth Ford» (мусор распознавания), «ago -> » (пустая правка) и
+# «hamburger -> a cold drink or a hot drink» с заметкой «Did not answer the
+# specific question». Всё это не про язык, а следующее занятие начиналось
+# с дрилла по такой паре.
+
+# Заметки, которыми Аналитик сам говорит «ответ не по теме».
+_OFF_TOPIC_MARKS = (
+    "did not answer", "didn't answer", "does not answer", "not answer",
+    "off topic", "off-topic", "irrelevant", "not relevant", "instead of",
+    "did not address", "does not address",
+    # распознавание подсунуло чужой язык — это не пробел ученика
+    "mixed language", "mixed german", "in german", "german/english",
+    "not english", "non-english",
+)
+
+
+def _has_latin(text: Any) -> bool:
+    """В тексте есть английские буквы (a-z)?"""
+    return bool(re.search(r"[a-z]", str(text or "").lower()))
+
+
+def _has_foreign_letters(text: Any) -> bool:
+    """В тексте есть кириллица или «чужие» буквы с диакритикой?""",
+    for ch in str(text or ""):
+        if "\u0400" <= ch <= "\u04ff":          # кириллица
+            return True
+        if ch in "äöüßåæøñçèêëáéíóú":             # немецкий/романский
+            return True
+    return False
+
+
+def is_junk_pair(wrong: Any, correct: Any) -> bool:
+    """Пара «было -> стало» не годится как ошибка языка?
+
+    Причины (каждая проверена на живой базе 09.11.2026):
+      * одна сторона пустая — повторять нечего;
+      * нет английских букв или есть чужие (мусор распознавания);
+      * стороны совпадают в речевом виде (это уже ловит is_speech_artifact).
+    """
+    w, c = str(wrong or "").strip(), str(correct or "").strip()
+    if not w or not c:
+        return True
+    if not _has_latin(w) and not _has_latin(c):
+        return True
+    if _has_foreign_letters(w) or _has_foreign_letters(c):
+        return True
+    return False
+
+
+def is_off_topic(note: Any) -> bool:
+    """Аналитик сам написал, что ответ не по теме — это не ошибка языка."""
+    text = str(note or "").lower()
+    return any(mark in text for mark in _OFF_TOPIC_MARKS)
+
+
 def _clean_errors(value: Any) -> List[Dict[str, str]]:
     """Нормализует список ошибок: типы, правило (§46), длины, пустое."""
     out: List[Dict[str, str]] = []
@@ -271,6 +330,10 @@ def _clean_errors(value: Any) -> List[Dict[str, str]]:
             continue            # запинка/повтор — не ошибка
         if is_speech_artifact(wrong, correct):
             continue            # регистр/пунктуация/сокращение — это РЕЧЬ, не ошибка
+        if is_junk_pair(wrong, correct):
+            continue            # пустая сторона / не-английский мусор (09.11.2026)
+        if is_off_topic(note):
+            continue            # «ответил не на вопрос» — не пробел в языке
         if etype not in ERROR_TYPES:
             etype = "grammar"
         # §46: правило из закрытого списка. Модель не назвала — догадка

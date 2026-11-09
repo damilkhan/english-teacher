@@ -358,6 +358,17 @@ def top_pair(user_id=None, rows=None, min_words=2, max_words=8):
         correct = str(row.get("correct") or "").strip()
         if not wrong or not correct:
             continue
+        # Мусор в базе (09.11.2026): пустая сторона, не-английский текст и
+        # «ответ не по теме» — это не пробел языка. Старые записи чистим
+        # ЗДЕСЬ, при чтении: саму базу не трогаем.
+        try:
+            from roles import analyst as _analyst
+            if _analyst.is_junk_pair(wrong, correct):
+                continue
+            if _analyst.is_off_topic(row.get("note")):
+                continue
+        except Exception:
+            pass                 # аналитик недоступен — считаем как есть
         size = len(_words(correct))
         if size < min_words or size > max_words:
             continue
@@ -365,25 +376,41 @@ def top_pair(user_id=None, rows=None, min_words=2, max_words=8):
                                            wrong, correct))
 
     limit = gap_threshold()
-    # §55 шаг 2: отработанные правила в дрилл больше не предлагаем
-    done_ids = mastered_ids(user_id)
-    best = None                  # (сколько раз, правило, было, стало)
-    for rule in sorted(pairs, key=lambda r: (-counts.get(r, 0), r)):
+    # §55 шаг 2: отработанные правила в дрилл больше не предлагаем.
+    # Записи пришли СНАРУЖИ и ученик не назван → живую базу не читаем
+    # (так же считает aggregate): тесты и отчёты видят ровно данное.
+    done_ids = mastered_ids(user_id) if (rows is None or user_id is not None) else set()
+    # Сама ПАРА тоже считается (живой экзамен 09.11.2026): правило word_choice
+    # набрало 20 записей, а внутри него была одна случайная фраза «hamburger ->
+    # a cold drink or a hot drink» — она и уходила в дрилл только потому, что
+    # оказалась САМОЙ ДЛИННОЙ. Теперь решает повторяемость пары.
+    pair_counts = {}
+    for rule, items in pairs.items():
+        for size, date, wrong, correct in items:
+            key = (wrong.lower(), correct.lower())
+            seen_count, _s, _d, w, c = pair_counts.get(
+                key, (0, size, date, wrong, correct))
+            pair_counts[key] = (seen_count + 1, size, _d, w, c)
+    ranking = []                 # (повторов пары, повторов правила, длина)
+    for rule, items in pairs.items():
         if rule == "other" or counts.get(rule, 0) < limit:
             continue
-        # внутри правила — фраза подлиннее (ближе к живой речи), потом свежая
-        _size, _date, wrong, correct = sorted(
-            pairs[rule], key=lambda it: (-it[0], it[1]))[0]
-        lib = library_rule(wrong, correct)
-        if lib and lib in done_ids:
-            continue             # эту пару ученик уже отработал
-        best = (counts[rule], rule, wrong, correct)
-        break
-    if best is None:
+        for size, date, wrong, correct in items:
+            key = (wrong.lower(), correct.lower())
+            seen_count = pair_counts.get(key, (0,))[0]
+            lib = library_rule(wrong, correct)
+            if lib and lib in done_ids:
+                continue         # эту пару ученик уже отработал
+            ranking.append((seen_count, counts.get(rule, 0), size, date,
+                            rule, wrong, correct))
+    if not ranking:
         return None
-    count, rule, wrong, correct = best
+    # сначала пара, которая ПОВТОРЯЛАСЬ; при равенстве — правило, где больше
+    # записей; потом фраза подлиннее (ближе к живой речи); потом свежая
+    seen, rule_total, _size, _date, rule, wrong, correct = sorted(
+        ranking, key=lambda it: (-it[0], -it[1], -it[2], it[3]))[0]
     return {"rule": rule, "label": RULE_RU.get(rule, rule), "wrong": wrong,
-            "correct": correct, "count": count}
+            "correct": correct, "count": rule_total, "pair_count": seen}
 
 
 def _example_text(pairs, limit=1):

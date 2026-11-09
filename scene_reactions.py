@@ -272,6 +272,41 @@ def reply_to(slot: str, it: Intent) -> Optional[str]:
     return _cap(text) if text else None
 
 
+def slot_hotwords(slot: str, limit: int = 14) -> List[str]:
+    """Слова, которых ждём от ученика в этом слоте (подсказка распознаванию).
+
+    Вопрос сцены известен заранее, а в его слоте уже лежат ожидаемые слова
+    (jacket, size, card, receipt…). Whisper с таким словарём слышит слово,
+    которое собирался сказать ученик, а не похожее (живой урок 09.11.2026:
+    «I'm looking for a jacket» → «i'm looking at jacket»).
+
+    Пустой список — подсказки нет (слот неизвестен, словарь пуст).
+    """
+    conf = _conf(slot)
+    if not conf:
+        return []
+    words: List[str] = []
+    # Сначала ФРАЗЫ слота («just looking», «here you are») — они важнее
+    # предметов: именно их ученик строит сам.
+    extra = conf.get("words") or {}
+    if isinstance(extra, dict):
+        words.extend(str(k) for k in extra.keys() if k)
+    items = conf.get("items") or {}
+    if isinstance(items, dict):
+        # только нормальные слова: значения, а не варианты написания
+        words.extend(str(v) for v in items.values() if v)
+    out: List[str] = []
+    for word in words:
+        word = word.strip()
+        if len(word) < 3 or word.lower() in ("the", "and", "you"):
+            continue
+        if word.lower() not in [w.lower() for w in out]:
+            out.append(word)
+        if len(out) >= limit:
+            break
+    return out
+
+
 def unknown(slot: str) -> str:
     """Не понял: СВОЙ переспрос слота, иначе общий + вопрос слота."""
     conf = _conf(slot)

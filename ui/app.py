@@ -411,6 +411,9 @@ class EnglishTeacherApp:
         # окно открыто ПОСЛЕ автозапуска (при старте) — урок взведём, когда
         # его закроют. Для захода с карты этот флаг остаётся False.
         self._arm_after_vocab = False
+        # Дрилл перед сценой (09.11.2026): сцена не умеет дрилл в сессии,
+        # поэтому одна фраза из прошлой ошибки спрашивается ДО сцены.
+        self._scene_drill = None
 
         self.recorder = RecordingController(
             vad=self.vad, stt=self.stt, dispatch=self._dispatch,
@@ -1584,6 +1587,11 @@ class EnglishTeacherApp:
         self._lesson_state("thinking")
         if session.is_scene:
             # вопросы задаёт ПРИЛОЖЕНИЕ: сервер (модель) не нужен вообще
+            # Решение 106 (09.11.2026): дрилл по прошлой ошибке идёт и в
+            # сценном уроке — раньше он был только в ветке «урок ведёт
+            # модель», то есть на всём пути сцен НЕ РАБОТАЛ ВООБЩЕ.
+            if self._start_scene_drill(session):
+                return session
             self._scene_ask(session)
             return session
         if self.server_ready:
@@ -2057,6 +2065,7 @@ class EnglishTeacherApp:
     def _end_lesson(self):
         """Свернуть интерфейс занятия (полоса, блокировка, тема промпта)."""
         self._asked_repeat = ""
+        self._scene_drill = None       # дрилл перед сценой закрыт вместе с уроком
         self._scene_chips_off()         # конструктор прячется вместе с уроком
         self._server_task = None        # занятие закрыто — ожидание сервера не нужно
         self._story_context = False     # рассказ был частью урока
@@ -2361,6 +2370,91 @@ class EnglishTeacherApp:
                     print("🎯 Правило осталось в работе: %s" % rule)
             except Exception as exc:
                 print("⚠️ Отметка «отработано» не записалась: %s" % exc)
+
+    # ---------- дрилл перед сценой (09.11.2026) ----------
+    def _start_scene_drill(self, session):
+        """Одна фраза из прошлой ошибки ПЕРЕД сценой. True — сцену отложили.
+
+        Почему отдельно от session.start_drill: сцена считает задания
+        ШАГАМИ, и зачёт дрилла внутри сессии сдвинул бы счёт шагов (урок
+        закрылся бы раньше времени). Поэтому дрилл живёт в приложении и
+        задание НЕ засчитывает — он только повторяет фразу вслух.
+        """
+        if not getattr(config, "LESSON_MISTAKE_DRILL", True):
+            return False
+        if session is None or not getattr(session, "is_scene", False):
+            return False
+        try:
+            pair = gaps.top_pair((self.current_user or {}).get("id"))
+        except Exception as exc:
+            print("⚠️ Дрилл перед сценой не собран: %s" % exc)
+            return False
+        if not pair:
+            return False
+        wrong = str(pair.get("wrong") or "").strip()
+        correct = str(pair.get("correct") or "").strip()
+        if not correct:
+            return False
+        try:
+            tries = max(1, int(getattr(config, "DRILL_TRIES", 2)))
+        except (TypeError, ValueError):
+            tries = 2
+        self._scene_drill = {"wrong": wrong, "correct": correct,
+                             "tries": 0, "max": tries}
+        if wrong:
+            line = ("🎯 Перед сценой — одна фраза с прошлого раза.\n"
+                    "Ты сказал: «%s». Как правильно?" % wrong)
+        else:
+            line = "🎯 Перед сценой — одна фраза с прошлого раза: «%s»." % correct
+        self.add_message(self.teacher_name, line)
+        print("🎯 Дрилл перед сценой: %r -> %r (%s)"
+              % (wrong, correct, pair.get("label") or pair.get("rule")))
+        return True
+
+    def _scene_drill_reply(self, text):
+        """Ответ на дрилл ПЕРЕД сценой. True — реплику забрали (модель не нужна)."""
+        drill = getattr(self, "_scene_drill", None)
+        if not drill:
+            return False
+        session = self.lesson.current()
+        if session is None or not getattr(session, "is_scene", False):
+            self._scene_drill = None
+            return False
+        correct = str(drill.get("correct") or "")
+        try:
+            ok = bool(lesson_mod.says_fix(text, [correct]))
+        except Exception as exc:
+            print("⚠️ Проверка дрилла перед сценой сбилась: %s" % exc)
+            ok = False
+        if ok:
+            self._scene_drill = None
+            self.add_message(self.teacher_name, "✅ " + correct)
+            print("🎯 Дрилл перед сценой сдан с %d-й попытки" % (drill["tries"] + 1))
+            self._say_then_scene(session, correct)
+            return True
+        drill["tries"] = int(drill.get("tries") or 0) + 1
+        if drill["tries"] < int(drill.get("max") or 2):
+            self.add_message(self.teacher_name,
+                             "🤏 Пока не то. Надо сказать: «%s»" % correct)
+            print("🎯 Дрилл перед сценой: промах (%.40r)" % (text or ""))
+            return True
+        self._scene_drill = None
+        self.add_message(self.teacher_name, "👉 Правильно: " + correct)
+        print("🎯 Дрилл перед сценой: попытки кончились, показываю эталон")
+        self._say_then_scene(session, correct)
+        return True
+
+    def _say_then_scene(self, session, english):
+        """Сказать эталон и, когда речь доиграет, задать первый вопрос сцены."""
+        try:
+            self._say(english)
+        except Exception:
+            pass
+        try:
+            self._wait_for_speech(lambda: self._scene_ask(session))
+        except Exception as exc:
+            print("⚠️ Сцена не началась после дрилла: %s" % exc)
+            self._scene_ask(session)
 
     # ---------------- сцена-пилот: диалог ведёт окно (шаг 3) ------------------
     def _scene_for_lesson(self, lesson_id):
@@ -4118,7 +4212,41 @@ class EnglishTeacherApp:
         if card:
             parts.append(card.get("en"))
             parts.append(card.get("example"))
+        parts.extend(self._scene_stt_words())
         return ", ".join(p for p in parts if p)
+
+    def _scene_stt_words(self):
+        """Слова текущего вопроса сцены — подсказка распознаванию.
+
+        Живой урок 09.11.2026: ученик членораздельно повторял «I'm looking for
+        a jacket», а записывалось «i'm looking at jacket». Вопрос сцены ЗАРАНЕЕ
+        известен, и в его слоте лежит словарь ожидаемых слов (jacket, size,
+        card, receipt…). Отдаём их Whisper как подсказку.
+
+        Пусто, если урок не сцена: в обычном уроке подсказки сцены лишь
+        мешают (Whisper начинает «слышать» то, чего не было).
+        """
+        session = None
+        try:
+            session = self.lesson.current()
+        except Exception:
+            session = None
+        if session is None or not getattr(session, "is_scene", False):
+            return []
+        if not getattr(session, "is_active", False):
+            return []
+        try:
+            import scenes as scenes_mod
+            import scene_reactions as react_mod
+            item = scenes_mod.question(session.scene_id, session.scene_step,
+                                       session.scene_q) or {}
+            slot = str(item.get("slot") or "").strip()
+            if not slot:
+                return []
+            return react_mod.slot_hotwords(slot)
+        except Exception as exc:
+            print("⚠️ Подсказки сцены не собраны: %s" % exc)
+            return []
 
     def _vocab_stt_card(self):
         """Карточка, которая сейчас на экране повторения (или None)."""
@@ -4240,6 +4368,9 @@ class EnglishTeacherApp:
             if self._picture_reply(text):
                 return
 
+        # Дрилл перед сценой идёт РАНЬШЕ самой сцены (09.11.2026)
+        if self._scene_drill_reply(text):
+            return
         # Шаг 3: в сцене ответ принимает приложение — модель не зовётся вовсе
         if self._scene_reply(text):
             return
