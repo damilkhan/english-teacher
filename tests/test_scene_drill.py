@@ -133,7 +133,7 @@ def main():
     session, fake = build(pair)
     started = start_drill(fake, session)
     check("дрилл начался", started is True, started)
-    check("в чате есть задание", any("Как правильно?" in m for m in fake.messages),
+    check("в чате есть задание", any("Say it correctly" in m for m in fake.messages),
           fake.messages)
     check("названо, что сказал ученик",
           any("i'm looking a jacket" in m for m in fake.messages), fake.messages)
@@ -154,12 +154,12 @@ def main():
     first = reply(fake, "i am looking jacket")
     check("промах забран дриллом (в модель не ушёл)", first is True, first)
     check("ученику сказано, как надо",
-          any("Надо сказать" in m for m in fake.messages), fake.messages)
+          any("Not quite" in m for m in fake.messages), fake.messages)
     check("сцена ещё не началась", fake.scenes_asked == [], fake.scenes_asked)
     second = reply(fake, "i want a bag please")
     check("вторая попытка тоже забрана", second is True, second)
     check("после попыток показан эталон",
-          any("Правильно:" in m for m in fake.messages), fake.messages)
+          any("Correct:" in m for m in fake.messages), fake.messages)
     check("и сцена всё равно началась", fake.scenes_asked == ["a2.shop"],
           fake.scenes_asked)
 

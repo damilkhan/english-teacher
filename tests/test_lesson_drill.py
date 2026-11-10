@@ -441,7 +441,7 @@ def test_window_drill():
     print(" -- подсказка по-русски")
     check("ситуация показана", app._drill_ask(session) is True)
     check("это ситуация, а не английский",
-          "🎯 Дрилл 1/3" in app.shown[-1] and trio[0]["ru"] in app.shown[-1],
+          "🎯 Drill 1/3" in app.shown[-1] and trio[0]["ru"] in app.shown[-1],
           app.shown[-1])
 
     print(" -- другая сторона пары")
@@ -451,14 +451,14 @@ def test_window_drill():
     check("ученику сказали про ошибку", "❌" in seen, seen)
     check("эталон показан", trio[0]["en"] in seen, seen)
     check("why показан сразу", trio[0]["why"] in seen, seen)
-    check("фраза та же — просят повторить", "Скажи ещё раз" in seen, seen)
+    check("фраза та же — просят повторить", "Say it again" in seen, seen)
 
     print(" -- верный ответ")
     check("верная фраза принята", app._drill_reply(trio[0]["en"]) is True)
     check("эталон озвучен по-английски", trio[0]["en"] in app.spoken,
           app.spoken)
     check("сразу спрашивают следующую",
-          "🎯 Дрилл 2/3" in app.shown[-1], app.shown[-1])
+          "🎯 Drill 2/3" in app.shown[-1], app.shown[-1])
 
     print(" -- конец дрилла")
     for item in trio[1:]:
@@ -469,7 +469,7 @@ def test_window_drill():
     check("задание засчитано без «подсказки»", app.credited == [True],
           app.credited)      # промах был выше, поэтому marked=True
     check("ученику сказали про промахи",
-          "промахи" in app.shown[-1], app.shown[-1])
+          "misses" in app.shown[-1], app.shown[-1])
 
     print(" -- чистая тройка: без пометки")
     clean = new_session()

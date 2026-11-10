@@ -1514,8 +1514,8 @@ class EnglishTeacherApp:
         else:
             if scene_id:
                 print("⚠️ Сцена %s не началась — урок поведёт модель" % scene_id)
-            # §55: первое задание — повтор ПРОШЛОЙ ошибки (если пробел есть)
-            self._start_mistake_drill(session)
+            # §55: дрилл по прошлой ошибке ставится НИЖЕ — после объявления
+            # урока (§64, 10.11.2026): раньше задание стояло ВЫШЕ начала.
 
         # 🧪 ТЕСТ (временный): флаг-файл ставит урок на последний шаг
         if self._test_tail_flag():
@@ -1594,6 +1594,13 @@ class EnglishTeacherApp:
                 return session
             self._scene_ask(session)
             return session
+        # §64 (скриншот 10.11.2026): дрилл по прошлой ошибке идёт ПОСЛЕ
+        # объявления урока и ЗАМЕНЯЕТ первую реплику модели. Раньше модель
+        # звалась всё равно и вторым заданием 1/3 просила повторить ОШИБКУ
+        # («I was hoping you could say "want to see"») — ученик повторял
+        # верно, а приложение считало это промахом.
+        if self._start_mistake_drill(session):
+            return session          # задание говорит приложение, модель не нужна
         if self.server_ready:
             self._open_lesson_dialog(lesson_payload, student_text)
         else:
@@ -1672,6 +1679,27 @@ class EnglishTeacherApp:
             self.chat.begin_lesson(lesson_payload, student_text=student_text)
         except Exception as exc:
             print("⚠️ Не удалось начать занятие в чате: %s" % exc)
+
+    def _continue_lesson_dialog(self):
+        """Служебный ход: модель даёт СЛЕДУЮЩЕЕ задание (§64, 10.11.2026).
+
+        Нужен там, где реплику проверило приложение (дрилл): в модель она не
+        уходила, ответа не было — и урок молча стоял на 2 из 3.
+        """
+        if not getattr(self, "server_ready", False):
+            try:
+                self._run_when_server_ready(self._continue_lesson_dialog)
+            except Exception as exc:
+                print("⚠️ Урок не продолжится: %s" % exc)
+            return False
+        try:
+            ok = bool(self.chat.continue_lesson())
+        except Exception as exc:
+            print("⚠️ Продолжение урока не удалось: %s" % exc)
+            return False
+        if not ok:
+            print("⚠️ Продолжение урока не заказано (модель занята)")
+        return ok
 
     def _lesson_server_timeout(self):
         """Сервер не ответил за отведённое время — занятие придётся закрыть."""
@@ -2222,7 +2250,7 @@ class EnglishTeacherApp:
             # «с подсказкой». Теперь задание показываем САМИ.
             return self._drill_ask_single(session)
         self.add_message(self.teacher_name,
-                         "🎯 Дрилл %d/%d. %s" % (current["index"],
+                         "🎯 Drill %d/%d. Say it in English.\n%s" % (current["index"],
                                                 current["total"],
                                                 current["ru"]))
         print("🎯 Дрилл %d/%d: %r" % (current["index"], current["total"],
@@ -2241,10 +2269,10 @@ class EnglishTeacherApp:
             return False
         wrong = str(getattr(session, "drill_wrong", "") or "").strip()
         if wrong:
-            text = ("🎯 Задание %d/%d. Ты сказал: «%s». Как правильно?"
+            text = ("🎯 Task %d/%d. You said: \"%s\". Say it correctly."
                     % (session.task_index, session.tasks_total, wrong))
         else:
-            text = ("🎯 Задание %d/%d. Скажи правильно: «%s»."
+            text = ("🎯 Task %d/%d. Say: \"%s\"."
                     % (session.task_index, session.tasks_total, want))
         self.add_message(self.teacher_name, text)
         print("🎯 Дрилл (одна фраза): %r" % want)
@@ -2277,15 +2305,15 @@ class EnglishTeacherApp:
         if result == "ok":
             line = "✅ " + english + ("\n" + why if why else "")
         elif result == "wrong_side":
-            line = ("❌ Это другая сторона пары.\n👉 " + english
+            line = ("❌ That is the other side of the pair.\n👉 " + english
                     + ("\n" + why if why else "")
-                    + "\nСкажи ещё раз: " + str(phrase.get("ru") or ""))
+                    + "\nSay it again: " + str(phrase.get("ru") or ""))
         elif result == "miss":
             hint = str(phrase.get("hint2") or "").strip()
-            line = ("🤏 " + hint if hint else "🤏 Попробуй ещё раз: "
+            line = ("🤏 " + hint if hint else "🤏 Try again: "
                     + str(phrase.get("ru") or ""))
         elif result == "reveal":
-            line = ("👉 Правильно: " + english
+            line = ("👉 Correct: " + english
                     + ("\n" + why if why else ""))
         elif result == "done":
             line = "✅ " + english + ("\n" + why if why else "")
@@ -2329,24 +2357,30 @@ class EnglishTeacherApp:
             self._say_after_current(want)
             print("🏁 Дрилл (одна фраза) пройден: %r" % text)
             self._credit_task(session, text, marked=False)
+            cont = getattr(self, "_continue_after_drill", None)   # заглушки тестов
+            if cont is not None:
+                cont(session)
             return True
         tries = session.note_task_attempt()
         if tries >= lesson_mod.MAX_TASK_ATTEMPTS:
             # попытки кончились: показываем эталон и засчитываем с пометкой
-            self.add_message(self.teacher_name, "👉 Правильно: " + want)
+            self.add_message(self.teacher_name, "👉 Correct: " + want)
             self._say_after_current(want)
             self._credit_task(session, text, marked=True)
+            cont = getattr(self, "_continue_after_drill", None)   # заглушки тестов
+            if cont is not None:
+                cont(session)
             return True
         self.add_message(self.teacher_name,
-                         "🤏 Пока не то. Надо сказать: «%s»." % want)
+                         "🤏 Not quite. Say: \"%s\"." % want)
         print("🤏 Дрилл (одна фраза), попытка %d: %r" % (tries, text))
         return True
 
     def _drill_finish(self, session):
         """Дрилл кончился: короткое слово ученику и зачёт первого задания."""
         clean = bool(getattr(session, "drill_clean", False))
-        line = ("🏁 Дрилл пройден." if clean
-                else "🏁 Дрилл пройден. Были промахи — правило повторим позже.")
+        line = ("🏁 Drill done." if clean
+                else "🏁 Drill done. There were misses — we will repeat it later.")
         self.add_message(self.teacher_name, line)
         print("🏁 Дрилл закончен: правило=%s фраз=%s ошибок=%s чисто=%s"
               % (getattr(session, "drill_rule", ""), session.drill_total,
@@ -2370,6 +2404,29 @@ class EnglishTeacherApp:
                     print("🎯 Правило осталось в работе: %s" % rule)
             except Exception as exc:
                 print("⚠️ Отметка «отработано» не записалась: %s" % exc)
+        cont = getattr(self, "_continue_after_drill", None)   # заглушки тестов
+        if cont is not None:
+            cont(session)
+
+    def _continue_after_drill(self, session):
+        """Дрилл закрыт — следующее задание просим у модели САМИ (§64).
+
+        Живой урок 10.11.2026: дрилл засчитал задание 1, в модель ничего не
+        ушло и урок встал на «Задание 2 из 3» — ученик ждал, бот молчал.
+        Возвращает True, если продолжение заказано.
+        """
+        if session is None or not getattr(session, "is_active", False):
+            return False
+        try:
+            if session.all_tasks_done:
+                return False        # урок закрыт зачётом — итог придёт сам
+        except Exception:
+            return False
+        step = getattr(self, "_continue_lesson_dialog", None)
+        if step is None:            # заглушка в тестах — молчим
+            return False
+        print("➡️ Дрилл закрыт: прошу у модели следующее задание")
+        return bool(step())
 
     # ---------- дрилл перед сценой (09.11.2026) ----------
     def _start_scene_drill(self, session):
@@ -2402,10 +2459,10 @@ class EnglishTeacherApp:
         self._scene_drill = {"wrong": wrong, "correct": correct,
                              "tries": 0, "max": tries}
         if wrong:
-            line = ("🎯 Перед сценой — одна фраза с прошлого раза.\n"
-                    "Ты сказал: «%s». Как правильно?" % wrong)
+            line = ("🎯 One phrase from last time, before the scene.\n"
+                    "You said: \"%s\". Say it correctly." % wrong)
         else:
-            line = "🎯 Перед сценой — одна фраза с прошлого раза: «%s»." % correct
+            line = "🎯 One phrase from last time, before the scene: \"%s\"." % correct
         self.add_message(self.teacher_name, line)
         print("🎯 Дрилл перед сценой: %r -> %r (%s)"
               % (wrong, correct, pair.get("label") or pair.get("rule")))
@@ -2435,11 +2492,11 @@ class EnglishTeacherApp:
         drill["tries"] = int(drill.get("tries") or 0) + 1
         if drill["tries"] < int(drill.get("max") or 2):
             self.add_message(self.teacher_name,
-                             "🤏 Пока не то. Надо сказать: «%s»" % correct)
+                             "🤏 Not quite. Say: \"%s\"." % correct)
             print("🎯 Дрилл перед сценой: промах (%.40r)" % (text or ""))
             return True
         self._scene_drill = None
-        self.add_message(self.teacher_name, "👉 Правильно: " + correct)
+        self.add_message(self.teacher_name, "👉 Correct: " + correct)
         print("🎯 Дрилл перед сценой: попытки кончились, показываю эталон")
         self._say_then_scene(session, correct)
         return True

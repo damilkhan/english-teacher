@@ -164,6 +164,22 @@ class ChatController:
             "and give the FIRST small task of this lesson (one thing at a time).%s"
             % (title, intro))
 
+    def continue_lesson(self):
+        """Продолжить урок СЛУЖЕБНЫМ ходом: «задание сдано, дай следующее».
+
+        Нужен после дрилла (§64, 10.11.2026): задание проверило приложение,
+        реплика ученика в модель не уходила, и урок молча стоял на 2 из 3.
+        Ход не считается репликой ученика: ни разбора, ни прогресса, ни
+        истории диалога — как у затравки begin_lesson.
+        """
+        if self.busy:
+            return False
+        self._opening = True
+        return self.send(
+            "[LESSON CONTINUES] The previous task is done. Praise it in three or"
+            " four words and give the NEXT small task of this lesson right now,"
+            " in English only. One thing at a time.")
+
     def clear_history(self):
         self.history = []
         self._lesson = None
