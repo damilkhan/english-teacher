@@ -129,6 +129,8 @@ def make_app(store=None):
     app.store = store or FakeStore()
     # §39: _send_to_teacher помечает «урок закрывается» — здесь пустышка
     app._mark_lesson_closing = lambda: None
+    # §70: перед репликой снимаются флаги прошлого хода — здесь пустышка
+    app._sync_lesson_prompt = lambda **kw: None
     return app
 
 

@@ -29,12 +29,20 @@ import gaps
 import llm_client
 import profile_store
 import exam as exam_mod
+import lesson as lesson_mod
 import prompt_builder
 import vocabulary
 import rag
 import user_manager
 
 _log = logging.getLogger(__name__)
+
+
+# §70 (11.11.2026): «не проси то же самое второй раз». Если в реплике модели
+# повторяется уже сданное задание — одна повторная просьба дать ДРУГОЕ.
+NEW_TASK_NOTE = ("\nNOTE: you have just repeated a task the student has already"
+                 " done this lesson. Do NOT repeat it again: give a DIFFERENT"
+                 " small task on the same topic, one short line, then wait.")
 
 
 class ChatController:
@@ -176,9 +184,9 @@ class ChatController:
             return False
         self._opening = True
         return self.send(
-            "[LESSON CONTINUES] The previous task is done. Praise it in three or"
-            " four words and give the NEXT small task of this lesson right now,"
-            " in English only. One thing at a time.")
+            "[LESSON CONTINUES] The warm-up repeat is done — it is not one of the"
+            " tasks. Praise it in three or four words and give the FIRST small"
+            " task of this lesson right now, in English only. One thing at a time.")
 
     def clear_history(self):
         self.history = []
@@ -305,6 +313,19 @@ class ChatController:
         cleaned = prompt_builder.clean_response(raw)
         if not cleaned:
             cleaned = prompt_builder.fallback_response(lang)
+        # §70: модель повторила УЖЕ СДАННОЕ задание — просим другое один раз.
+        # Живой урок city/3.3 (10.11.2026): «i bought a hat» три раза подряд,
+        # ученик: «это что, молитва?».
+        if self._repeats_done_task(cleaned):
+            print("🔁 Модель повторила уже сданное задание — прошу другое")
+            ok2, raw2 = self._ask_model(system_prompt, user_text,
+                                        tail=tail + NEW_TASK_NOTE)
+            if ok2:
+                again = prompt_builder.clean_response(raw2)
+                if again and not self._repeats_done_task(again):
+                    cleaned = again
+                else:
+                    print("⚠️ Другое задание не получилось — оставляю ответ как есть")
         # §39: на последнем задании (или при закрытии урока) модель любит
         # дописывать вопрос после похвалы — отрезаем его, чтобы после
         # ВЕРНОГО ответа бот не задавал новый вопрос.
@@ -320,6 +341,34 @@ class ChatController:
                     or (total > 0 and index >= total and phase == "ask")):
                 cleaned = prompt_builder.strip_trailing_question(cleaned)
         return True, cleaned
+
+    def _repeats_done_task(self, text):
+        """Повторила ли модель уже сданное задание? (§70, 11.11.2026)
+
+        Смотрим только в тот момент, когда приложение ждёт НОВОЕ задание:
+        задание засчитано (task_done_now) или закончилась разминка
+        (drill_done_now). Обычные реплики диалога не трогаем.
+        """
+        lesson_block = self._lesson or {}
+        if not isinstance(lesson_block, dict) or not text:
+            return False
+        if not (lesson_block.get("task_done_now")
+                or lesson_block.get("drill_done_now")):
+            return False
+        if lesson_block.get("lesson_closing"):
+            return False
+        if str(lesson_block.get("task_phase") or "").lower() != lesson_mod.TASK_ASK:
+            return False
+        asked = str(lesson_block.get("asked_tasks") or "")
+        if not asked:
+            return False
+        for item in asked.split(" · "):
+            try:
+                if lesson_mod.same_task(text, item):
+                    return True
+            except Exception:
+                continue
+        return False
 
     def _ask_model(self, system_prompt, user_text, short_history=False, tail=""):
         """Один вызов Учителя: промпт + история + реплика ученика.

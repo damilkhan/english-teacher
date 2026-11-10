@@ -2179,19 +2179,29 @@ class EnglishTeacherApp:
             self._sync_exam_asked()
 
     # ---------- задания урока (§36, 26.10.2026) ----------
-    def _sync_lesson_prompt(self, just_credited=False, closing=False):
+    def _sync_lesson_prompt(self, just_credited=False, closing=False,
+                            drill_done=False):
         """Пересобрать словарь урока для промпта (номер задания, фаза).
 
         just_credited=True — задание только что засчитано: преподаватель
         должен СРАЗУ дать следующее (в этой же реплике).
         closing=True — эта реплика ЗАКРЫВАЕТ урок: спрашивать больше нельзя,
         только подтвердить ответ и похвалить (просьба ученика 26.10.2026).
+        drill_done=True — закончилась РАЗМИНКА (дрилл): задание ещё не сдано,
+        но модель должна сразу дать ПЕРВОЕ задание урока (§70).
         """
+
         session = self.lesson.current()
         payload = getattr(self, "_lesson_payload", None)
         if session is None or not isinstance(payload, dict):
             return
         merged = dict(payload)
+        # §70: флаги «одного раза» НЕ должны залипать: task_done_now стоял
+        # в словаре до конца урока, и модель на каждую реплику слышала
+        # «задание сдано, дай следующее» — отсюда повторы заданий.
+        for flag in ("task_done_now", "drill_done_now", "lesson_closing",
+                     "task_new_required"):
+            merged.pop(flag, None)
         try:
             merged.update(session.task_prompt())
         except Exception as exc:
@@ -2199,6 +2209,10 @@ class EnglishTeacherApp:
             return
         if just_credited:
             merged["task_done_now"] = True
+        if drill_done:
+            merged["drill_done_now"] = True
+            merged.pop("task_done_now", None)
+
         if closing:
             merged["lesson_closing"] = True
         self._lesson_payload = merged
@@ -2314,12 +2328,12 @@ class EnglishTeacherApp:
         # §65: эталон виден СРАЗУ. Прежнее «You said: "...". Say it correctly.»
         # ученик читал как «повтори правильно», говорил старую фразу и получал
         # «Not quite» при верном ответе (живой урок 10.11.2026, city/3.2).
+        # §70: это РАЗМИНКА, а не задание урока — номер задания не занимает.
         if wrong:
-            text = ("🎯 Task %d/%d. Say: \"%s\" (last time: \"%s\")."
-                    % (session.task_index, session.tasks_total, want, wrong))
+            text = ("🎯 Warm-up. Say: \"%s\" (last time: \"%s\")."
+                    % (want, wrong))
         else:
-            text = ("🎯 Task %d/%d. Say: \"%s\"."
-                    % (session.task_index, session.tasks_total, want))
+            text = ("🎯 Warm-up. Say: \"%s\"." % want)
         self.add_message(self.teacher_name, text)
         print("🎯 Дрилл (одна фраза): %r" % want)
         return True
@@ -2522,7 +2536,7 @@ class EnglishTeacherApp:
         return True
 
     def _drill_finish(self, session):
-        """Дрилл кончился: короткое слово ученику и зачёт первого задания."""
+        """Дрилл кончился: короткое слово ученику. Задание НЕ засчитываем (§70)."""
         clean = bool(getattr(session, "drill_clean", False))
         line = ("🏁 Drill done." if clean
                 else "🏁 Drill done. There were misses — we will repeat it later.")
@@ -2530,10 +2544,22 @@ class EnglishTeacherApp:
         print("🏁 Дрилл закончен: правило=%s фраз=%s ошибок=%s чисто=%s"
               % (getattr(session, "drill_rule", ""), session.drill_total,
                  getattr(session, "drill_errors", 0), clean))
+        # §70 (11.11.2026): дрилл — РАЗМИНКА, задание он больше НЕ съедает.
+        # Ученик: «за урок отработали одну фразу, это не серьёзно».
         try:
-            self._credit_task(session, "", marked=not clean)
+            moved = session.finish_drill(clean)
         except Exception as exc:
-            print("⚠️ Зачёт дрилла не прошёл: %s" % exc)
+            moved = False
+            print("⚠️ Разминка не закрылась: %s" % exc)
+        if moved:
+            self._asked_repeat = ""
+            self._sync_lesson_prompt(drill_done=True)
+            try:
+                self.lesson_bar.set_progress(session.progress_text())
+            except Exception:
+                pass
+            print("🏁 Разминка закрыта: задание %d/%d ещё не сдано"
+                  % (session.tasks_done + 1, session.tasks_total))
         # §55 шаг 2: «отработано». Историю ошибок НЕ трогаем.
         rule = str(getattr(session, "drill_rule", "") or "")
         if rule:
@@ -4637,6 +4663,8 @@ class EnglishTeacherApp:
         self._last_student_text = text       # за какую реплику придёт разбор
         session = self.lesson.current()
         self._register_lesson_reply(text)    # на экзамене текст нужен для балла
+        # §70: снять флаги ПРОШЛОЙ реплики (иначе они живут весь урок)
+        self._sync_lesson_prompt()
         # §36 (вариант В): ученик повторил исправление — задание сдано ДО
         # ответа учителя, поэтому он сразу даёт следующее в той же реплике.
         self._credit_task_by_text(text)

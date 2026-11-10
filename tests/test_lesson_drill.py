@@ -132,7 +132,8 @@ def test_prompt():
     check("сказано, что это дрилл", "REPEAT DRILL" in block, block[:200])
     check("материал в промпте", WRONG in block, block[:200])
     check("запрет давать другое задание", "Do NOT give any other task" in block)
-    check("номер задания в промпте", "Task 1 of 3" in block, block[:120])
+    check("номер задания в промпте",
+          ("Task 1 of %d" % session.tasks_total) in block, block[:120])
     closing = prompt_builder._task_cycle_block(
         {"tasks_total": 3, "task_index": 3, "task_phase": "ask", "lesson_closing": True})
     check("ветка закрытия урока цела", "the lesson ends now" in closing, closing)
@@ -390,11 +391,15 @@ def test_three_phrases():
     check("фраза со старой ошибкой не зачтена", res["result"] == "miss",
           res["result"])
 
-    print(" -- зачёт задания после дрилла")
-    state = stuck.credit_task("", marked=True)
-    check("задание 1 из 3 засчитано", state.get("tasks_done") == 1, state)
+    print(" -- §70: разминка задание НЕ засчитывает")
+    check("разминка закрылась", stuck.finish_drill(False) is True)
+    check("задание осталось первым", stuck.tasks_done == 0, stuck.tasks_done)
+    check("ждём первое задание урока", stuck.task_phase == lesson_mod.TASK_ASK,
+          stuck.task_phase)
     check("очередь очищена", stuck.drill_phrases == [] and stuck.drill_pos == 0,
           (stuck.drill_phrases, stuck.drill_pos))
+    check("эталон дрилла помнится как сделанный", RIGHT in stuck.asked_tasks,
+          stuck.asked_tasks)
 
 
 def test_window_drill():
@@ -417,6 +422,7 @@ def test_window_drill():
             self.shown = []
             self.spoken = []
             self.credited = []
+            self.synced = []
 
         def add_message(self, sender, text, picture=None, spans=None):
             self.shown.append(text)
@@ -426,6 +432,9 @@ def test_window_drill():
 
         def _credit_task(self, session, text="", marked=False):
             self.credited.append(marked)
+            return True
+        def _sync_lesson_prompt(self, **kwargs):
+            self.synced.append(kwargs)
             return True
 
     FakeApp._drill_ask = EnglishTeacherApp._drill_ask
@@ -466,8 +475,10 @@ def test_window_drill():
     check("дрилл закрыт", session.drill_pos >= session.drill_total
           and session.drill_current() is None,
           (session.drill_pos, session.drill_total))
-    check("задание засчитано без «подсказки»", app.credited == [True],
-          app.credited)      # промах был выше, поэтому marked=True
+    check("§70: разминка не засчитывает задание", session.tasks_done == 0,
+          session.tasks_done)
+    check("модели сказали «разминка пройдена»",
+          any(item.get("drill_done") for item in app.synced), app.synced)
     check("ученику сказали про промахи",
           "misses" in app.shown[-1], app.shown[-1])
 
@@ -478,8 +489,9 @@ def test_window_drill():
     clean_app = FakeApp(clean)
     for item in trio:
         clean_app._drill_reply(item["en"])
-    check("marked=False, если ни одной ошибки", clean_app.credited == [False],
-          clean_app.credited)
+    check("без ошибок тоже без зачёта задания",
+          clean.tasks_done == 0 and clean.task_phase == lesson_mod.TASK_ASK,
+          (clean.tasks_done, clean.task_phase))
 
     print(" -- модель не зовётся")
     with open(os.path.join(ROOT, "ui", "app.py"), "r", encoding="utf-8") as fh:

@@ -328,6 +328,11 @@ def _task_cycle_block(lesson):
                 " student's answer and praise it in ONE short line. Do NOT ask any"
                 " question and do NOT give a new task — the lesson ends now."
                 % (index, total))
+    elif lesson.get("drill_done_now"):
+        # §70: дрилл — РАЗМИНКА перед заданиями, счёт заданий он не сдвигает.
+        line = ("The warm-up drill is done. Praise the repeat in three or four"
+                " words and give task %d of %d right now, in this same reply."
+                " Do NOT ask for the drill phrase again." % (index, total))
     elif lesson.get("task_done_now"):
         line = ("Task %d of %d is DONE. Praise the repeat in three or four words"
                 " and give task %d of %d right now, in this same reply."
@@ -337,12 +342,26 @@ def _task_cycle_block(lesson):
                 " praise it in ONE short line and STOP. If there is a mistake, give"
                 " the correct version in one short line and STOP. Do not add a"
                 " question — the lesson ends after this reply." % (index, total))
+    elif lesson.get("task_new_required"):
+        # §70: код поймал ПОВТОР уже сданного задания и попросил ещё раз.
+        line = ("Task %d of %d must be a DIFFERENT task: the one you just gave"
+                " is already done this lesson. Change the object or the question,"
+                " keep the lesson topic, one short line, then wait." % (index, total))
     else:
         line = ("You are on task %d of %d: give it now, or wait for the"
                 " student's answer if you already gave it." % (index, total))
+    # §70: что ученик уже сделал в этом уроке. Без этой строки модель давала
+    # одно и то же задание три раза подряд (живой урок city/3.3, 10.11.2026).
+    used = ""
+    asked = str(lesson.get("asked_tasks") or "").strip()
+    if asked and phase != "done" and not lesson.get("lesson_closing"):
+        used = ("\nAlready done in this lesson: %s. Do NOT ask for these again —"
+                " the student has done them: give a DIFFERENT task on the same"
+                " topic (another object, another situation or another question)."
+                % asked)
     rules = "" if (phase in ("done", "fix", "drill") or lesson.get("lesson_closing")
                    or last) else TASK_RULES
-    return TASK_CYCLE_TEMPLATE.format(total=total, line=line, rules=rules)
+    return TASK_CYCLE_TEMPLATE.format(total=total, line=line + used, rules=rules)
 
 
 def strip_trailing_question(text):

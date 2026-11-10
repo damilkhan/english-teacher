@@ -248,6 +248,43 @@ def voice_hint(lesson_type: Any) -> str:
 
 
 # ---------- задания: кто и как решает «сдано» (§36) ----------
+
+# Слова, которые не делают задание «тем же самым» (11.11.2026).
+# Нужно для правила «не спрашивай то, что ученик уже сделал».
+_TASK_STOP_WORDS = frozenset(
+    """the a an and or but to of in on at for with from by is are am was were
+    be been you your yours i me my we our us he she it they them his her its this
+    that these those do does did have has had can could would should will shall
+    may might must please now then again say told tell repeat think want like
+    about what who where when why how one two three four five six seven eight
+    nine ten very really just also more most some any all not no yes ok okay
+    good great nice well done right correct wrong another else thing things
+    """.split())
+
+
+def task_words(text: Any) -> set:
+    """Смысловые слова задания: по ним видно, что задание ПОВТОРЯЕТСЯ."""
+    return {w for w in _flat(text).split()
+            if len(w) > 2 and w not in _TASK_STOP_WORDS}
+
+
+def same_task(first: Any, second: Any) -> bool:
+    """Одно и то же задание? (§70, 11.11.2026: «это что, молитва?»)
+
+    Сравнение по СМЫСЛОВЫМ словам, а не по тексту: живой урок city/3.3 —
+    модель дала `i bought a hat at the store`, засчитала, а потом попросила
+    `i bought a hat` ещё раз (и это уже третье задание урока).
+    Порог 0,5 подобран на этом же уроке: пересечение {bought, hat} = 1,0,
+    а «What did you buy yesterday?» с ним не пересекается вовсе.
+    """
+    one = task_words(first)
+    two = task_words(second)
+    if not one or not two:
+        return False
+    common = len(one & two)
+    return common >= 2 and common / float(min(len(one), len(two))) >= 0.5
+
+
 def tasks_for(lesson_type: Any) -> int:
     """Сколько заданий в уроке: 0 — считаем по репликам, как раньше.
 
@@ -462,6 +499,10 @@ class LessonSession:
         # мелочь (артикль, заглавная) больше не валит верный повтор.
         self.repeat_wrong = []       # type: List[str]
         self.last_credited = ""      # текст, за который задание уже засчитано
+        # §70: ЧТО уже сделано в уроке (эталон, а не текст ученика).
+        # По этому списку промпт и контроллер не дают попросить то же самое
+        # второй раз: «одна фраза три раза — это что, молитва?».'«
+        self.asked_tasks = []        # type: List[str]
         # §55: материал дрилла (что ученик сказал раньше и как надо)
         self.drill_wrong = ""
         self.drill_correct = ""
@@ -878,6 +919,7 @@ class LessonSession:
         if marked:
             self.tasks_marked += 1
         self.last_credited = _flat(student_text)
+        self._remember_asked(self.drill_correct or student_text)
         self.repeat_expected = []
         self.repeat_wrong = []
         self.task_attempts = 0
@@ -893,6 +935,46 @@ class LessonSession:
         else:
             self.task_phase = TASK_ASK
         return self.state()
+
+    def _remember_asked(self, text: Any) -> None:
+        """Запомнить ЭТАЛОН того, что в уроке уже отработано (§70).
+
+        Живой урок city/3.3 (10.11.2026): три задания подряд об одном и том же
+        («i bought a hat»), потому что модель не знала, ЧТО она уже дала.
+        Держим последние шесть: промпт не должен пухнуть.
+        """
+        value = str(text or "").strip()
+        if not value:
+            return
+        if value not in self.asked_tasks:
+            self.asked_tasks.append(value)
+        del self.asked_tasks[:-6]
+
+    def finish_drill(self, clean: bool = True) -> bool:
+        """Дрилл пройден — задание НЕ засчитывается: это разминка (§70).
+
+        Ученик 10.11.2026: «за этот урок мы отработали всего лишь одну фразу
+        "I bought a hat", одна фраза это не серьёзно». Дрилл занимал первое
+        из трёх заданий, и на тему урока оставалось два. Теперь дрилл идёт
+        ПЕРЕД заданиями: счёт заданий не сдвигается.
+        """
+        if not self.is_active or not self.has_tasks:
+            return False
+        if self.task_phase != TASK_DRILL:
+            return False
+        self._remember_asked(self.drill_correct)
+        self.repeat_expected = []
+        self.repeat_wrong = []
+        self.task_attempts = 0
+        self.drill_wrong = ""
+        self.drill_correct = ""
+        self.drill_phrases = []
+        self.drill_pos = 0
+        self.drill_tries = 0
+        self.drill_why = ""
+        self.task_phase = TASK_ASK       # задание 1 из N ещё НЕ сдано
+        return True
+
 
     def credit_rest(self, marked: bool = True) -> int:
         """Засчитать НЕДОДЕЛАННЫЕ задания, когда урок упирается в предел.
@@ -933,6 +1015,11 @@ class LessonSession:
             "task_phase": self.task_phase,
             "repeat_expected": ", ".join(self.repeat_expected),
         }
+        # §70: «не проси то же самое второй раз». Эталоны уже
+        # отработанного — по ним модель выбирает НОВОЕ задание.
+        if self.asked_tasks:
+            payload["asked_tasks"] = " · ".join(self.asked_tasks)
+            payload["last_task_done"] = self.asked_tasks[-1]
         # §55: в фазе дрилла промпту нужно, ЧТО ученик сказал неправильно
         if self.task_phase == TASK_DRILL and self.drill_wrong:
             payload["drill_wrong"] = self.drill_wrong
@@ -1083,6 +1170,9 @@ class LessonSession:
         if self.has_tasks:
             if self.is_scene:
                 return "Шаг %d/%d" % (self.task_index, self.tasks_total)
+            if self.task_phase == TASK_DRILL:
+                return "Разминка"
+
             return "Задание %d/%d" % (self.task_index, self.tasks_total)
         return "%d/%d" % (self.replies, self.reply_target)
     def state(self) -> Dict[str, Any]:
