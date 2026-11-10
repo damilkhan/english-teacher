@@ -128,6 +128,9 @@ class FakeInput:
     def set_text(self, text):
         self.text = str(text)
 
+    def set_voice_draft(self, on=True):
+        self.draft = bool(on)
+
     def focus_input(self):
         self.focused = True
 
@@ -153,8 +156,9 @@ class FakeWin:
 
 
 def test_draft():
-    method = getattr(EnglishTeacherApp, "_scene_draft", None)
-    check("в окне есть _scene_draft", callable(method))
+    # §67 (10.11.2026): черновик теперь во ВСЕХ занятиях, не только в сцене
+    method = getattr(EnglishTeacherApp, "_voice_draft", None)
+    check("в окне есть _voice_draft", callable(method))
     if not callable(method):
         return
 
@@ -169,7 +173,13 @@ def test_draft():
     check("вне занятия в поле НЕ кладём", method(win2, "hello") is False)
 
     win3 = FakeWin(FakeSession(scene=False))
-    check("в обычном уроке НЕ кладём (там как было)", method(win3, "hello") is False)
+    check("в обычном уроке ТОЖЕ кладём (жалоба 10.11.2026)",
+          method(win3, "i want to pay with a card") is True)
+    check("и помечаем как озвученное", getattr(win3.input_bar, "draft", False) is True)
+
+    win5 = FakeWin(FakeSession())
+    check("русскую речь в поле ответа НЕ кладём",
+          method(win5, "как сказать вилка") is False)
 
     win4 = FakeWin(FakeSession())
     check("пустое распознавание игнорируем", method(win4, "   ") is False)
@@ -181,9 +191,9 @@ def test_source_order():
                   encoding="utf-8").read()
     body = src[src.find("def _on_recognized"):]
     body = body[:body.find("def _on_server_state")]
-    pos_draft = body.find("self._scene_draft(text)")
+    pos_draft = body.find("self._voice_draft(text)")
     pos_msg = body.find('self.add_message("Вы (голос)", text)')
-    check("_on_recognized зовёт _scene_draft", pos_draft >= 0)
+    check("_on_recognized зовёт _voice_draft", pos_draft >= 0)
     check("черновик раньше отправки в чат", 0 <= pos_draft < pos_msg,
           (pos_draft, pos_msg))
 

@@ -31,7 +31,8 @@ for _stream in (sys.stdout, sys.stderr):
 import customtkinter as ctk                                     # noqa: E402
 import theme                                                    # noqa: E402
 from ui.widgets.input_bar import (InputBar, LOCK_BUTTON_TEXT,   # noqa: E402
-                                  SEND_TEXT, TRANSLATE_TEXT)
+                                  SEND_TEXT, TRANSLATE_TEXT,
+                                  VOICE_SEND_TEXT)
 
 FAILED = []
 
@@ -128,6 +129,26 @@ def main():
     bar.set_enabled(True)
     pump(root)
     check("после гейта снова «💡 Перевести»", text_of() == TRANSLATE_TEXT, text_of())
+
+    # ---------- 6b. Черновик распознанной речи отправляется и в уроке ----------
+    print("\n[6b] Урок «только голосом»: распознанное можно отправить (§67)")
+    bar.clear_text()
+    bar.set_locked(True, "🎤 Говори в микрофон", allow_dictionary=True)
+    bar.set_text("i want to pay with a card")
+    bar.set_voice_draft(True)
+    pump(root)
+    check("кнопка — «✔ Отправить озвученное»", text_of() == VOICE_SEND_TEXT, text_of())
+    check("и она НАЖИМАЕМА (в уроке!)",
+          str(bar.send_btn.cget("state")) == "normal",
+          bar.send_btn.cget("state"))
+    check("черновик виден снаружи", bar.has_voice_draft is True)
+    bar.clear_text()
+    pump(root)
+    check("после отправки кнопка снова «Голосом»",
+          text_of() == LOCK_BUTTON_TEXT, text_of())
+    check("черновика больше нет", bar.has_voice_draft is False)
+    bar.set_locked(False)
+    pump(root)
 
     # ---------- 7. Исходник: нет пересчёта «только в замке» ----------
     print("\n[7] В _on_key_release нет условия «только если заблокировано»")

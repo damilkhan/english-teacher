@@ -45,6 +45,10 @@ SEND_TEXT = "Отправить"
 LOCK_HINT = "🎤 Говори в микрофон · слово по-русски → перевод"
 # Подпись кнопки отправки, пока текст заблокирован занятием.
 LOCK_BUTTON_TEXT = "🎤 Голосом"
+# Подпись кнопки, когда в поле лежит РАСПОЗНАННАЯ речь ученика: отправлять
+# можно и в уроке «только голосом» — это его собственные слова, а не текст
+# с клавиатуры (просьба ученика 10.11.2026).
+VOICE_SEND_TEXT = "✔ Отправить озвученное"
 # Подпись кнопки, когда в поле есть русские буквы: это запрос перевода.
 TRANSLATE_TEXT = "💡 Перевести"
 
@@ -72,6 +76,7 @@ class InputBar(ctk.CTkFrame):
         self._enabled = True      # разрешена ли отправка (профиль/сервер)
         self._busy = False        # идёт ответ Джейн
         self._locked = False      # занятие запрещает текстовый ввод (урок «голосом»)
+        self._voice_draft = False # в поле лежит распознанная речь (можно отправить)
         self._lock_hint = LOCK_HINT
         self._dict_ok = True      # словарь-подсказка (на экзамене False)
         self._hint = ""           # почему отправка недоступна
@@ -138,6 +143,7 @@ class InputBar(ctk.CTkFrame):
 
     def clear_text(self):
         self._placeholder_on = False
+        self._voice_draft = False     # поле пустое — черновика больше нет
         self._replace_field_text("", self.palette["text"])
         self._apply_state()      # подсказка и подпись кнопки — по обстановке
 
@@ -190,6 +196,7 @@ class InputBar(ctk.CTkFrame):
     def set_text(self, text):
         self._placeholder_on = False
         self._replace_field_text(str(text), self.palette["text"])
+        self._voice_draft = False     # кто зовёт set_text, сам скажет про черновик
         self._apply_state()
 
     # ---------- счётчик букв (задание с картинкой) ----------
@@ -264,6 +271,21 @@ class InputBar(ctk.CTkFrame):
         self._dict_ok = bool(allow_dictionary)
         self._apply_state()
 
+    def set_voice_draft(self, on=True):
+        """В поле лежит РАСПОЗНАННАЯ речь (черновик) — её можно отправить.
+
+        Зачем: ученик должен видеть, что услышал микрофон, и отправлять
+        ТОЛЬКО верный текст. В уроке «только голосом» кнопка иначе мертва
+        («🎤 Голосом»), и исправить неверное распознавание было нельзя —
+        приходилось повторять фразу по нескольку раз (жалоба 10.11.2026).
+        """
+        self._voice_draft = bool(on)
+        self._apply_state()
+
+    @property
+    def has_voice_draft(self):
+        return bool(self._voice_draft and self._real_text().strip())
+
     @property
     def is_locked(self):
         return self._locked
@@ -284,6 +306,10 @@ class InputBar(ctk.CTkFrame):
             self.send_btn.configure(state="disabled", text=(self._hint or "Недоступно"))
         elif self._busy:
             self.send_btn.configure(state="disabled", text="Думаю…")
+        elif self._voice_draft and self._real_text().strip():
+            # §67: черновик распознанной речи отправляется ВСЕГДА — и в уроке
+            # «только голосом»: это слова самого ученика, а не ввод с клавиатуры
+            self.send_btn.configure(state="normal", text=VOICE_SEND_TEXT)
         elif self._locked:
             if self._dict_ok and has_cyrillic(self._real_text()):
                 # «ключ» — это не ответ, а просьба о переводе: кнопка живая
@@ -394,6 +420,10 @@ class InputBar(ctk.CTkFrame):
             self._show_placeholder(self._lock_hint if self._locked else None)
 
     def _on_key_press(self, event=None):
+        if self._voice_draft:
+            # ученик правит распознанное руками — это уже не «озвученное»
+            self._voice_draft = False
+            self._apply_state()
         if not self._placeholder_on:
             return None
         # Shift и стрелки подсказку не трогают: иначе она пропадала бы от

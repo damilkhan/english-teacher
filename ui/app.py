@@ -4375,10 +4375,6 @@ class EnglishTeacherApp:
         if panel is not None and panel.is_open:
             panel.accept_text(text)
             return
-        # СЦЕНА (03.11.2026): распознанное НЕ уходит в чат само — кладём в поле.
-        # Ученик видит, что услышал STT, правит и жмёт «Отправить» (или Enter).
-        if self._scene_draft(text):
-            return
         # первая реплика голосом тоже запускает урок (до проверки языка)
         if self._maybe_start_auto_lesson(text, "Вы (голос)"):
             return
@@ -4389,15 +4385,22 @@ class EnglishTeacherApp:
         # сверка произношения: ученик произносит фразу из подсказки
         if self._show_pronunciation(text):
             return
+        # §67 (03.11.2026, расширено 10.11.2026): в занятии распознанное НЕ
+        # уходит в чат само — кладём в поле. Ученик видит, что услышал
+        # микрофон, правит и жмёт «✔ Отправить озвученное» (или Enter).
+        if self._voice_draft(text):
+            return
         self.add_message("Вы (голос)", text)
         self._handle_text(text)
 
-    def _scene_draft(self, text):
-        """Сцена: показать распознанное В ПОЛЕ, а не отправлять молча.
+    def _voice_draft(self, text):
+        """Показать распознанное В ПОЛЕ, а не отправлять вслепую (§67).
 
-        Ученик (03.11.2026): сперва вижу, что услышал STT; верно — «Отправить»
-        (или Enter), неверно — правлю руками или стираю и говорю заново.
-        Так ошибка распознавания не отнимает ответ, и разбору есть что брать.
+        Ученик (03.11.2026, повторно 10.11.2026): сперва вижу, что услышал
+        микрофон; верно — «✔ Отправить озвученное» (или Enter), неверно —
+        правлю руками или стираю и говорю заново. Раньше так было ТОЛЬКО в
+        сценах, а в обычном уроке распознанное улетало в чат сразу: ученик
+        видел «i want to fail with that car», и приходилось повторять фразу.
         Возвращает True, если текст ушёл в поле.
         """
         ctrl = getattr(self, "lesson", None)
@@ -4405,16 +4408,22 @@ class EnglishTeacherApp:
             session = ctrl.current() if ctrl is not None else None
         except Exception:
             session = None
-        if session is None or not session.is_active or not session.is_scene:
+        if session is None or not session.is_active:
             return False
-        if not str(text or "").strip():
+        text = str(text or "").strip()
+        if not text:
+            return False
+        # Русская речь — это просьба о переводе, её место в подсказке,
+        # а не в поле ответа (её проверили выше, здесь страховка).
+        if translate.has_cyrillic(text):
             return False
         try:
             self.input_bar.set_text(text)
+            self.input_bar.set_voice_draft(True)
             self.input_bar.focus_input()
-            print("📝 Сцена: распознано %.40r — в поле на проверку" % text)
+            print("📝 Распознано %.40r — в поле на проверку" % text)
         except Exception as exc:
-            print("⚠️ Сцена: черновик в поле не показан: %s" % exc)
+            print("⚠️ Черновик распознавания не показан: %s" % exc)
             return False
         return True
 
@@ -4535,7 +4544,8 @@ class EnglishTeacherApp:
         # увидит английский вариант и произнесёт его вслух (решение 23.10.2026).
         # Решаем ДО автозапуска урока: в занятии он всё равно не нужен, а
         # русское слово не должно приниматься за первую реплику.
-        if self.input_bar.is_locked:
+        if (self.input_bar.is_locked
+                and not getattr(self.input_bar, "has_voice_draft", False)):
             ctrl = getattr(self, "lesson", None)
             session = ctrl.current() if ctrl is not None else None
             # На ЭКЗАМЕНЕ словаря нет: русское слово тоже не переводим.
