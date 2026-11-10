@@ -190,11 +190,19 @@ class STTEngine:
         Живой случай 09.11.2026: модель с жёстким языком на непонятной речи
         выдаёт "R r Pi r S r r u NG r" — такие слова в речи не встречаются.
         """
+        # 10.11.2026: порог 0,4 срабатывал на НОРМАЛЬНОЙ речи — в
+        # «usually i pay a card» два коротких слова из пяти («i», «a»), и
+        # запись уходила в русскую проверку. Там на английской речи модель
+        # выдала «я же поймал картошку», и ученик получил бред вместо ответа.
+        # Настоящий мусор («R r Pi r S r r u NG r») — это почти все слова
+        # из одной буквы И ни одного нормального длинного слова.
         words = [w for w in re.split(r"[^\w']+", str(text or "")) if w]
         if not words:
             return True
         short = sum(1 for w in words if len(w) <= 1)
-        return float(short) / len(words) >= 0.4
+        if float(short) / len(words) < 0.5:
+            return False
+        return not any(len(w) >= 4 for w in words)
 
     def _rescue_russian(self, audio):
         """Резерв: проверить запись как РУССКУЮ базовой моделью.
@@ -215,8 +223,11 @@ class STTEngine:
         words = [w for w in re.split(r"[^\w']+", text) if w]
         cyr = [w for w in words if len(w) >= 3 and all("\u0400" <= ch <= "\u04ff"
                                                     for ch in w)]
-        if len(cyr) >= 2:
-            print("🔁 Похоже, речь русская — беру вариант базовой модели")
+        # 10.11.2026: двух русских слов мало — английская фраза иногда даёт
+        # пару русских «слов» случайно. Нужно ТРИ и больше.
+        if len(cyr) >= 3:
+            print("🔁 Похоже, речь русская (русских слов: %d) — беру вариант"
+                  " базовой модели" % len(cyr))
             return text, "ru"
         return None
 
@@ -385,6 +396,8 @@ class STTEngine:
             rescued = self._rescue_russian(audio_float)
             if rescued:
                 text, detected_lang = rescued
+            else:
+                print("ℹ️ Страховка по-русски не сработала — остаётся: %r" % text)
 
         if text:
             print(f"✅ Распознано [{detected_lang}]: {text}")

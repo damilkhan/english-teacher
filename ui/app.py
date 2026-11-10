@@ -40,6 +40,7 @@ import lesson as lesson_mod
 import lesson_summary
 import model_registry
 import photo_check
+import phrases
 import picture_task
 import profile_store
 import ru_text
@@ -250,6 +251,48 @@ def _asks_for_words(text):
     if not value.strip():
         return False
     return bool(_WORDS_TOPIC_RE.search(value) and _WORDS_ACTION_RE.search(value))
+
+
+# §65 (10.11.2026): проверка СМЫСЛА моделью. Решение ученика 109 — не
+# придираться к словам. Спрашиваем только в момент промаха и только когда
+# старую ошибку в реплике нет: модель не должна оправдать промах.
+MEANING_PROMPT = (
+    "You compare two English sentences said by an A2 learner of American"
+    " English. Answer with ONE word: SAME if the student's sentence means the"
+    " same as the target, or DIFFERENT if it means something else."
+    " Different words, contractions, word order and polite fillers are fine."
+    " Ignore small grammar slips. Parts of speech and key words must match."
+    " Answer only SAME or DIFFERENT, nothing else.")
+
+
+def _meaning_verdict(raw):
+    """Ответ модели одним словом: True — тот же смысл, False — нет, None — не понять."""
+    text = str(raw or "").strip().upper()
+    if not text:
+        return None
+    if "DIFFERENT" in text or text.startswith("NO"):
+        return False
+    if "SAME" in text or text.startswith("YES"):
+        return True
+    return None
+
+
+def _said_old_error(wrong, text):
+    """Звучит ли СТАРАЯ ошибка в реплике? Тогда модель не зовём (§65)."""
+    try:
+        old = lesson_mod._flat(wrong)
+        said = lesson_mod._flat(text)
+    except Exception:
+        return False
+    if not old:
+        return False
+    if old in said:
+        return True
+    # стяжки: «I wanna see» — это всё ещё старая ошибка «want to see»
+    try:
+        return bool(lesson_mod.same_meaning(text, wrong))
+    except Exception:
+        return False
 
 
 def _asks_for_story(text):
@@ -2268,9 +2311,12 @@ class EnglishTeacherApp:
         if not want:
             return False
         wrong = str(getattr(session, "drill_wrong", "") or "").strip()
+        # §65: эталон виден СРАЗУ. Прежнее «You said: "...". Say it correctly.»
+        # ученик читал как «повтори правильно», говорил старую фразу и получал
+        # «Not quite» при верном ответе (живой урок 10.11.2026, city/3.2).
         if wrong:
-            text = ("🎯 Task %d/%d. You said: \"%s\". Say it correctly."
-                    % (session.task_index, session.tasks_total, wrong))
+            text = ("🎯 Task %d/%d. Say: \"%s\" (last time: \"%s\")."
+                    % (session.task_index, session.tasks_total, want, wrong))
         else:
             text = ("🎯 Task %d/%d. Say: \"%s\"."
                     % (session.task_index, session.tasks_total, want))
@@ -2335,9 +2381,10 @@ class EnglishTeacherApp:
     def _drill_reply_single(self, session, text):
         """Ответ в дрилле из ОДНОЙ фразы: проверяет приложение (§62).
 
-        Зачёт — по тексту (lesson.says_fix), модель не зовём: фраза эталонная
-        и лежит в коде. Промах не молчит: показываем эталон и идём дальше,
-        чтобы ученик не повторял одно и то же третий раз.
+        Зачёт — по СМЫСЛУ (§65, решение 109): «I'd like to see» вместо
+        «would like to see» — верно, это та же мысль. Если код смысла не
+        увидел, последний шанс даёт модель — но только в момент промаха и
+        только если старой ошибки в реплике нет.
         """
         want = ""
         for item in (getattr(session, "repeat_expected", None) or []):
@@ -2353,19 +2400,48 @@ class EnglishTeacherApp:
             print("⚠️ Проверка дрилла сбилась: %s" % exc)
             said_ok = False
         if said_ok:
-            self.add_message(self.teacher_name, "✅ " + want)
-            self._say_after_current(want)
-            print("🏁 Дрилл (одна фраза) пройден: %r" % text)
-            self._credit_task(session, text, marked=False)
-            cont = getattr(self, "_continue_after_drill", None)   # заглушки тестов
-            if cont is not None:
-                cont(session)
-            return True
+            return self._drill_pass_single(session, text, want)
+        # §65: слова другие — но, может быть, смысл тот же (синонимы).
+        # Модель НЕ оправдывает старую ошибку: «want to see» так и останется
+        # промахом, поэтому такие реплики к ней не идут.
+        if not _said_old_error(getattr(session, "drill_wrong", ""), text):
+            if self._meaning_second_look(
+                    text, want,
+                    lambda verdict: self._drill_verdict_single(
+                        session, text, want, verdict)):
+                return True
+        return self._drill_miss_single(session, text, want)
+
+    def _drill_verdict_single(self, session, text, want, verdict):
+        """Пришёл ответ модели «тот же смысл?» по фразе дрилла (§65)."""
+        if session is None or not getattr(session, "is_active", False):
+            return False
+        if verdict:
+            print("👍 Модель: смысл тот же — засчитываю (%r)" % (text or ""))
+            return self._drill_pass_single(session, text, want, same=True)
+        return self._drill_miss_single(session, text, want)
+
+    def _drill_pass_single(self, session, text, want, same=False):
+        """Фраза принята: короткая похвала, эталон, варианты, зачёт задания."""
+        said = ("👍 Same meaning — counted. " if same else "✅ ") + want
+        self.add_message(self.teacher_name, said)
+        self._say_after_current(want)
+        print("🏁 Дрилл (одна фраза) пройден: %r" % text)
+        self._offer_alts(want)
+        self._credit_task(session, text, marked=False)
+        cont = getattr(self, "_continue_after_drill", None)   # заглушки тестов
+        if cont is not None:
+            cont(session)
+        return True
+
+    def _drill_miss_single(self, session, text, want):
+        """Смысл не совпал: попытка, после MAX_TASK_ATTEMPTS — эталон и зачёт."""
         tries = session.note_task_attempt()
         if tries >= lesson_mod.MAX_TASK_ATTEMPTS:
             # попытки кончились: показываем эталон и засчитываем с пометкой
             self.add_message(self.teacher_name, "👉 Correct: " + want)
             self._say_after_current(want)
+            self._offer_alts(want)
             self._credit_task(session, text, marked=True)
             cont = getattr(self, "_continue_after_drill", None)   # заглушки тестов
             if cont is not None:
@@ -2374,6 +2450,75 @@ class EnglishTeacherApp:
         self.add_message(self.teacher_name,
                          "🤏 Not quite. Say: \"%s\"." % want)
         print("🤏 Дрилл (одна фраза), попытка %d: %r" % (tries, text))
+        return True
+
+    def _offer_alts(self, phrase):
+        """Показать равнозначные варианты фразы (решение 109).
+
+        Смысл тот же, слова другие — это и есть обогащение словаря. Тексты
+        лежат в data/paraphrases_a2.json: фразы пишет человек, модель их НЕ
+        сочиняет (решение 67). Нет вариантов — строки просто нет.
+        """
+        try:
+            alts = phrases.alts(phrase)
+        except Exception as exc:
+            print("⚠️ Варианты не подобрались: %s" % exc)
+            return
+        if not alts:
+            return
+        shown = " · ".join("\"%s\"" % item for item in alts[:2])
+        self.add_message(self.teacher_name, "💡 Same meaning: " + shown)
+
+    def _meaning_second_look(self, said, want, on_verdict):
+        """Спросить МОДЕЛЬ: «ученик сказал то же самое другими словами?»
+
+        Нужен только в момент промаха (§65, решение 109): код сравнивает
+        слова, а синонимы («see» / «watch») умеет только модель. Окно не
+        мерзнет — вызов идёт в фоне, ответ возвращается в главный поток
+        через _dispatch. True — проверка запущена, решение придёт в on_verdict.
+        """
+        if not getattr(config, "DRILL_MEANING_MODEL", True):
+            return False
+        if not getattr(self, "server_ready", False):
+            return False
+        if getattr(self, "_meaning_busy", False):
+            return False
+        said = str(said or "").strip()
+        want = str(want or "").strip()
+        if not said or not want:
+            return False
+        self._meaning_busy = True
+        print("🤔 Спрашиваю модель, тот же ли смысл: %r / %r" % (said, want))
+        messages = [
+            {"role": "system", "content": MEANING_PROMPT},
+            {"role": "user",
+             "content": "Target: \"%s\"\nStudent: \"%s\"" % (want, said)},
+        ]
+
+        def worker():
+            verdict = None
+            try:
+                ok, raw = self.llm.complete(messages, max_tokens=6,
+                                            temperature=0.0, timeout=20)
+                if ok:
+                    verdict = _meaning_verdict(raw)
+                else:
+                    print("⚠️ Модель не проверила смысл: %s" % raw)
+            except Exception as exc:
+                print("⚠️ Проверка смысла сбилась: %s" % exc)
+
+            def done():
+                self._meaning_busy = False
+                try:
+                    on_verdict(verdict)
+                except Exception as exc:
+                    print("⚠️ Ответ проверки смысла не принят: %s" % exc)
+            try:
+                self._dispatch(done)
+            except Exception:
+                self._meaning_busy = False
+
+        threading.Thread(target=worker, daemon=True).start()
         return True
 
     def _drill_finish(self, session):
@@ -2459,10 +2604,11 @@ class EnglishTeacherApp:
         self._scene_drill = {"wrong": wrong, "correct": correct,
                              "tries": 0, "max": tries}
         if wrong:
-            line = ("🎯 One phrase from last time, before the scene.\n"
-                    "You said: \"%s\". Say it correctly." % wrong)
+            # §65: эталон сразу — «Say it correctly» читалось как «повтори»
+            line = ("🎯 Before the scene, one phrase from last time: \"%s\""
+                    " (last time: \"%s\")." % (correct, wrong))
         else:
-            line = "🎯 One phrase from last time, before the scene: \"%s\"." % correct
+            line = "🎯 Before the scene, one phrase from last time: \"%s\"." % correct
         self.add_message(self.teacher_name, line)
         print("🎯 Дрилл перед сценой: %r -> %r (%s)"
               % (wrong, correct, pair.get("label") or pair.get("rule")))
@@ -2484,13 +2630,42 @@ class EnglishTeacherApp:
             print("⚠️ Проверка дрилла перед сценой сбилась: %s" % exc)
             ok = False
         if ok:
-            self._scene_drill = None
-            self.add_message(self.teacher_name, "✅ " + correct)
             print("🎯 Дрилл перед сценой сдан с %d-й попытки" % (drill["tries"] + 1))
-            self._say_then_scene(session, correct)
-            return True
+            return self._scene_drill_pass(session, correct)
+        # §65: слова другие — спрашиваем модель, тот же ли смысл. Старую
+        # ошибку модель не оправдает, такие реплики к ней не идут.
+        if not _said_old_error(drill.get("wrong"), text):
+            if self._meaning_second_look(
+                    text, correct,
+                    lambda verdict: self._scene_drill_verdict(
+                        session, correct, verdict)):
+                return True
+        return self._scene_drill_fail(session, text, correct)
+
+    def _scene_drill_verdict(self, session, correct, verdict):
+        """Пришёл ответ модели «тот же смысл?» по фразе перед сценой (§65)."""
+        if session is None or not getattr(session, "is_scene", False):
+            self._scene_drill = None
+            return False
+        if verdict:
+            print("👍 Дрилл перед сценой: смысл тот же — засчитываю")
+            return self._scene_drill_pass(session, correct)
+        return self._scene_drill_fail(session, None, correct)
+
+    def _scene_drill_pass(self, session, correct):
+        """Фраза перед сценой принята: эталон, варианты и начало сцены."""
+        self._scene_drill = None
+        self.add_message(self.teacher_name, "✅ " + correct)
+        self._offer_alts(correct)
+        self._say_then_scene(session, correct)
+        return True
+
+    def _scene_drill_fail(self, session, text, correct):
+        """Смысл не совпал: попытка, после попыток — эталон и сцена."""
+        drill = getattr(self, "_scene_drill", None) or {"tries": 0, "max": 2}
         drill["tries"] = int(drill.get("tries") or 0) + 1
         if drill["tries"] < int(drill.get("max") or 2):
+            self._scene_drill = drill
             self.add_message(self.teacher_name,
                              "🤏 Not quite. Say: \"%s\"." % correct)
             print("🎯 Дрилл перед сценой: промах (%.40r)" % (text or ""))
@@ -2498,6 +2673,7 @@ class EnglishTeacherApp:
         self._scene_drill = None
         self.add_message(self.teacher_name, "👉 Correct: " + correct)
         print("🎯 Дрилл перед сценой: попытки кончились, показываю эталон")
+        self._offer_alts(correct)
         self._say_then_scene(session, correct)
         return True
 

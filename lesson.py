@@ -288,6 +288,82 @@ def _latin_words(text: Any) -> List[str]:
     return words
 
 
+# ---------------------------------------------------------------------------
+# §65 (10.11.2026): «НЕ ПРИДИРАТЬСЯ» — сравнение по СМЫСЛУ, а не по буквам
+# ---------------------------------------------------------------------------
+# Решение ученика 109: одну мысль можно сказать по-разному, и зачёт должен
+# быть, если сказано ТО ЖЕ САМОЕ. Живой случай 10.11.2026: задание просило
+# «would like to see», ученик сказал «I want to see» — и слышал «Not quite».
+# Без модели приводим «чуть другое» к одной форме: сокращения, разговорные
+# стяжки, вежливые вставки, порядок слов.
+_CONTRACTIONS = (
+    ("won't", "will not"), ("can't", "cannot"),
+    ("i'm", "i am"), ("i've", "i have"), ("i'll", "i will"),
+    ("i'd", "i would"), ("you're", "you are"), ("you've", "you have"),
+    ("you'll", "you will"), ("you'd", "you would"),
+    ("we're", "we are"), ("we've", "we have"), ("we'll", "we will"),
+    ("they're", "they are"), ("they've", "they have"),
+    ("they'll", "they will"), ("he's", "he is"), ("she's", "she is"),
+    ("it's", "it is"), ("that's", "that is"), ("what's", "what is"),
+    ("there's", "there is"), ("let's", "let us"),
+    ("isn't", "is not"), ("aren't", "are not"), ("wasn't", "was not"),
+    ("weren't", "were not"), ("don't", "do not"), ("doesn't", "does not"),
+    ("didn't", "did not"), ("haven't", "have not"), ("hasn't", "has not"),
+    ("hadn't", "had not"), ("wouldn't", "would not"),
+    ("couldn't", "could not"), ("shouldn't", "should not"),
+)
+# Разговорные стяжки: в речи звучат так же, как полная форма.
+_SPOKEN = (("wanna", "want to"), ("gonna", "going to"),
+           ("gotta", "got to"), ("kinda", "kind of"),
+           ("lemme", "let me"), ("gimme", "give me"))
+# Вежливые вставки, которые смысла не меняют. «just»/«like»/«so» сюда НЕ
+# входят: они бывают частью фразы («just looking», «I'd like»).
+_FILLERS = frozenset(("please", "well", "um", "uh", "erm", "hmm",
+                      "oh", "ah", "eh", "yeah", "ok", "okay"))
+# Служебные слова: артикли, местоимения-подлежащие, формы be. Их пропуск
+# смысла не меняет: «Looking for a jacket» и «I'm looking for a jacket» —
+# одна мысль (решение 109: придираться к мелочам не надо). Отрицание
+# («not») из списка СНАРУЖИ — его отдельно сверяет same_meaning.
+_NEGATIONS = frozenset(("not", "no", "never", "nothing", "nobody"))
+_SKIP = frozenset(("a", "an", "the", "i", "you", "we", "they", "he", "she",
+                   "it", "am", "is", "are", "was", "were", "be"))
+
+
+def _meaning_words(text: Any) -> List[str]:
+    """Слова фразы в ОДНОЙ форме: сокращения раскрыты, вставки убраны."""
+    value = " " + _flat(text) + " "
+    for short, full in _CONTRACTIONS:
+        value = value.replace(" " + short + " ", " " + full + " ")
+    for short, full in _SPOKEN:
+        value = value.replace(" " + short + " ", " " + full + " ")
+    return [w for w in value.split()
+            if w and w not in _FILLERS and w not in _SKIP]
+
+
+def same_meaning(said: Any, want: Any) -> bool:
+    """Сказано ТО ЖЕ САМОЕ, пусть и другими словами? (решение 109)
+
+    Правило простое: все значимые слова эталона есть в ответе, порядок не
+    важен, сокращения и вежливые вставки не считаются. Чего этот путь НЕ
+    умеет — настоящие синонимы («see» / «watch»): их решает модель, но только
+    в момент промаха (ui/app.py::_meaning_second_look), а не на каждом ответе.
+
+    Отрицание сверяется ОТДЕЛЬНО: «I do» и «I don't» дают одинаковый набор
+    значимых слов, и без этой проверки промах засчитывался бы как верный.
+    """
+    want_words = _meaning_words(want)
+    if not want_words:
+        return False
+    said_words = _meaning_words(said)
+    if not said_words:
+        return False
+    bad = sum(1 for w in said_words if w in _NEGATIONS)
+    if bad != sum(1 for w in want_words if w in _NEGATIONS):
+        return False
+    have = set(said_words)
+    return all(w in have for w in want_words)
+
+
 def says_fix(student_text: Any, corrections) -> bool:
     """Ученик ПОВТОРИЛ исправление? Проверка без модели (вариант В, §36).
 
@@ -309,6 +385,9 @@ def says_fix(student_text: Any, corrections) -> bool:
         return False
     for want in wanted:
         if want in said:
+            continue
+        # §65 (решение 109): та же мысль другими словами — тоже зачёт
+        if same_meaning(student_text, want):
             continue
         if difflib.SequenceMatcher(None, said, want).ratio() >= REPEAT_RATIO:
             continue
@@ -672,6 +751,15 @@ class LessonSession:
         ratio = difflib.SequenceMatcher(None, said, want).ratio()
         if ratio >= 0.60 and self._drill_other_side(said, want):
             return fail("wrong_side", phrase["why"])
+        # 4) §65: та же мысль другими словами — зачёт (решение ученика 109).
+        #    Стоит ПОСЛЕ проверок старой ошибки и другой стороны пары: иначе
+        #    «advise to me» прошло бы как верное к «advise me».
+        if same_meaning(student_text, phrase.get("en")):
+            self.drill_pos += 1
+            self.drill_tries = 0
+            done = self.drill_pos >= self.drill_total
+            return self._drill_report("done" if done else "ok", phrase,
+                                      phrase["why"])
         if ratio >= DRILL_RATIO:
             self.drill_pos += 1
             self.drill_tries = 0
@@ -726,6 +814,8 @@ class LessonSession:
                 return True
             if wrong and wrong in said:
                 return False
+            if same_meaning(student_text, self.drill_correct):
+                return True            # §65: та же мысль другими словами
             return difflib.SequenceMatcher(None, said, want).ratio() >= DRILL_RATIO
         return says_fix(student_text, self.repeat_expected)
 

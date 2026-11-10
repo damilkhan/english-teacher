@@ -144,3 +144,62 @@ def describe(rule_id: Any, level: str = "a2") -> str:
     """Строка «о чём пара» для лога: берётся из поля pair."""
     item = rule(rule_id, level)
     return str((item or {}).get("pair") or "").strip()
+
+# ---------------------------------------------------------------
+# §65 (10.11.2026): равнозначные варианты фразы (решение ученика 109)
+# ---------------------------------------------------------------
+# Зачем: смысл один, а сказать можно по-разному. После верного ответа
+# показываем 1-2 равнозначных варианта — так растёт словарный запас.
+# Тексты пишет ЧЕЛОВЕК (решение 67), модель их не сочиняет: файл
+# data/paraphrases_a2.json плюс поле "alts" у фраз библиотеки пар.
+_ALTS_CACHE = {}      # type: Dict[str, Dict[str, List[str]]]
+
+
+def _flat_key(text: Any) -> str:
+    """Фраза в одной форме: без регистра, знаков и лишних пробелов."""
+    value = str(text or "").lower()
+    keep = [ch if (ch.isalnum() or ch == "'") else " " for ch in value]
+    return " ".join("".join(keep).split())
+
+
+def _alts_file(level: str = "a2") -> Dict[str, List[str]]:
+    """{фраза-в-одной-форме: [варианты]} из data/paraphrases_<уровень>.json."""
+    name = str(level or "a2").strip().lower()
+    if name in _ALTS_CACHE:
+        return _ALTS_CACHE[name]
+    data = {}                                   # type: Dict[str, List[str]]
+    path = os.path.join(DATA_DIR, "paraphrases_%s.json" % name)
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            raw = json.load(fh)
+        items = raw.get("alts") if isinstance(raw, dict) else None
+        if isinstance(items, dict):
+            for key, value in items.items():
+                if not isinstance(value, list):
+                    continue
+                good = [str(v).strip() for v in value if str(v or "").strip()]
+                if good:
+                    data[_flat_key(key)] = good
+    except (OSError, ValueError) as exc:
+        print("⚠️ Варианты фраз %s не прочитаны: %s" % (name, exc))
+    _ALTS_CACHE[name] = data
+    return data
+
+
+def alts(text: Any, level: str = "a2") -> List[str]:
+    """Равнозначные варианты фразы (пусто — вариантов нет).
+
+    Ищем СНАЧАЛА точное совпадение фразы, потом — вхождение (задание дрилла
+    может нести лишние слова вроде вежливого «please»).
+    """
+    key = _flat_key(text)
+    if not key:
+        return []
+    table = _alts_file(level)
+    found = list(table.get(key) or [])
+    if found:
+        return found
+    for item in sorted(table, key=len, reverse=True):
+        if item in key:
+            return list(table[item])
+    return []

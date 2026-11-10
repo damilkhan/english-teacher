@@ -1,0 +1,68 @@
+{
+  "level": "a2",
+  "english": "american",
+  "note": "Равнозначные варианты фраз (решение ученика 109, §65). Ключ — эталонная фраза в одной форме (без регистра и знаков), значение — 1-2 варианта с ТЕМ ЖЕ смыслом. Показываются ПОСЛЕ верного ответа как бонус к словарю. СТАРУЮ ошибку ученика вариантом не записывать: иначе дрилл теряет смысл. Тексты пишет человек, модель их не сочиняет (решение 67).",
+  "alts": {
+    "would like to see": [
+      "I'd like to see",
+      "I'd love to see"
+    ],
+    "i want to see": [
+      "I'd like to see",
+      "I want to see it"
+    ],
+    "i'm looking for a jacket": [
+      "I'm looking for a jacket, please",
+      "I need a jacket"
+    ],
+    "i'm looking for": [
+      "I need",
+      "I'd like"
+    ],
+    "how much is it": [
+      "How much does it cost?",
+      "What's the price?"
+    ],
+    "do you have a discount": [
+      "Do you have any discount?",
+      "Is there a discount?",
+      "Can I get a discount?"
+    ],
+    "i pay with a card": [
+      "I'll pay by card",
+      "Can I pay by card?"
+    ],
+    "can i pay by card": [
+      "Could I pay by card?",
+      "Do you take cards?"
+    ],
+    "i'd like a coffee": [
+      "Can I have a coffee, please?",
+      "A coffee, please."
+    ],
+    "i'd like the bill": [
+      "Can I have the check, please?",
+      "Could we get the bill?"
+    ],
+    "i ate canned food": [
+      "I had canned food",
+      "I ate food from a can"
+    ],
+    "i don't have any money": [
+      "I have no money",
+      "I haven't got any money"
+    ],
+    "let me think": [
+      "Give me a second",
+      "Wait a moment, please"
+    ],
+    "i'm not sure": [
+      "I don't know for sure",
+      "I can't say for sure"
+    ],
+    "can you help me": [
+      "Could you help me?",
+      "Would you help me, please?"
+    ]
+  }
+}

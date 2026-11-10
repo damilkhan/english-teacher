@@ -96,6 +96,16 @@ class FakeApp:
         self._say(english)
         self._scene_ask(session)
 
+    # §65: проверку смысла развели на ветки — берём НАСТОЯЩИЕ методы,
+    # заглушка отвечает только за чат и речь
+    _scene_drill_pass = app_mod.EnglishTeacherApp._scene_drill_pass
+    _scene_drill_fail = app_mod.EnglishTeacherApp._scene_drill_fail
+    _offer_alts = app_mod.EnglishTeacherApp._offer_alts
+
+    def _meaning_second_look(self, said, want, on_verdict):
+        # модель в тесте не зовём: решение принимает только код (§65)
+        return False
+
 
 def build(pair=None):
     session = FakeSession()
@@ -133,7 +143,10 @@ def main():
     session, fake = build(pair)
     started = start_drill(fake, session)
     check("дрилл начался", started is True, started)
-    check("в чате есть задание", any("Say it correctly" in m for m in fake.messages),
+    # §65: эталон виден сразу («Say: "..."»), иначе ученик читал
+    # «Say it correctly» как «повтори правильно» и слышал «Not quite».
+    check("в чате есть задание с эталоном",
+          any("I'm looking for a jacket" in m for m in fake.messages),
           fake.messages)
     check("названо, что сказал ученик",
           any("i'm looking a jacket" in m for m in fake.messages), fake.messages)
