@@ -107,6 +107,8 @@ def make_app(store=None):
     app._deferred_deadline = None
     app._speech_busy = False
     app.window = FakeWindow()
+    # §66: _send_to_teacher спрашивает, не закрылся ли урок этой репликой
+    app.lesson = types.SimpleNamespace(current=lambda: None)
 
     app.add_message = lambda sender, text, picture=None: app.messages.append(
         (sender, text)) or "msg"
@@ -121,7 +123,8 @@ def make_app(store=None):
 
     for name in ("_on_lesson_finished", "_run_deferred_finish",
                  "_say_after_current", "_wait_for_speech",
-                 "_speech_wait_left"):
+                 "_speech_wait_left", "_lesson_closed_now",
+                 "_finish_without_model"):
         setattr(app, name, types.MethodType(getattr(App, name), app))
     app.store = store or FakeStore()
     # §39: _send_to_teacher помечает «урок закрывается» — здесь пустышка
@@ -157,6 +160,43 @@ def test_send_marks_in_flight():
     check("порядок: флаг → счёт → отправка",
           app.steps == ["count", "send"] and app._reply_in_flight is True,
           (app.steps, app._reply_in_flight))
+
+
+def test_closed_lesson_skips_model():
+    print("\n[2b] Урок закрыт этой репликой — модель НЕ зовём (§66)")
+    body = method_body("_send_to_teacher")
+    check("зачёт по тексту идёт ДО отправки в модель",
+          body.find("_credit_task_by_text") < body.find("self.chat.send("), body)
+    check("после зачёта проверяется, не закрыт ли урок",
+          body.find("_lesson_closed_now") < body.find("self.chat.send("), body)
+
+    session = types.SimpleNamespace(is_active=True, has_tasks=True,
+                                    all_tasks_done=True)
+    app = make_app()
+    app.lesson = types.SimpleNamespace(current=lambda: session)
+    app.chat = types.SimpleNamespace(
+        send=lambda t: app.steps.append("send-to-model"))
+    app._register_lesson_reply = lambda text: app.steps.append("count")
+    app._credit_task_by_text = lambda text: app.steps.append("credit")
+    app._say_after_current = lambda text, mark=None: app.said.append(text)
+    App._send_to_teacher(app, "a card")
+    check("в модель НЕ ушло", "send-to-model" not in app.steps, app.steps)
+    check("ученику сказана короткая похвала", len(app.said) == 1, app.said)
+    check("ожидание ответа снято (иначе итог не покажется)",
+          app._reply_in_flight is False, app._reply_in_flight)
+
+    # урок НЕ закрыт — реплика уходит модели, как раньше
+    open_session = types.SimpleNamespace(is_active=True, has_tasks=True,
+                                         all_tasks_done=False)
+    app2 = make_app()
+    app2.lesson = types.SimpleNamespace(current=lambda: open_session)
+    app2.chat = types.SimpleNamespace(
+        send=lambda t: app2.steps.append("send-to-model"))
+    app2._register_lesson_reply = lambda text: app2.steps.append("count")
+    app2._credit_task_by_text = lambda text: app2.steps.append("credit")
+    App._send_to_teacher(app2, "i pay with a card")
+    check("открытый урок: реплика дошла до модели",
+          "send-to-model" in app2.steps, app2.steps)
 
 
 def test_finish_is_deferred():
@@ -292,6 +332,7 @@ def main():
     print("=" * 60)
     test_config()
     test_send_marks_in_flight()
+    test_closed_lesson_skips_model()
     test_finish_is_deferred()
     test_deferred_runs_once()
     test_exam_untouched()

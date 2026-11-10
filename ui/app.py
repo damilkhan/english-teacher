@@ -4625,14 +4625,52 @@ class EnglishTeacherApp:
         # урока встанет раньше ответа (живой баг 25.10.2026).
         self._reply_in_flight = True
         self._last_student_text = text       # за какую реплику придёт разбор
+        session = self.lesson.current()
         self._register_lesson_reply(text)    # на экзамене текст нужен для балла
-        # Реплика, которая закрывает урок: спрашивать больше НЕЛЬЗЯ — иначе
-        # бот задаёт новый вопрос и тут же уходит в итог с фото (баг 26.10.2026).
-        self._mark_lesson_closing()
         # §36 (вариант В): ученик повторил исправление — задание сдано ДО
         # ответа учителя, поэтому он сразу даёт следующее в той же реплике.
         self._credit_task_by_text(text)
+        # §66 (10.11.2026): зачёт мог ЗАКРЫТЬ урок. Тогда модель не зовём:
+        # на просьбу «похвали и остановись» она всё равно дописывает вопрос
+        # («A card is great, Danil; now tell me, what kind of card do you
+        # usually use to pay»), и урок кончается пустым вопросом.
+        if self._lesson_closed_now(session):
+            self._finish_without_model()
+            return
+        # Реплика, которая закрывает урок: спрашивать больше НЕЛЬЗЯ — иначе
+        # бот задаёт новый вопрос и тут же уходит в итог с фото (баг 26.10.2026).
+        self._mark_lesson_closing()
         self.chat.send(text)
+
+    def _lesson_closed_now(self, session):
+        """Урок закрылся ИМЕННО этой репликой? (задания сданы, сессия мертва)"""
+        if session is None:
+            return False
+        try:
+            if not session.is_active:
+                return True
+            return bool(getattr(session, "has_tasks", False)
+                        and session.all_tasks_done)
+        except Exception:
+            return False
+
+    def _finish_without_model(self):
+        """Урок закрыт: короткая похвала своими словами и итог (модель молчит).
+
+        Вопрос в конце урока не нужен никому: отвечать на него уже нельзя,
+        урок закрыт. Похвала короткая, счётчики покажет итог урока.
+        """
+        line = "🎉 That's the last task — well done!"
+        print("🏁 Урок закрыт этой репликой: модель не зовём")
+        try:
+            self.add_message(self.teacher_name, line)
+            self._say_after_current(line)
+        except Exception as exc:
+            print("⚠️ Похвала в конце урока не сказалась: %s" % exc)
+        # Ответа учителя не будет: снимаем ожидание, иначе итог не покажется.
+        # Сам итог покажет _finish_speech (похвала доиграла) или страховочный
+        # таймер — так похвала не рвётся на полуслове.
+        self._reply_in_flight = False
 
     def _run_deferred_finish(self):
         """Показать отложенный итог урока (ответ учителя уже прозвучал).

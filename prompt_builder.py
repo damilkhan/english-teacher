@@ -644,6 +644,11 @@ LOGIC_BLOCK = """
 - Build the question on the student's own words: take one word from their
   answer and go one step further ("I go once a month" - "Who goes with
   you?"). If you have nothing to build on, ask about their day or plans.
+- Do NOT ask a question just to fill the pause (student, 10.11.2026: a
+  question for the sake of a question is bad). A question must be worth
+  answering: dull or nosy ones ("what kind of card do you usually use to
+  pay?") are worse than no question. If there is nothing worth asking, react
+  to what the student said or add a short fact instead.
 - ONE question per reply, at the end. Never two questions in a row and never
   a question inside a question.
 - If the student says your question is silly or wrong: agree in ONE short
