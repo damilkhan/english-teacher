@@ -361,8 +361,18 @@ class ChatController:
                 if again and not left:
                     cleaned = again
                 else:
-                    print("⚠️ Повтор не помог (%s) — оставляю ответ как есть"
-                          % ", ".join(reply_checks.names(left)))
+                    # §76: если модель всё равно спрашивает ТО ЖЕ, код
+                    # отрезает вопрос — ученик не должен слышать его второй
+                    # раз. Живой урок 11.11.2026: «повтор не помог» и вопрос
+                    # звучал снова.
+                    if "same_question" in left:
+                        trimmed = prompt_builder.strip_trailing_question(again)
+                        if trimmed and trimmed.strip():
+                            cleaned = trimmed
+                    print("⚠️ Повтор не помог (%s) — %s"
+                          % (", ".join(reply_checks.names(left)),
+                             "вопрос отрезан" if cleaned != again
+                             else "оставляю ответ как есть"))
             else:
                 print("⚠️ Повторный запрос не удался — оставляю ответ как есть")
         self._last_question = self._question_of(cleaned)

@@ -58,18 +58,24 @@ def method_body(name):
     return rest if end < 0 else rest[:end]
 
 
+# §70: заданий в уроке стало 5 (config.LESSON_TASKS). Тест был написан под
+# три и с тех пор падал на HEAD — числа берём из самого lesson.py, чтобы он
+# не устаревал снова.
+TOTAL = lesson.tasks_for("speaking")
+
+
 def session_with(done, lesson_type="speaking"):
     s = lesson.LessonSession("1.1", lesson_type=lesson_type)
     s.tasks_done = done
     return s
 
 
-print("1) Сценарий со скриншота: 2 из 3 → добрали одно с пометкой")
-s = session_with(2)
+print("1) Сценарий со скриншота: последнее задание → добрали одно с пометкой")
+s = session_with(TOTAL - 1)
 s.replies = s.hard_reply_limit
 added = s.credit_rest(marked=True)
 check("добрано ровно 1", added == 1, added)
-check("сдано 3", s.tasks_done == 3, s.tasks_done)
+check("сдано все", s.tasks_done == TOTAL, s.tasks_done)
 check("с пометкой 1", s.tasks_marked == 1, s.tasks_marked)
 check("урок закрыт", s.finished is True, s.finished)
 check("фаза DONE", s.task_phase == lesson.TASK_DONE, s.task_phase)
@@ -78,23 +84,24 @@ check("все задания сданы", s.all_tasks_done is True)
 print("2) Итог и похвала больше не противоречат друг другу")
 text = lesson_summary.summary_text(s)
 praise = lesson_summary.praise_text(s)
-check("итог: «Заданий: 3 из 3»", "3 из 3" in text, text)
+check("итог: «Заданий: %d из %d»" % (TOTAL, TOTAL),
+      "%d из %d" % (TOTAL, TOTAL) in text, text)
 check("итог: «с подсказкой: 1»", "с подсказкой: 1" in text, text)
-check("нет «2 из 3»", "2 из 3" not in text, text)
-check("похвала про 3 задачи", "3 tasks" in praise, praise)
+check("нет прежнего числа", "%d из %d" % (TOTAL - 1, TOTAL) not in text, text)
+check("похвала про все задачи", "%d tasks" % TOTAL in praise, praise)
 
 print("3) Всё сдано — добирать нечего")
 s = session_with(0)
-for i in range(3):
+for i in range(TOTAL):
     s.credit_task("phrase %d" % i)
 check("добрано 0", s.credit_rest(marked=True) == 0)
 check("пометок нет", s.tasks_marked == 0, s.tasks_marked)
 
-print("4) Ничего не сдано — добираем все три")
+print("4) Ничего не сдано — добираем все")
 s = session_with(0)
-check("добрано 3", s.credit_rest(marked=True) == 3)
-check("пометок 3", s.tasks_marked == 3, s.tasks_marked)
-check("сдано 3", s.tasks_done == 3, s.tasks_done)
+check("добрано все", s.credit_rest(marked=True) == TOTAL)
+check("пометок все", s.tasks_marked == TOTAL, s.tasks_marked)
+check("сдано все", s.tasks_done == TOTAL, s.tasks_done)
 
 print("5) Экзамен и аудирование — заданий нет, добирать нечего")
 for kind in ("check", "listening"):
@@ -110,7 +117,7 @@ check("сдано осталось 1", s.tasks_done == 1, s.tasks_done)
 print("7) Добор идёт БЕЗ пометки, если попросили marked=False")
 s = session_with(2)
 s.credit_rest(marked=False)
-check("сдано 3", s.tasks_done == 3, s.tasks_done)
+check("сдано все", s.tasks_done == TOTAL, s.tasks_done)
 check("пометок 0", s.tasks_marked == 0, s.tasks_marked)
 
 print("8) Связки в коде на месте")

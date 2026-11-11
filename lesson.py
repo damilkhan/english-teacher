@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import difflib
 import logging
+import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 try:
@@ -399,6 +400,72 @@ def same_meaning(said: Any, want: Any) -> bool:
         return False
     have = set(said_words)
     return all(w in have for w in want_words)
+
+
+# §76 (11.11.2026): МИНИМУМ ФРАЗЫ, а не слова.
+# Живой урок city/3.3: Аналитик вернул правку одним словом (sell, buy, bought),
+# код попросил «say it once more: bought», и урок превратился в словарный
+# тренажёр. Ученик: «нахера мне учить по одному слову, мне нужны фразы,
+# построения фраз». Отдельно для слов есть занятие «Слова».
+# Правило: просим повторить ФРАЗУ — свою же реплику ученика с исправленным
+# словом. Одно слово не просим никогда.
+MIN_PHRASE_WORDS = 3
+
+
+def _words_count(text: Any) -> int:
+    """Сколько в куске СЛОВ (включая «a», «i» — иначе «i want a jacket» = 2)."""
+    return len([w for w in _flat(text).split() if w])
+
+
+# Слова вежливости и согласия — сами по себе НЕ ответ по заданию.
+FILLER_WORDS = {
+    "ok", "okay", "yes", "yeah", "no", "nope", "thanks", "thank", "please",
+    "hi", "hello", "bye", "well", "fine", "sure", "right", "good", "great",
+    "mm", "hmm", "ah", "oh",
+}
+
+
+def looks_like_answer(said: Any) -> bool:
+    """Похоже ли это на ОТВЕТ ПО ЗАДАНИЮ, а не на случайное слово.
+
+    §76 (11.11.2026), живой урок city/3.3: урок засчитал задание за реплику
+    «bye», а до этого за «bolger» и «buy» — распознанный мусор и одно слово.
+    Зачёт за мусор хуже незачёта: ученик видит «сделано», а не сделал ничего.
+
+    Правило: минимум ДВА слова, и хотя бы одно из них — не вежливость
+    («no, thanks» ответом по заданию не считается, «i want a card» — считается).
+    """
+    words = [w for w in _flat(said).split() if len(w) >= 2]
+    if len(words) < 2:
+        return False
+    return any(word not in FILLER_WORDS for word in words)
+
+
+def fix_sentence(said: Any, wrongs: Any, corrections: Any) -> str:
+    """Реплика ученика с исправленной ошибкой — то, что просим повторить.
+
+    «i don't sell anything» + wrong «sell» -> correct «buy» даёт
+    «i don't buy anything»: ученик повторяет СВОЮ фразу целиком, а не слово.
+    Возвращает пустую строку, если собрать фразу не вышло.
+    """
+    text = str(said or "").strip()
+    if not text:
+        return ""
+    result = text
+    pairs = list(zip(list(wrongs or []), list(corrections or [])))
+    for wrong, correct in pairs:
+        bad = str(wrong or "").strip()
+        good = str(correct or "").strip()
+        if not bad or not good:
+            continue
+        # меняем целым словом/куском, без учёта регистра первого символа
+        pattern = re.compile(r"(?<![\w'])" + re.escape(bad) + r"(?![\w'])",
+                             re.IGNORECASE)
+        if pattern.search(result):
+            result = pattern.sub(good, result, count=1)
+    if _words_count(result) < MIN_PHRASE_WORDS:
+        return ""
+    return result.strip()
 
 
 def says_fix(student_text: Any, corrections) -> bool:
@@ -809,7 +876,7 @@ class LessonSession:
                                       phrase["why"])
         return fail("miss")
 
-    def expect_repeat(self, corrections, wrongs=None) -> List[str]:
+    def expect_repeat(self, corrections, wrongs=None, said="") -> List[str]:
         """Запомнить, что просили повторить, и перейти в фазу «ждём повтор».
 
         corrections — правильные куски из разбора Аналитика
@@ -829,6 +896,11 @@ class LessonSession:
             text = str(raw or "").strip()
             if text and text not in bad:
                 bad.append(text)
+        # §76: одно слово не просим повторять — превращаем правку во фразу
+        # ученика («i don't sell anything» -> «i don't buy anything»).
+        sentence = fix_sentence(said, bad, items) if said else ""
+        if sentence:
+            items = [sentence]
         self.repeat_expected = items
         self.repeat_wrong = bad
         self.task_phase = TASK_FIX

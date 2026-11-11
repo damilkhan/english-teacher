@@ -3152,12 +3152,23 @@ class EnglishTeacherApp:
                 (getattr(session, "repeat_expected", None) or []) if str(w).strip()]
         if not want:
             return False
+        # §76: одно слово повторять не просим НИКОГДА — для слов есть
+        # отдельное занятие «Слова». Если фразу собрать не удалось, просто
+        # не просим: попытки идут, урок закроется сам.
+        if all(lesson_mod._words_count(item) < lesson_mod.MIN_PHRASE_WORDS
+               for item in want):
+            print("⏭️ Правка короче фразы — повтор не прошу: %r" % (want,))
+            return False
         key = "|".join(want)
         if key == getattr(self, "_asked_repeat", ""):
             return False
         self._asked_repeat = key
         phrase = want[0]
-        text = ('✏️ Almost! Now say it once more, please: "%s".' % phrase)
+        # §76: раньше здесь стояла ОДНА зашитая реакция на любую ошибку, и
+        # ученик слышал её каждый раз («зачем-то каждый раз says почти-почти»).
+        # Реакцию по смыслу даёт модель, а код только просит повторить фразу
+        # и всегда показывает, какую именно.
+        text = ('✏️ Say it once more, please: "%s".' % phrase)
         mark = self.add_message(self.teacher_name, text)
         self._say_after_current("Now say it once more, please. " + phrase,
                                 mark=mark)
@@ -3186,6 +3197,16 @@ class EnglishTeacherApp:
         # Ученик ждал итог, которого не будет. Правило: разбор НЕ нашёл
         # ошибок → задание сдано, каким бы ни был answer_state (кроме
         # unclear: «не понял, ответ ли это»).
+        # §76: реплика должна быть похожа на ОТВЕТ по заданию. Иначе урок
+        # засчитывает задание за «bye» / «bolger» / одно слово (живой урок
+        # city/3.3, 11.11.2026). Мусор попытку всё равно считает — иначе
+        # урок висел бы вечно.
+        answer_like = lesson_mod.looks_like_answer(text)
+        if not answer_like:
+            print("⏭️ Не ответ по заданию (%r) — зачёт не ставлю" % (text or ""))
+            if session.note_task_attempt() >= lesson_mod.MAX_TASK_ATTEMPTS:
+                return self._credit_task(session, text, marked=True)
+            return False
         no_errors = not errors and state != lesson_mod.ANSWER_UNCLEAR
         try:
             target_ok = session.target_repeated(text)
@@ -3220,7 +3241,10 @@ class EnglishTeacherApp:
         if state == lesson_mod.ANSWER_NEEDS_FIX or corrections:
             wrongs = [item.get("wrong") for item in errors
                       if isinstance(item, dict)]
-            session.expect_repeat(corrections, wrongs=wrongs)
+            # §76: передаём САМУ реплику — из неё соберётся фраза для
+            # повтора («i don't sell anything» -> «i don't buy anything»),
+            # а не одно слово.
+            session.expect_repeat(corrections, wrongs=wrongs, said=text)
             self._sync_lesson_prompt()   # «ждём верный повтор этой фразы»
             # первую ошибку попыткой НЕ считаем: попытки — это неудачные
             # ПОВТОРЫ (иначе 3 ошибки подряд «съедали» задание сразу)
@@ -4481,7 +4505,45 @@ class EnglishTeacherApp:
             parts.append(card.get("en"))
             parts.append(card.get("example"))
         parts.extend(self._scene_stt_words())
+        parts.extend(self._lesson_stt_words())
         return ", ".join(p for p in parts if p)
+
+    def _lesson_stt_words(self):
+        """Слова ИДУЩЕГО УРОКА — подсказка распознаванию (§76).
+
+        Долг №3 из §72: подсказки были только у сцен, и в обычном уроке
+        Whisper резал слова на слух. Живой урок city/3.3 (11.11.2026):
+        ученик три раза сказал «sell», а в лог пришло «cell», «seal»,
+        «till», «c.e.l.» — и код три раза просил повторить «sell», которого
+        распознавание не слышало. Ученик: «слова не считывались правильно
+        из-за отсутствия контекста».
+
+        Отдаём то, что урок и так ЖДЁТ: фразу для повтора, фразу разминки и
+        слова темы. Только урок (не сцена — у неё свой список).
+        """
+        session = None
+        try:
+            session = self.lesson.current()
+        except Exception:
+            session = None
+        if session is None or not getattr(session, "is_active", False):
+            return []
+        if getattr(session, "is_scene", False):
+            return []
+        words = []
+        for item in (getattr(session, "repeat_expected", None) or []):
+            words.extend(str(item).split())
+        drill = str(getattr(session, "drill_correct", "") or "")
+        words.extend(drill.split())
+        topic = str(getattr(session, "topic", "") or "")
+        words.extend(part for part in topic.replace("-", " ").split()
+                     if len(part) > 2)
+        clean = []
+        for word in words:
+            word = "".join(ch for ch in str(word) if ch.isalpha() or ch == "'")
+            if len(word) > 2 and word.lower() not in [c.lower() for c in clean]:
+                clean.append(word)
+        return clean[:24]
 
     def _scene_stt_words(self):
         """Слова текущего вопроса сцены — подсказка распознаванию.
