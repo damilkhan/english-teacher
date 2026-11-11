@@ -31,6 +31,7 @@ import profile_store
 import exam as exam_mod
 import lesson as lesson_mod
 import prompt_builder
+import reply_checks
 import vocabulary
 import rag
 import user_manager
@@ -326,19 +327,6 @@ class ChatController:
         cleaned = prompt_builder.clean_response(raw)
         if not cleaned:
             cleaned = prompt_builder.fallback_response(lang)
-        # §70: модель повторила УЖЕ СДАННОЕ задание — просим другое один раз.
-        # Живой урок city/3.3 (10.11.2026): «i bought a hat» три раза подряд,
-        # ученик: «это что, молитва?».
-        if self._repeats_done_task(cleaned):
-            print("🔁 Модель повторила уже сданное задание — прошу другое")
-            ok2, raw2 = self._ask_model(system_prompt, user_text,
-                                        tail=tail + NEW_TASK_NOTE)
-            if ok2:
-                again = prompt_builder.clean_response(raw2)
-                if again and not self._repeats_done_task(again):
-                    cleaned = again
-                else:
-                    print("⚠️ Другое задание не получилось — оставляю ответ как есть")
         # §39: на последнем задании (или при закрытии урока) модель любит
         # дописывать вопрос после похвалы — отрезаем его, чтобы после
         # ВЕРНОГО ответа бот не задавал новый вопрос.
@@ -353,80 +341,40 @@ class ChatController:
             if (lesson.get("lesson_closing") or phase == "done"
                     or (total > 0 and index >= total and phase == "ask")):
                 cleaned = prompt_builder.strip_trailing_question(cleaned)
-        # §71: модель задала ТОТ ЖЕ вопрос второй раз, хотя ученик уже ответил.
-        # Живой случай 11.11.2026: «do you need a receipt?» → «no, thanks» →
-        # «next, do you need a receipt for your blue jacket, or not?».
-        if self._asks_same_question(cleaned):
-            print("🔁 Модель спросила то же самое второй раз — прошу идти дальше")
+        # §74 (шаг 2 плана §72): ПАКЕТ ПРОВЕРОК ответа в одном месте.
+        # Правило в промпте — просьба, проверка в коде — гарантия. Проверки
+        # общие для уроков И сцен: контекст передаёт вызывающая сторона.
+        # Один повторный запрос на все найденные нарушения сразу: гонять
+        # модель по кругу за каждую мелочь — это +1,5 с ожидания ученику.
+        ctx = reply_checks.build_context(self._lesson, self._last_question, lang)
+        problems = reply_checks.check(cleaned, ctx)
+        if problems:
+            print("🔁 Проверки ответа: %s" % ", ".join(reply_checks.names(problems)))
             ok2, raw2 = self._ask_model(system_prompt, user_text,
-                                        tail=tail + SAME_QUESTION_NOTE)
+                                        tail=tail + reply_checks.note(problems))
             if ok2:
                 again = prompt_builder.clean_response(raw2)
-                if again and not self._asks_same_question(again):
+                left = reply_checks.check(again, ctx) if again else ["empty"]
+                if again and not left:
                     cleaned = again
                 else:
-                    print("⚠️ Тот же вопрос повторился — оставляю ответ как есть")
+                    print("⚠️ Повтор не помог (%s) — оставляю ответ как есть"
+                          % ", ".join(reply_checks.names(left)))
+            else:
+                print("⚠️ Повторный запрос не удался — оставляю ответ как есть")
         self._last_question = self._question_of(cleaned)
         return True, cleaned
 
-    def _repeats_done_task(self, text):
-        """Повторила ли модель уже сданное задание? (§70, 11.11.2026)
-
-        Смотрим только в тот момент, когда приложение ждёт НОВОЕ задание:
-        задание засчитано (task_done_now) или закончилась разминка
-        (drill_done_now). Обычные реплики диалога не трогаем.
-        """
-        lesson_block = self._lesson or {}
-        if not isinstance(lesson_block, dict) or not text:
-            return False
-        if not (lesson_block.get("task_done_now")
-                or lesson_block.get("drill_done_now")):
-            return False
-        if lesson_block.get("lesson_closing"):
-            return False
-        if str(lesson_block.get("task_phase") or "").lower() != lesson_mod.TASK_ASK:
-            return False
-        asked = str(lesson_block.get("asked_tasks") or "")
-        if not asked:
-            return False
-        for item in asked.split(" · "):
-            try:
-                if lesson_mod.same_task(text, item):
-                    return True
-            except Exception:
-                continue
-        return False
-
     @staticmethod
     def _question_of(text):
-        """Вопрос из реплики преподавателя. Пусто — вопроса нет."""
-        value = str(text or "")
-        if "?" not in value:
-            return ""
-        parts = []
-        for piece in value.split("?"):
-            if not piece.strip():
-                continue
-            # вопрос — ПОСЛЕДНЕЕ предложение перед «?»: отрезаем похвалу
-            # по точке, точке с запятой и двоеточию (11.11.2026)
-            tail = piece
-            for mark in (".", ";", ":"):
-                if mark in tail:
-                    tail = tail.rsplit(mark, 1)[-1]
-            tail = tail.strip().strip("\"\u201c\u201d").strip("'").strip()
-            if tail:
-                parts.append(tail)
-        return " ".join(parts)[-200:]
+        """Вопрос из реплики — логика в reply_checks (§74: один источник)."""
+        return reply_checks.question_of(text)
 
     def _asks_same_question(self, text):
-        """Этот вопрос ученик уже слышал? (§71, 11.11.2026)."""
-        question = self._question_of(text)
-        if not question or not self._last_question:
-            return False
-        try:
-            return lesson_mod.same_task(question, self._last_question)
-        except Exception:
-            return False
+        """Этот вопрос ученик уже слышал? (§71; логика в reply_checks)."""
+        ctx = reply_checks.build_context(None, self._last_question,
+                                         self.current_lang)
+        return "same_question" in reply_checks.check(text, ctx)
 
     def _ask_model(self, system_prompt, user_text, short_history=False, tail=""):
         """Один вызов Учителя: промпт + история + реплика ученика.
