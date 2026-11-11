@@ -42,6 +42,24 @@ TEACHER_NAME = "Verbot"
 # (см. available_models) — так удобно держать «примеры» для будущих моделей.
 MODELS = [
     {
+        "id": "gemma4-e4b-it-qat",
+        "label": "Gemma-4-E4B-it QAT (официальная, Q4_0)",
+        "path": os.path.join(BASE_DIR, "models", "gemma-official",
+                             "gemma-4-E4B_q4_0-it.gguf"),
+        # Замер §73: 84,4 нарушений на 100 без правила про тему и 50,0 с одним
+        # правилом — столько же, сколько у переделки, но на 0,34 с быстрее
+        # (1,24 против 1,58 с на реплику). Отсюда ctx 8192, как у gemma4-e4b.
+        "ctx": 8192,
+        # mmproj есть: фото-задание работает (замер §73)
+        "mmproj": os.path.join(BASE_DIR, "models", "gemma-official",
+                               "gemma-4-E4B-it-mmproj.gguf"),
+        "extra_args": [],
+        "max_tokens": None,
+        "temperature": None,
+        "stop": None,
+        "note": "официальная Gemma-4-E4B-it, QAT Q4_0; загрузка ~15 с",
+    },
+    {
         "id": "gemma4-e4b",
         "label": "Gemma-4-E4B (Q4_K_M)",
         "path": os.path.join(BASE_DIR, "models", "gemma",
@@ -74,7 +92,7 @@ MODELS = [
         "note": "пример: положите GGUF в models/ и перезапустите",
     },
 ]
-DEFAULT_MODEL_ID = "gemma4-e4b"
+DEFAULT_MODEL_ID = "gemma4-e4b-it-qat"
 
 # ---------- авто-обнаружение моделей ----------
 # Дополнительно к ручному списку MODELS можно сканировать папку на *.gguf
