@@ -221,13 +221,18 @@ def _words_block(words):
 # {"title", "type", "topic"}. ВАЖНО: при lesson=None блок НЕ добавляется —
 # вывод build_system_prompt не меняется (обратная совместимость,
 # см. tests/smoke_test.test_prompt_unchanged).
+# §75: «The student just started this lesson» стояло здесь на КАЖДОЙ реплике
+# (блок уходит в хвост, а не один раз в начале), и модель начинала заново:
+# живой замер §73 — «Hi Damil, what would you like to see today?» почти на
+# каждом первом ответе эпизода. Строка убрана. Правило темы поднято ПЕРВЫМ:
+# замер показал, что оно одно снимает ~30 нарушений из 100, но работало оно
+# последней строкой абзаца из шести инструкций.
 LESSON_BLOCK_TEMPLATE = """
 \n\U0001F3EB CURRENT LESSON: {title}
-The student just started this lesson. Topic: {topic}.
-{task_line}{task_cycle}Run THIS lesson now: keep the student talking, ask one short question at a time,
-let the student answer, and gently correct mistakes. Adapt if the student
-struggles, and do not switch to another topic on your own.
-"""
+Topic: {topic}. Every question you ask must be about this topic.
+Never ask about films, music, books, hobbies, weekends or plans in this
+lesson: only about the topic above and what the student just said.
+{task_line}{task_cycle}"""
 
 # ---------- задания урока (§36, 26.10.2026) ----------
 # Урок = 3 маленьких задания, каждое по циклу: дал → ученик ответил (с
@@ -243,11 +248,10 @@ TASK_CYCLE_TEMPLATE = """
 # после сдачи всех заданий они противоречат строке фазы («дай следующее
 # задание» против «вопросов больше нет»), поэтому там они не печатаются.
 TASK_RULES = """
-A task counts as DONE only after the student said it correctly. If the student
-made a mistake, give the correct version in one short line and ask them to say
-it again (or to say it in another way). Then wait for the repeat.
+A task is DONE only after the student said it correctly. On a mistake: give the
+correct version in one short line and ask them to say it again, then wait.
 When a task is done, praise it in three or four words and give the NEXT task in
-the SAME reply. Do not pile up two tasks in one reply.
+the SAME reply — one task per reply, never two.
 """
 
 def _lesson_block(lesson):
@@ -427,10 +431,28 @@ Topic ideas: family, friends, school, hobbies, music, films, games, books,
 sport, pets, travel, dreams, favourite places, funny stories.
 """
 
+# В УРОКЕ этот же блок КОРОЧЕ и без списка тем. Причина (§75): список
+# «music, films, books» прямо звал модель уйти с темы урока, а через 2000
+# знаков стояло «не уходи с темы». Замер §73: официальная Gemma спрашивала
+# «what movies / what music / what books» слово в слово из этого списка.
+VARIETY_LESSON_BLOCK = """
+\n\U0001F501 MAKE THE CONVERSATION FRESH:
+- Never ask a question you have already asked in this dialogue.
+- Do NOT use the default textbook small talk: breakfast, food you ate,
+  "how are you", "what is the weather".
+- Build on what the student just said, and use their name sometimes.
+"""
 
-def _variety_block(variety=False):
-    """Блок против повторов. Пусто, если не запрошен."""
-    return VARIETY_BLOCK_TEMPLATE if variety else ""
+
+def _variety_block(variety=False, lesson_mode=False):
+    """Блок против повторов. Пусто, если не запрошен.
+
+    lesson_mode=True — короткая версия без списка свободных тем: в уроке
+    список тем прямо звал модель уйти с темы (§73, §75).
+    """
+    if not variety:
+        return ""
+    return VARIETY_LESSON_BLOCK if lesson_mode else VARIETY_BLOCK_TEMPLATE
 
 
 # ---------- ответ ТОЛЬКО по-английски (необязательно) ----------
@@ -461,16 +483,12 @@ def _english_only_block(english_only=False):
 # остаётся прежним байт-в-байт (правило §10, см. tests/smoke_test).
 AMERICAN_ENGLISH_BLOCK = """
 \n\U0001F1FA\U0001F1F8 USE AMERICAN ENGLISH (US):
-Spell and speak American English, never British: color, favorite, traveling,
-organize, apartment, elevator, movie, vacation, store, soccer, fall, math,
-"at the doctor". Never «colour», «favourite», «travelling», «film», «shop»,
-«holiday», «practise».
-Use the words people really say in the US today. Never bookish or
-dictionary-style words: greeting, salutation, commence, purchase, assist.
-Teach the everyday word first: "hi" (not "greetings"), "say hello" (not
-"exchange greetings"), "thanks" (not "I am grateful").
-When you teach a new word, give ONE natural word plus a short example the
-student could really say, not a list of synonyms.
+Speak and spell American, never British: color, favorite, traveling, movie,
+store, vacation, apartment, elevator, soccer, fall, math.
+Use the words people really say today, never bookish ones (greeting,
+salutation, commence, purchase): "hi", "say hello", "thanks".
+Teach ONE natural word plus a short example the student could say, not a
+list of synonyms.
 """
 
 
@@ -620,21 +638,15 @@ def _hesitation_block(flag):
 # ВАЖНО: блок включается флагом (как запинки) — без флага вывод
 # build_system_prompt остаётся прежним байт-в-байт (tests/smoke_test).
 WORD_FORMS_BLOCK = """
-\n\U0001F4D6 WORD MEANINGS AND WORD FORMS - BE EXACT:
-One English word can have several meanings (lie = to be flat / to say
-something untrue; lay = to put down; left = direction / went away; right,
-bank, bear, book, watch, date, spring, can, light). Before you correct a
-word, make sure YOUR meaning is the same as the meaning the student had.
-- If the word also means something else, name the meaning you mean in ONE
-  short line: "lie down = to get into a flat position (a lie = something
-  untrue)".
-- Never replace the student's word with a word that means something else.
-- When a verb form is wrong, show the forms: lie - lay - lain (to be flat),
-  lie - lied - lied (to say something untrue).
-- If the standard and the colloquial form differ (lie down / lay down), say
-  in one line which one is standard, and do not repeat that correction in
-  later replies.
-Then go on with the lesson: one short sentence, not a grammar lecture.
+\n\U0001F4D6 WORD MEANINGS - BE EXACT:
+Many English words have two meanings (lie = be flat / not tell the truth;
+lay = put down; left, right, bank, book, watch). Before you correct a word,
+make sure your meaning is the student's meaning:
+- name the meaning you mean in ONE short line ("lie down = get into a flat
+  position"); never swap in a word with another meaning;
+- when a verb form is wrong, show the forms once (lie - lay - lain) and do
+  not repeat that correction later;
+- then go on: one short sentence, not a grammar lecture.
 """
 
 
@@ -651,38 +663,20 @@ def _word_forms_block(flag):
 # ВАЖНО: блок включается флагом (как запинки и значения слов) — без флага
 # вывод build_system_prompt прежний байт-в-байт (tests/smoke_test).
 LOGIC_BLOCK = """
-\n\U0001F9E0 THINK BEFORE YOU ASK - A QUESTION MUST MAKE SENSE:
-- Before you ask, check the question against real life and against what the
-  student already said. If the situation is impossible or the answer is
-  obvious, do not ask it - ask something else.
-- Never invent facts about a place or a situation and then ask about them.
-  A dentist's office is not a cinema: "Do you watch a movie at the dentist?"
-  is a bad question.
-- Ask about the student's own life: what they do, how often, with whom, why,
-  how they feel. Never ask about something they cannot know.
-- Build the question on the student's own words: take one word from their
-  answer and go one step further ("I go once a month" - "Who goes with
-  you?"). If you have nothing to build on, ask about their day or plans.
-- Do NOT ask a question just to fill the pause (student, 10.11.2026: a
-  question for the sake of a question is bad). A question must be worth
-  answering: dull or nosy ones ("what kind of card do you usually use to
-  pay?") are worse than no question. If there is nothing worth asking, react
-  to what the student said or add a short fact instead.
-- ONE question per reply, at the end. Never two questions in a row and never
-  a question inside a question.
-- If the student ALREADY answered your question ("no, thanks", "yes", "not
-  really"), the answer is final: do not ask that question again, not with
-  other words and not "or not?". Take the answer, react to it in one short
-  line and move the talk ONE step forward. Live case (11.11.2026): "do you
-  need a receipt?" - "no, thanks" - "next, do you need a receipt for your
-  blue jacket, or not?" - the student was asked the same thing twice.
-- If the student says your question is silly or wrong: agree in ONE short
-  line ("You're right, that was a silly question."), then ask about something
-  the student ALREADY said in this dialogue, using their own words: how often,
-  with whom, why, how they feel. Never bring a new thing, place or hobby into
-  the talk on your own. If there is nothing to ask about, say "Tell me more
-  about it." Do not apologize twice, do not defend the question, do not
-  explain why you asked it, do not ask the same topic in other words.
+\n\U0001F9E0 A QUESTION MUST MAKE SENSE - BEFORE YOU ASK:
+- ONE question per reply, at the END. Never two questions in one reply.
+- Ask only what the student can answer about their own life (what, how
+  often, with whom, why, how they feel), built on one word from their answer
+  ("I go once a month" - "Who goes with you?").
+- Never invent a fact about a place or a situation and then ask about it:
+  "Do you watch a movie at the dentist?" is a bad question.
+- Never ask a question just to fill the pause. If nothing is worth asking,
+  react to what the student said instead of asking.
+- If the student already answered ("no, thanks", "yes", "not really"), that
+  answer is final: do not ask it again, not in other words, not with "or
+  not?". React in one short line and move one step forward.
+- If the student says your question is silly: agree in one short line, then
+  ask about something the student ALREADY said. Do not explain or defend.
 """
 
 
@@ -750,7 +744,6 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
         prompt = f"""You are {name}, a helpful AI assistant.
     {language_rule}
     {female_identity(teacher)}
-    The student is Russian-speaking, but respond in the language they use.
 
     📊 STUDENT PROGRESS PROFILE:
     Topics covered: {topics_str}
@@ -759,8 +752,8 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
     Strengths: {strengths_text}
     Total lessons: {total_lessons}
 
-    Your task: help the student improve their English. If they speak Russian, answer in Russian. If they speak English, answer in English.
-    Keep responses short (2-3 sentences). Use colorful emojis to make conversation more engaging and friendly (like in messengers): {EMOJIS}
+    Your task: help the student improve their English: keep them talking, correct gently.
+    Use colorful emojis to make conversation more engaging and friendly (like in messengers): {EMOJIS}
     Do NOT use thought tags (like <|thought|>).
     """
     else:
@@ -774,7 +767,8 @@ def build_system_prompt(mode, profile, lang="en", level=None, student=None, cont
     return (prompt + _level_block(profile, level)
             + _weak_topics_block(profile) + _student_block(student, teacher)
             + _lesson_block(lesson) + _now_block(now)
-            + _variety_block(variety) + _english_only_block(english_only)
+            + _variety_block(variety, lesson_mode=(mode == "lesson"))
+            + _english_only_block(english_only)
             + _american_block(american)
             + _plan_block(plan) + _knowledge_block(context)
             + _hesitation_block(hesitation)
@@ -795,7 +789,9 @@ BRIEF_BLOCK = (
     "\n- answer with ONE short sentence, 12 words at most;"
     "\n- no emojis at all;"
     "\n- simple A2 words, no long explanations;"
-    "\n- never repeat what the student said back to them; just respond."
+    "\n- do not echo the student's answer back; react to it in your own"
+    " words (quoting the word you CORRECT is fine and needed);"
+    "\n- one idea per reply: no lists, no two corrections at once."
     "\n")
 
 
@@ -811,12 +807,26 @@ def _strip_emoji_offer(text):
     text = text.replace(
         "Use colorful emojis to make conversation more engaging and friendly "
         "(like in messengers): " + EMOJIS,
-        "Keep it short, no emojis.")
+        "")
     text = text.replace("Use emojis freely: " + EMOJIS, "")
     text = text.replace(
         "Keep responses short (2-3 sentences).",
         "Keep responses short: one sentence.")
     return text
+
+def finish_system_prompt(text):
+    """Последний слой system-промпта: снять предложение про эмодзи + STYLE.
+
+    Нужен и в build_prompt_parts, и в ПОВТОРНОМ запросе, когда промпт не влез
+    в память модели (chat_controller: там собирается build_system_prompt
+    напрямую). До §75 повтор уходил БЕЗ правила STYLE и С «используй эмодзи»:
+    ответ на аварийном пути был другим по стилю, чем обычный.
+    """
+    text = _strip_emoji_offer(text)
+    if getattr(config, "BRIEF_REPLIES", True):
+        text = text + BRIEF_BLOCK
+    return text
+
 
 def build_prompt_parts(mode, profile, lang="en", level=None, student=None,
                        context=None, plan=None, lesson=None, now=None,
@@ -850,8 +860,7 @@ def build_prompt_parts(mode, profile, lang="en", level=None, student=None,
     dynamic = (_plan_block(plan) + _lesson_block(lesson) + _now_block(now)
                + _knowledge_block(context) + _words_block(words)
                + _exam_block(exam, exam_questions, exam_asked))
-    if getattr(config, "BRIEF_REPLIES", True):
-        prompt = _strip_emoji_offer(prompt) + BRIEF_BLOCK
+    prompt = finish_system_prompt(prompt)
     return {"stable": prompt, "dynamic": dynamic}
 
 def build_messages(system_prompt, history, user_text, tail=""):

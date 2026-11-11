@@ -103,12 +103,13 @@ def main():
                    "task": L.opening_task(les.get("type")),
                    "exam": L.is_check_lesson(les.get("type")),
                    "lesson_id": lid}
-        history, asked_q, issued = [], [], []
+        history, asked_q, issued, credited = [], [], [], []
         last_q = ""
         for idx, item in enumerate(ep["items"]):
             said = item["said"]
             if item.get("credit_before"):
                 session.credit_task(said)
+                credited.append(said)
             lp = dict(payload)
             lp.update(session.task_prompt())
             if session.finished or not session.is_active:
@@ -152,8 +153,12 @@ def main():
                 L.same_task(q, prev) or L._flat(q) == L._flat(prev)
                 for prev in asked_q if prev)
             new_tasks = task_sentences(reply)
+            # Замер честный только против ЗАСЧИТАННЫХ заданий. Раньше сверяли
+            # со всеми ВЫДАННЫМИ — и «ты сказал acrecraft, скажи правильную
+            # фразу» попадало в повторы, хотя это исправление текущего
+            # задания, то есть работа учителя (§75).
             flags["repeat_task"] = any(
-                L.same_task(t, old) for t in new_tasks for old in issued)
+                L.same_task(t, old) for t in new_tasks for old in credited)
             flags["question_when_closed"] = bool(reply.count("?")) and closed
             flags["not_english"] = bool(CYR.search(reply))
             flags["truncated"] = (not reply) or (
@@ -166,6 +171,7 @@ def main():
                          "task": "%d/%d" % (session.task_index, session.tasks_total),
                          "phase": session.task_phase, "closed": closed,
                          "raw_reply": raw_reply, "problems": problems,
+                         "credited": list(credited),
                          "retried": retried,
                          "stable_chars": len(stable),
                          "flags": flags})
@@ -179,6 +185,10 @@ def main():
             history.append("Assistant: " + reply)
             if item.get("credit") and not item.get("credit_before"):
                 session.credit_task(said)
+                for tsk in task_sentences(said):
+                    credited.append(tsk)
+                if not task_sentences(said):
+                    credited.append(said)
         # konec epizoda
     save(rows, tag, port)
 

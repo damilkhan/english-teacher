@@ -158,7 +158,7 @@ def test_prompt_unchanged():
     for pi, profile in enumerate(profiles):
         for mode, lang, _ in cases:
             fake = _make_fake_app(src, profile, mode, lang, [])
-            old_prompt = _expected_system(fake.get_dynamic_prompt(), lang)
+            old_prompt = _known_edits(_expected_system(fake.get_dynamic_prompt(), lang))
             new_prompt = prompt_builder.build_system_prompt(mode, profile, lang)
             check(f"system-промпт mode={mode} lang={lang} профиль#{pi} (кроме строки языка)",
                   norm(old_prompt) == norm(new_prompt),
@@ -637,6 +637,31 @@ def test_level_test():
         level_test.set_client(None)
         user_manager.PROFILES_DIR = real_dir
         user_manager.LAST_USER_FILE = real_last
+
+
+# Осознанные правки персоны после исторического gui.py.
+# §75 (11.11.2026): из персоны убраны (1) дубль про язык — он повторял
+# LANGUAGE_POLICY выше, (2) «Keep responses short (2-3 sentences)» — это
+# прямо спорило с правилом STYLE «одно предложение, 12 слов». Замер §73 на
+# 32 живых репликах: церемония промпта не помогала, а мешала.
+# Список НАМЕРЕННО короткий: любая новая правка промпта сюда не попадает и
+# тест падает — так случайный дрейф по-прежнему ловится.
+KNOWN_EDITS = (
+    ("Your task: help the student improve their English. If they speak Russian,"
+     " answer in Russian. If they speak English, answer in English.",
+     "Your task: help the student improve their English: keep them talking,"
+     " correct gently."),
+    ("    The student is Russian-speaking, but respond in the language they"
+     " use.\n", ""),
+    ("    Keep responses short (2-3 sentences). ", "    "),
+)
+
+
+def _known_edits(text):
+    """Применить к историческому промпту только НАМЕРЕННЫЕ правки (§75)."""
+    for old, new in KNOWN_EDITS:
+        text = text.replace(old, new)
+    return text
 
 
 def main():

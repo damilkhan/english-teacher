@@ -79,29 +79,27 @@ def main():
     # ---------- 3. Содержание правила ----------
     print("\n[3] Блок про смысл вопроса, а не про что попало")
     block = pb.LOGIC_BLOCK
-    check("заголовок про проверку вопроса", "THINK BEFORE YOU ASK" in block)
+    # §75: блок сокращён с 7 пунктов до 5 — проверяем СМЫСЛ каждого пункта,
+    # а не прежние длинные формулировки.
+    check("заголовок про проверку вопроса", "A QUESTION MUST MAKE SENSE" in block)
     check("запрет выдумывать факты о месте",
-          "Never invent facts about a place" in block)
+          "Never invent a fact about a place" in block)
     check("живой пример со стоматологом", "dentist" in block.lower())
-    check("пример про кино в кабинете", "cinema" in block.lower())
-    check("опираться на слова ученика", "their own words" in block)
-    check("запрет приносить новую вещь/место/хобби",
-          "Never bring a new thing" in block)
-    check("запасной ход, когда спросить нечего", "Tell me more" in block)
+    check("пример про кино в кабинете", "watch a movie" in block.lower())
+    check("опираться на слова ученика", "one word from their answer" in block)
+    check("запасной ход, когда спросить нечего",
+          "If nothing is worth asking" in block)
     check("ровно ОДИН вопрос в конце", "ONE question per reply" in block)
     check("про поправку ученика", "student says your question is silly" in block)
-    check("одно короткое согласие, без двух извинений",
-          "Do not apologize twice" in block)
-    check("не защищать вопрос", "defend the question" in block)
-    check("не объяснять, зачем спросил",
-          "explain why you asked it" in block)
+    check("не объяснять и не защищать вопрос",
+          "Do not explain or defend" in block)
 
     # ---------- 4. Порядок блоков ----------
     print("\n[4] Блок стоит до блока слов ученика")
     full = pb.build_system_prompt("lesson", PROFILE, "en", word_forms=True,
                                   logic=True, words=["flatbread", "rest"])
-    i_forms = full.find("WORD MEANINGS AND WORD FORMS")
-    i_logic = full.find("THINK BEFORE YOU ASK")
+    i_forms = full.find("WORD MEANINGS - BE EXACT")
+    i_logic = full.find("A QUESTION MUST MAKE SENSE")
     i_words = full.find("WORDS FROM THE STUDENT")
     check("все три блока на месте", min(i_forms, i_logic, i_words) > 0,
           (i_forms, i_logic, i_words))

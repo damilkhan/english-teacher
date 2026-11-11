@@ -320,6 +320,9 @@ class ChatController:
             word_forms=True,          # lie/lay и прочие слова с двумя значениями
             logic=True,               # вопрос должен иметь смысл (26.10.2026)
             exam_asked=(self._exam_asked if exam_mode else None))   # повтор — не ошибка
+            # §75: на аварийном пути промпт тоже проходит финишер — иначе
+            # повтор уходил БЕЗ правила STYLE и С «используй эмодзи».
+            system_prompt = prompt_builder.finish_system_prompt(system_prompt)
             ok, raw = self._ask_model(system_prompt, user_text, short_history=True)
         if not ok:
             return False, self._explain(raw)

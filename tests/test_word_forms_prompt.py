@@ -76,14 +76,13 @@ def main():
     # ---------- 3. Правило общее, а не про lie ----------
     print("\n[3] Правило общее для ВСЕХ слов")
     block = pb.WORD_FORMS_BLOCK
+    # §75: блок сокращён — проверяем смысл, а не прежние длинные фразы.
     for word in ("lie", "lay", "left", "bank", "watch"):
         check("в примерах есть «%s»" % word, word in block)
-    check("сказано «несколько значений»", "several meanings" in block)
+    check("сказано «два значения»", "two meanings" in block)
     check("запрет подменять слово другим значением",
-          "Never replace" in block)
+          "never swap in a word with another meaning" in block)
     check("нужны три формы глагола", "lie - lay - lain" in block)
-    check("про разницу литературного и разговорного варианта",
-          "colloquial" in block)
     check("требование коротко: одна фраза", "one short sentence" in block.lower()
           or "ONE short line" in block)
 
@@ -91,7 +90,7 @@ def main():
     print("\n[4] Блок стоит до блока слов ученика")
     words = pb.build_system_prompt("lesson", PROFILE, "en", word_forms=True,
                                    words=["flatbread", "rest"])
-    i_forms = words.find("WORD MEANINGS AND WORD FORMS")
+    i_forms = words.find("WORD MEANINGS - BE EXACT")
     i_words = words.find("WORDS FROM THE STUDENT")
     check("оба блока на месте", i_forms > 0 and i_words > 0, (i_forms, i_words))
     check("значения слов идут ПЕРЕД словами ученика", 0 < i_forms < i_words,
