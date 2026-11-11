@@ -263,12 +263,12 @@ class VocabPanel(ctk.CTkToplevel):
                                     text_color=self.palette["muted"])
             return
         if status == "unrelated":
-            heard = result.get("heard") or text
-            expected = result.get("en") or ""
-            self.hint_lbl.configure(
-                text="Услышал «%s», а слово — «%s». Скажи ещё раз — или нажми 💡 Подсказка."
-                     % (heard, expected),
-                text_color=self.palette["muted"])
+            # §71 (11.11.2026): подсказки «Услышал «like», а слово — «similar»»
+            # БОЛЬШЕ НЕТ. Ученик: для этого уже есть кнопка 💡 Подсказка, а
+            # строка внизу просто выдавала правильный ответ и мешала думать.
+            # Молчим: карточка ждёт, ученик повторяет сам.
+            print("🤐 Повторение: услышал «%s» — не слово карточки (молчим)"
+                  % (result.get("heard") or text))
             return
         if status == "empty":
             return
@@ -352,7 +352,12 @@ class VocabPanel(ctk.CTkToplevel):
         Когда ответ уже дан, эта же кнопка стала «Дальше»/«Готово»: одно
         нажатие переключает слово (просьба ученика 27.10.2026).
         """
+        # §71 (11.11.2026): на итоговом экране большая кнопка говорит «Готово»
+        # и ЗАКРЫВАЕТ окно. Второй «Готово» внизу больше нет — ученик:
+        # «для чего нужна ещё одна кнопка, если большая и так стала Готово».
         if self._finished:
+            if self._main_mode == "done" and pressed:
+                self._done()
             return
         if self._skip_release and not pressed:
             self._skip_release = False      # это отпускание, а не новое нажатие
@@ -465,7 +470,9 @@ class VocabPanel(ctk.CTkToplevel):
         self._finished = True
         stats = self.controller.summary()
         p = self.palette
-        self._set_main("off")
+        # §71: итог закрывает БОЛЬШАЯ кнопка («Готово»), нижней больше нет
+        self._set_main("done")
+        self._hide_next_button()
         try:
             self.bar.set(1.0)
         except Exception:
@@ -477,17 +484,12 @@ class VocabPanel(ctk.CTkToplevel):
             "Верно: %d · промахи: %d · отложено: %d"
             % (stats.get("good", 0), stats.get("miss", 0), stats.get("skipped", 0)),
             "Завтра спрошу то, что не получается.", color_key="ok")
-        for btn in (self.record_btn, self.hint_btn, self.later_btn, self.listen_btn):
+        # ГЛАВНУЮ кнопку не выключаем: на ней теперь «Готово» (§71)
+        for btn in (self.hint_btn, self.later_btn, self.listen_btn):
             try:
                 btn.configure(state="disabled")
             except Exception:
                 pass
-        try:
-            self.next_btn.configure(text="Готово", state="normal",
-                                    command=self._done)
-            self._pack_next_button()
-        except Exception:
-            pass
         self.hint_lbl.configure(text="Слова повторяются по лестнице: 1 → 3 → 7 → 21 день.",
                                 text_color=p["muted"])
 

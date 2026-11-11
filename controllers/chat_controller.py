@@ -40,6 +40,16 @@ _log = logging.getLogger(__name__)
 
 # §70 (11.11.2026): «не проси то же самое второй раз». Если в реплике модели
 # повторяется уже сданное задание — одна повторная просьба дать ДРУГОЕ.
+# §71 (11.11.2026): тот же вопрос второй раз. Живой случай: «do you need a
+# receipt for this purchase?» → «no, thanks» → «next, do you need a receipt
+# for your blue jacket, or not?». Ответ уже дан — повторяться нельзя.
+SAME_QUESTION_NOTE = ("\nNOTE: the student has just ANSWERED the question you"
+                     " asked. Do NOT ask it again, not even in other words or"
+                     " with \"or not?\". Accept the answer in one short line"
+                     " and move the conversation one step forward: build on what"
+                     " the student just said.")
+
+
 NEW_TASK_NOTE = ("\nNOTE: you have just repeated a task the student has already"
                  " done this lesson. Do NOT repeat it again: give a DIFFERENT"
                  " small task on the same topic, one short line, then wait.")
@@ -59,6 +69,8 @@ class ChatController:
         self.teacher = user_manager.teacher_name(user_manager.get_user(user_id))
         self.history = []
         self.busy = False
+        self._last_question = ""
+
         # роль-Аналитик (необязательна): разбирает реплики ПОСЛЕ ответа Учителя
         self.analyst = analyst
 
@@ -191,6 +203,7 @@ class ChatController:
     def clear_history(self):
         self.history = []
         self._lesson = None
+        self._last_question = ""     # §71: новый диалог — вопросов ещё нет
         self._opening = False
         self._exam_asked = None
         self._reset_plan()
@@ -340,6 +353,20 @@ class ChatController:
             if (lesson.get("lesson_closing") or phase == "done"
                     or (total > 0 and index >= total and phase == "ask")):
                 cleaned = prompt_builder.strip_trailing_question(cleaned)
+        # §71: модель задала ТОТ ЖЕ вопрос второй раз, хотя ученик уже ответил.
+        # Живой случай 11.11.2026: «do you need a receipt?» → «no, thanks» →
+        # «next, do you need a receipt for your blue jacket, or not?».
+        if self._asks_same_question(cleaned):
+            print("🔁 Модель спросила то же самое второй раз — прошу идти дальше")
+            ok2, raw2 = self._ask_model(system_prompt, user_text,
+                                        tail=tail + SAME_QUESTION_NOTE)
+            if ok2:
+                again = prompt_builder.clean_response(raw2)
+                if again and not self._asks_same_question(again):
+                    cleaned = again
+                else:
+                    print("⚠️ Тот же вопрос повторился — оставляю ответ как есть")
+        self._last_question = self._question_of(cleaned)
         return True, cleaned
 
     def _repeats_done_task(self, text):
@@ -369,6 +396,37 @@ class ChatController:
             except Exception:
                 continue
         return False
+
+    @staticmethod
+    def _question_of(text):
+        """Вопрос из реплики преподавателя. Пусто — вопроса нет."""
+        value = str(text or "")
+        if "?" not in value:
+            return ""
+        parts = []
+        for piece in value.split("?"):
+            if not piece.strip():
+                continue
+            # вопрос — ПОСЛЕДНЕЕ предложение перед «?»: отрезаем похвалу
+            # по точке, точке с запятой и двоеточию (11.11.2026)
+            tail = piece
+            for mark in (".", ";", ":"):
+                if mark in tail:
+                    tail = tail.rsplit(mark, 1)[-1]
+            tail = tail.strip().strip("\"\u201c\u201d").strip("'").strip()
+            if tail:
+                parts.append(tail)
+        return " ".join(parts)[-200:]
+
+    def _asks_same_question(self, text):
+        """Этот вопрос ученик уже слышал? (§71, 11.11.2026)."""
+        question = self._question_of(text)
+        if not question or not self._last_question:
+            return False
+        try:
+            return lesson_mod.same_task(question, self._last_question)
+        except Exception:
+            return False
 
     def _ask_model(self, system_prompt, user_text, short_history=False, tail=""):
         """Один вызов Учителя: промпт + история + реплика ученика.
