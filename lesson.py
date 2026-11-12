@@ -305,7 +305,8 @@ def tasks_for(lesson_type: Any) -> int:
 #                     останавливаясь, ошибки уйдут в базу и в конец занятия;
 #   3.4 check       — экзамен: подсказок нет вовсе (у него свой путь).
 # Значение по умолчанию True: неизвестный тип ведёт себя как раньше.
-CORRECTS_ON_THE_FLY = {SPEAKING: True, CHAT: False, LISTENING: False}
+CORRECTS_ON_THE_FLY = {SPEAKING: True, CHAT: False, LISTENING: False,
+                       CHECK: False}
 
 
 def corrects_on_the_fly(lesson_type: Any) -> bool:

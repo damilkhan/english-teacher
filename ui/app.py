@@ -4337,6 +4337,8 @@ class EnglishTeacherApp:
             errors = result.get("errors") or []
             if errors:
                 self._note_mistakes(len(errors))
+        # §77: подсветить ошибки в самой реплике ученика (красным).
+        self._highlight_mistakes(result)
         # §36: разбор решает, сдано ли ТЕКУЩЕЕ задание урока (вариант Б)
         self._task_from_analysis(result)
         # §36b: если задание ждёт ПОВТОРА — попросить его самим (модель молчит)
@@ -4345,6 +4347,53 @@ class EnglishTeacherApp:
         step = self._exam_score_answer(result)
         if step is not None and step.get("finished"):
             self._finish_exam()          # 10-й ответ: итог и запись в профиль
+
+    def _highlight_mistakes(self, result):
+        """Красит ошибочные куски в последней реплике ученика (§77).
+
+        Решение ученика 12.11.2026: при ошибке — выделение, клик и карточка
+        с правилом. Здесь только ПЕРВЫЙ шаг — выделение. Куски ищутся по
+        словам в ТЕКСТЕ ЕГО ЖЕ РЕПЛИКИ (photo_check.spans_for_changes),
+        поэтому подчёркивается то, что он правда сказал: выдуманную правку
+        Аналитика покрасить нечем (живой урок 11.11.2026 — он возвращал
+        слова, которых ученик не говорил).
+
+        НЕ красим: в chat-уроке и на экзамене правок по ходу нет — там
+        «молчим и копим» (§77), подсветка была бы той же правкой, только
+        картинкой.
+        """
+        if not result or not result.get("ok"):
+            return 0
+        errors = result.get("errors") or []
+        if not errors:
+            return 0
+        session = self.lesson.current()
+        if session is None or not getattr(session, "is_active", False):
+            return 0
+        if not lesson_mod.corrects_on_the_fly(
+                getattr(session, "lesson_type", "")):
+            return 0
+        text = getattr(self, "_last_student_text", "") or ""
+        if not text.strip():
+            return 0
+        try:
+            spans = photo_check.spans_for_changes(text, errors)
+        except Exception as exc:
+            print("⚠️ Подсветка ошибок сбилась: %s" % exc)
+            return 0
+        if not spans:
+            return 0
+        mark = self.chat_view.last_user_mark()
+        if not mark:
+            return 0
+        try:
+            done = self.chat_view.mark_message(mark, spans)
+        except Exception as exc:
+            print("⚠️ Подсветка не применилась: %s" % exc)
+            return 0
+        print("🖍️ Подсветил ошибок в реплике: %d" % len(spans))
+        return len(spans)
+
 
     @staticmethod
     def _analysis_text(result):
