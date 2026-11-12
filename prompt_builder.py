@@ -254,6 +254,18 @@ When a task is done, praise it in three or four words and give the NEXT task in
 the SAME reply — one task per reply, never two.
 """
 
+# §77 (12.11.2026): правила цикла для CHAT-урока (3.3 в блоке).
+# Лестница ученика: 3.1/3.2 — правки по ходу, 3.3 — молча, 3.4 — экзамен.
+# В chat цель — говорить не останавливаясь, поэтому модель НЕ просит повтор:
+# иначе урок превращается в «скажи ещё раз» и разговор рассыпается.
+# Ошибки всё равно копятся (их считает разбор) — разберём в конце занятия.
+CHAT_TASK_RULES = """
+A task is DONE as soon as the student answered it in English — even with small
+grammar mistakes. In this lesson do NOT correct mistakes out loud and do NOT ask
+the student to say the sentence again: praise the answer in three or four words
+and give the NEXT task in the SAME reply — one task per reply, never two.
+"""
+
 def _lesson_block(lesson):
     """Блок «идёт занятие». Пусто, если занятия нет (обратная совместимость)."""
     if not lesson:
@@ -363,8 +375,12 @@ def _task_cycle_block(lesson):
                 " the student has done them: give a DIFFERENT task on the same"
                 " topic (another object, another situation or another question)."
                 % asked)
+    # §77: в chat-уроке правила другие — модель не просит повтор, а хвалит и
+    # даёт следующее задание. Тип урока приходит в payload ("type").
+    chat_lesson = str(lesson.get("type") or "").strip().lower() == "chat"
+    cycle_rules = CHAT_TASK_RULES if chat_lesson else TASK_RULES
     rules = "" if (phase in ("done", "fix", "drill") or lesson.get("lesson_closing")
-                   or last) else TASK_RULES
+                   or last) else cycle_rules
     return TASK_CYCLE_TEMPLATE.format(total=total, line=line + used, rules=rules)
 
 

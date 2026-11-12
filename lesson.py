@@ -298,6 +298,21 @@ def tasks_for(lesson_type: Any) -> int:
     return TASKS_PER_LESSON
 
 
+# §77 (12.11.2026): ГДЕ ПРАВИМ ПО ХОДУ, А ГДЕ МОЛЧА.
+# Лестница внутри блока (решение ученика 12.11.2026):
+#   3.1/3.2 speaking — правим СРАЗУ: правка целевой фразы и есть обучение;
+#   3.3 chat        — молчим и копим: цель chat-урока — говорить не
+#                     останавливаясь, ошибки уйдут в базу и в конец занятия;
+#   3.4 check       — экзамен: подсказок нет вовсе (у него свой путь).
+# Значение по умолчанию True: неизвестный тип ведёт себя как раньше.
+CORRECTS_ON_THE_FLY = {SPEAKING: True, CHAT: False, LISTENING: False}
+
+
+def corrects_on_the_fly(lesson_type: Any) -> bool:
+    """Просить верный повтор СРАЗУ (True) или копить ошибки до конца (False)?"""
+    return bool(CORRECTS_ON_THE_FLY.get(normalize_type(lesson_type), True))
+
+
 def _flat(text: Any) -> str:
     """Текст без регистра, знаков и лишних пробелов — чтобы сравнивать «то же».
 

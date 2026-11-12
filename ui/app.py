@@ -3241,6 +3241,18 @@ class EnglishTeacherApp:
         if state == lesson_mod.ANSWER_NEEDS_FIX or corrections:
             wrongs = [item.get("wrong") for item in errors
                       if isinstance(item, dict)]
+            # §77 (12.11.2026): в chat-уроке по ходу НЕ правим. Цель такого
+            # урока — говорить без остановок, поэтому ошибка уходит в базу и
+            # в разбор в конце, а задание всё равно сдано: смысл ответа верный
+            # (ошибки — форма, а не смысл). marked=False: это НЕ зачёт «с
+            # пометкой», ученик ответил по делу.
+            if not lesson_mod.corrects_on_the_fly(
+                    getattr(session, "lesson_type", "")):
+                print("🔇 Правка молча (%s): %s -> %s (задание сдано)"
+                      % (getattr(session, "lesson_type", "?"),
+                         ", ".join(str(w) for w in wrongs if w) or "-",
+                         ", ".join(str(c) for c in corrections if c) or "-"))
+                return self._credit_task(session, text, marked=False)
             # §76: передаём САМУ реплику — из неё соберётся фраза для
             # повтора («i don't sell anything» -> «i don't buy anything»),
             # а не одно слово.
