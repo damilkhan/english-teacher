@@ -155,6 +155,16 @@ BROKEN_DIFF = [
     ("The shop opens at nine.", "Shop close nine."),
 ];
 
+# Staryj prompt (do §77 on stojal v ui/app.py). Ostavlen dlya sravneniya:
+# variant "v1" meriт ego, "app" - to, chto sejchas v prilozhenii.
+PROMPT_V1 = (
+    "You compare two English sentences said by an A2 learner of American"
+    " English. Answer with ONE word: SAME if the student's sentence means the"
+    " same as the target, or DIFFERENT if it means something else."
+    " Different words, contractions, word order and polite fillers are fine."
+    " Ignore small grammar slips. Parts of speech and key words must match."
+    " Answer only SAME or DIFFERENT, nothing else.")
+
 PROMPT_V2 = (
     "You compare two English sentences said by an A2 learner of American"
     " English. Answer with ONE word: SAME if the student's sentence means the"
@@ -185,8 +195,10 @@ def main():
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
     runs = int(sys.argv[2]) if len(sys.argv) > 2 else 3
     prompt, verdict_of = load_from_app()
-    variant = sys.argv[3] if len(sys.argv) > 3 else "v1"
-    if variant == "v2":
+    variant = sys.argv[3] if len(sys.argv) > 3 else "app"
+    if variant == "v1":
+        prompt = PROMPT_V1
+    elif variant == "v2":
         prompt = PROMPT_V2
     elif variant == "v3":
         prompt = PROMPT_V3
@@ -199,6 +211,13 @@ def main():
              + [("E", a, b) for a, b in BROKEN_SAME]
              + [("F", a, b) for a, b in BROKEN_DIFF])
     print("port=%d runs=%d cases=%d prompt=%s" % (port, runs, len(cases), variant), flush=True)
+    # §77: proverka svyazi. Bez neyo upavshij server daval 0 % i vyglyadelo
+    # kak "prompt ne rabotaet" (sluchilos 12.11.2026: prilozhenie zakryli,
+    # llama-server ostanovilsya, zamer sdelal 246 oshibok podryad).
+    ok0, raw0 = llm.complete([{"role": "user", "content": "ping"}],
+                             max_tokens=2, temperature=0.0, timeout=20)
+    if not ok0:
+        raise SystemExit("SERVER NOT READY on port %d: %s" % (port, str(raw0)[:120]))
 
     rows = []
     for i, (kind, target, student) in enumerate(cases, 1):

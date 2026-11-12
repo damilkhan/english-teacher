@@ -256,13 +256,26 @@ def _asks_for_words(text):
 # §65 (10.11.2026): проверка СМЫСЛА моделью. Решение ученика 109 — не
 # придираться к словам. Спрашиваем только в момент промаха и только когда
 # старую ошибку в реплике нет: модель не должна оправдать промах.
+# §77 (12.11.2026): замер на 86 парах x 3 прогона (tools/eval_meaning.py).
+# Старый промпт (просто «другие слова — нормально») давал 91,5 %, но резал
+# ЛОМАНУЮ речь: 5 из 12 верных по смыслу реплик получали «повтори»
+# («how much cost?», «I have headache», «it too expensive»). Это прямо вредит
+# ученику A2: он и так говорит с ошибками, а его просят повторить верное.
+# Новый промпт разделяет два шага: сначала «что человек ИМЕЛ В ВИДУ»
+# (грамматику игнорируем), потом сравнение. Точность 96,3 %, ложных SAME
+# (главная опасность: похвалить за неверный смысл) — НОЛЬ, время 0,17 с.
+# Вариант «ошибки не меняют смысл» одной строкой дал ложные SAME — отброшен.
 MEANING_PROMPT = (
     "You compare two English sentences said by an A2 learner of American"
-    " English. Answer with ONE word: SAME if the student's sentence means the"
-    " same as the target, or DIFFERENT if it means something else."
-    " Different words, contractions, word order and polite fillers are fine."
-    " Ignore small grammar slips. Parts of speech and key words must match."
-    " Answer only SAME or DIFFERENT, nothing else.")
+    " English. The target is the correct textbook sentence. The student speaks"
+    " aloud and makes mistakes.\n"
+    "Step 1: guess what the student MEANT, ignoring grammar, missing small"
+    " words, wrong tense or word order.\n"
+    "Step 2: answer SAME if that meaning matches the target, DIFFERENT if it"
+    " does not.\n"
+    "A grammar mistake alone is never DIFFERENT. Only a different thing, person,"
+    " place, time, opposite meaning or a different question is DIFFERENT.\n"
+    "Answer only SAME or DIFFERENT, nothing else.")
 
 
 def _meaning_verdict(raw):
