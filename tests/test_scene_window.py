@@ -85,6 +85,9 @@ class Fake:
 
     _scene_say = EnglishTeacherApp._scene_say
     _scene_reply = EnglishTeacherApp._scene_reply
+    # §81: уточняющий вопрос — эти же настоящие методы App
+    _is_scene_clarify = EnglishTeacherApp._is_scene_clarify
+    _scene_clarify = EnglishTeacherApp._scene_clarify
 
 
 def new_session():

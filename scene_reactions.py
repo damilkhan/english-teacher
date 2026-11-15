@@ -238,6 +238,50 @@ def intent(slot: str, text: str) -> Intent:
 # ---------------------------------------------------------
 # Ответ
 # ---------------------------------------------------------
+# ---------------------------------------------------------
+# Уточняющий вопрос — НЕ ответ (§81)
+# ---------------------------------------------------------
+# Живой урок 15.11.2026: ученик спросил «what does it mean?» — приложение
+# приняло это за ОТВЕТ и прокрутило сценарий: вопрос официанта так и остался
+# без ответа, а шаг засчитался. Здесь только РАСПОЗНАВАНИЕ; что с ним делать,
+# решает окно (ui/app.py::_scene_reply).
+
+# С этих слов начинается уточняющий вопрос.
+ASK_START = frozenset((
+    "what", "why", "how", "who", "whom", "whose", "where", "when", "which",
+    "can", "could", "do", "does", "did", "is", "are", "was", "were", "am",
+    "shall", "should", "would", "may", "might", "will", "have", "has", "had",
+))
+
+# Слова про «что значит», «как сказать», «не понимаю» — уточнение всегда,
+# даже если вопрос не начинается с вопросительного слова.
+ASK_MEANING = (
+    "mean", "means", "meaning", "understand", "explain", "translate",
+    "in russian", "how to say", "what is it", "how do you say",
+)
+
+
+def is_clarify(slot: str, text: str) -> bool:
+    """Уточняющий вопрос ученика про слова, а не ответ по сценарию.
+
+    Отвечать сценарием на «how much is coffee?» НЕЛЬЗЯ — это настоящий ответ
+    (цена), движок его уже понимает как PRICE. Поэтому решает НАМЕРЕНИЕ:
+    уточнение — только когда в реплике НЕТ ничего по слоту.
+    """
+    raw = str(text or "").strip()
+    if "?" not in raw:
+        return False
+    ws = tokens(raw)
+    if not ws:
+        return False
+    it = intent(slot, raw)
+    if it.kind not in (OTHER, EMPTY):
+        return False          # цену, счёт, предмет, «да/нет» сцена понимает
+    if _find(ws, ASK_MEANING):
+        return True
+    return ws[0] in ASK_START
+
+
 def reply(slot: str, text: str) -> Optional[str]:
     """Что сказать ученику. None - окно ПОВТОРЯЕТ вопрос (переспрос)."""
     return reply_to(slot, intent(slot, text))

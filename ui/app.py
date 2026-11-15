@@ -2152,6 +2152,7 @@ class EnglishTeacherApp:
         """Свернуть интерфейс занятия (полоса, блокировка, тема промпта)."""
         self._asked_repeat = ""
         self._scene_drill = None       # дрилл перед сценой закрыт вместе с уроком
+        self._scene_asked_again = {}   # §81: счёт уточнений на новый урок
         self._scene_chips_off()         # конструктор прячется вместе с уроком
         self._server_task = None        # занятие закрыто — ожидание сервера не нужно
         self._story_context = False     # рассказ был частью урока
@@ -2820,6 +2821,14 @@ class EnglishTeacherApp:
             return True
         if result == "skip":
             print("🎬 Сцена: вопрос пропущен — осечек %s" % res.get("tries"))
+        # §81: УТОЧНЯЮЩИЙ ВОПРОС — не ответ по сценарию.
+        # Живой урок 15.11.2026: «what does it mean?» приняли за ответ, шаг
+        # засчитался, а вопрос официанта так и остался без ответа. Теперь
+        # уточнение НЕ двигает сценарий и не идёт в счёт реплик.
+        if result == "ok" and self._is_scene_clarify(slot, text):
+            if self._scene_clarify(session, text):
+                return True          # реплику забрала сцена, шаг стоит
+            # уточнений уже два: идём обычным путём, ниже
         print("🎬 Сцена: ответ принят (%.40r)" % (text or ""))
 
         # ДВИЖОК РЕАКЦИЙ (§57, 03.11.2026): сцена ОТВЕЧАЕТ на смысл, а не
@@ -2884,6 +2893,41 @@ class EnglishTeacherApp:
         done = session.finished or session.all_tasks_done
         # Реакция — ВСЛУХ, и только ПОСЛЕ неё следующий вопрос или итог
         self._scene_say(session, reaction, finish=done)
+        return True
+
+    # ---------------- уточняющий вопрос в сцене (§81) ----------------
+    def _is_scene_clarify(self, slot, text):
+        """Спросил про слово, а не ответил по сценарию? (решает движок)"""
+        try:
+            import scene_reactions as react_mod
+            return bool(react_mod.is_clarify(slot, text))
+        except Exception as exc:
+            print("⚠️ Уточнение не распознано: %s" % exc)
+            return False
+
+    def _scene_clarify(self, session, text):
+        """Уточнение: ответить нельзя — ПОВТОРИТЬ вопрос и не двигаться.
+
+        Счёт: реплика в счёт урока НЕ идёт и шаг не засчитывается — раньше
+        ученик получал шаг за собственный вопрос (жалоба 15.11.2026).
+        Уточнять можно дважды: дальше не застреваем — реплика идёт обычным
+        путём (ученик мог просто не суметь построить ответ).
+        """
+        key = (session.scene_id, session.scene_step, session.scene_q)
+        seen = getattr(self, "_scene_asked_again", None)
+        if seen is None:
+            seen = self._scene_asked_again = {}
+        times = int(seen.get(key) or 0)
+        if times >= 2:
+            print("🎬 Сцена: уточнений уже два — реплика идёт как ответ")
+            return False
+        seen[key] = times + 1
+        print("🎬 Сцена: уточняющий вопрос, шаг не двигаем (%.40r)" % (text or ""))
+        line = ("Sorry, let's do this question first. 🙂" if not times
+                else "Almost — this question, please. 🙂")
+        # ask=True: после реплики вопрос ЗВУЧИТ ЗАНОВО — позиция в сцене
+        # не сдвинулась, поэтому _scene_ask задаст тот же самый вопрос.
+        self._scene_say(session, line)
         return True
 
     def _replay_after(self, mark):
