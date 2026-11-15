@@ -4580,7 +4580,69 @@ class EnglishTeacherApp:
             parts.append(card.get("example"))
         parts.extend(self._scene_stt_words())
         parts.extend(self._lesson_stt_words())
+        parts.extend(self._picture_stt_words())
+        parts.extend(self._my_stt_words())
         return ", ".join(p for p in parts if p)
+
+    def _picture_stt_words(self):
+        """Ключевые слова фото-задания — подсказка распознаванию.
+
+        Живой урок 15.11.2026: в задании «опиши фото» подсказок не было ВООБЩЕ
+        (урок к этому моменту закрыт, а сцены нет), и Whisper писал
+        «balanced tower» вместо «balance tower» — семь реплик подряд.
+        У фото в pictures.json есть поле points («desks», «chairs»…) — отдаём.
+        """
+        task = getattr(self, "_picture", None) or {}
+        points = task.get("points") if isinstance(task, dict) else None
+        out = []
+        for item in (points or ()):
+            text = " ".join("".join(ch for ch in str(item)
+                                   if ch.isalpha() or ch == " ").split())
+            if len(text) > 2 and text not in out:
+                out.append(text)
+        return out[:12]
+
+    def _my_stt_words(self):
+        """СВОИ слова ученика для распознавания (data/stt_words.txt).
+
+        Имена и названия модель не угадывает: «Balance Tower» (башня в
+        Астрахани) превращалась в «balanced tower», «balancing tower» и
+        «Balenci Tower» — 7 реплик подряд, ученик злился справедливо.
+        Замер на его же записях (logs/stt, 7 файлов, tools — не нужен):
+           beam=1, без подсказок:  Balanced Tower   (неверно)
+           beam=5, без подсказок:  Balanced Tower   (неверно, +0,1 с)
+           beam=1 + подсказка:     Balance Tower    (верно, 6 из 7)
+        То есть дело НЕ в жадном поиске, а в отсутствии подсказки.
+
+        Файл читается при каждом распознавании, но кэшируется по времени
+        изменения: правишь список — приложение перечитывает само, без
+        перезапуска. Формат: одна фраза в строке, «#» — комментарий.
+        """
+        path = os.path.join(getattr(config, "BASE_DIR", "."), "data",
+                           "stt_words.txt")
+        try:
+            stamp = os.path.getmtime(path)
+        except OSError:
+            return []
+        cached = getattr(self, "_stt_words_cache", None)
+        if cached and cached[0] == stamp:
+            return list(cached[1])
+        out = []
+        try:
+            with open(path, encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if line not in out:
+                        out.append(line)
+        except OSError as exc:
+            print("⚠️ Свои слова для распознавания не прочитаны: %s" % exc)
+            return []
+        out = out[:40]
+        self._stt_words_cache = (stamp, out)
+        return list(out)
+
 
     def _lesson_stt_words(self):
         """Слова ИДУЩЕГО УРОКА — подсказка распознаванию (§76).
