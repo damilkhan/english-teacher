@@ -65,6 +65,10 @@
 | 80 | `loop_progress.py` — процент усвоения, порог 80 %, цвет красный→зелёный | `35a797d` | нет окна |
 | 81 | уточняющий вопрос в сцене НЕ считается ответом, шаг не двигается | `ed501c9` | **нет** |
 | 82 | `data/tasks_a2.json` — 18 русских фраз для city/5; `translate_task.py` — сверка | `ad1c287` | не подключено |
+| 83 | подсказки распознаванию: `bill` был не в списке, а `beer` был → «bill» слышалось как «beer» (2 из 6 → **6 из 6**) | `b8fc18e` | по замеру |
+
+⚠️ **ПЕРЕЗАПУСТИТЬ Verbot**: правки §81 (`ui/app.py`, `scene_reactions.py`) и §83
+(`scene_reactions.py`, `config.py`) живут только после перезапуска.
 
 Тесты: `test_cards.py` (12), `test_loop_progress.py` (31), `test_translate_task.py` (20),
 `test_scene_clarify.py` (17), `test_lesson_highlight.py` (22) — зелёные.
