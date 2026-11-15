@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional
 
 import customtkinter as ctk
 
+import loop_progress
 import theme
 
 # Тип урока → подпись для человека.
@@ -28,6 +29,7 @@ TYPE_LABELS = {
     "chat": "текст",
     "listening": "аудирование",
     "check": "проверка",
+    "loop": "петля",
 }
 
 # Значок кнопки запуска (текстовый: ▶ рисуется шрифтом, эмодзи тут не нужны).
@@ -37,6 +39,23 @@ START_ICON = "▶"
 # id уроков выглядят как «1.1», «2.3», поэтому метку с ними не спутать.
 VOCAB_TEXT = "📚  Повторить слова"
 VOCAB_RESULT = "__vocab__"
+
+# §80: урок-петля — «работа над ошибками» вместо экзамена. Напротив
+# него рисуем бар усвоения с меткой порога.
+LOOP_TYPE = "loop"
+
+def loop_state() -> Dict[str, Any]:
+    """Процент усвоения для бара (§80). Нет данных — пусто (бар не рисуем).
+
+    Считается ПО ЗАПРОСУ: бар в окне блока показывает состояние на момент
+    открытия, а не запомненное при старте приложения.
+    """
+    try:
+        return loop_progress.progress() or {}
+    except Exception as exc:
+        print("⚠️ Процент петли не посчитался: %s" % exc)
+        return {}
+
 
 # Урок недоступен (предыдущий не пройден): кнопка серая и не нажимается.
 LOCKED_TEXT = "закрыто"
@@ -48,6 +67,9 @@ STATE_LOCKED = "locked"
 NUMBER_WIDTH = 30
 
 WIDTH = 480
+# §80: у урока-петли справа стоит бар усвоения — окно блока с петлёй
+# шире, иначе название урока сжимается в точку.
+LOOP_WIDTH = 560
 HEIGHT = 440
 
 
@@ -111,13 +133,17 @@ class BlockPanel(ctk.CTkToplevel):
         self.states = dict(states or {})
         self.result = None            # id выбранного урока (или None)
         self._closed = False
+        # §80: процент усвоения для урока-петли (считаем ОДИН раз на окно)
+        has_loop = any(it.get("type") == LOOP_TYPE
+                       for it in lesson_items(self.point))
+        self.loop_state = loop_state() if has_loop else {}
 
         self.title(block_title(self.point))
         self.configure(fg_color=palette["window"])
         self.resizable(False, False)
         self.transient(parent)
         self.protocol("WM_DELETE_WINDOW", self._close)
-        self._center(parent, WIDTH, HEIGHT)
+        self._center(parent, LOOP_WIDTH if has_loop else WIDTH, HEIGHT)
 
         p = palette
         card = ctk.CTkFrame(self, fg_color=p["surface"], corner_radius=theme.R["card"])
@@ -201,6 +227,9 @@ class BlockPanel(ctk.CTkToplevel):
             command=lambda lid=item["id"]: self._pick(lid))
         start_btn.pack(side="right", padx=(8, 0))
 
+        if item.get("type") == LOOP_TYPE:
+            self._loop_bar(row, p)
+
         badge = self.exams.get(item["id"]) or ""
         if badge:
             ctk.CTkLabel(row, text=badge, anchor="e", width=64,
@@ -224,6 +253,37 @@ class BlockPanel(ctk.CTkToplevel):
         title_lbl = ctk.CTkLabel(row, text=item.get("title") or "", anchor="w",
                                  font=theme.FONT_UI, text_color=p["text"])
         title_lbl.pack(side="left", padx=(2, 0))
+
+    # -----------------------------------------------------
+    def _loop_bar(self, parent, p) -> None:
+        """Бар усвоения напротив урока-петли: процент + метка порога (§80).
+
+        Цвет — спектр красный → зелёный (loop_progress.color): 0 % красный,
+        половина порога жёлтый, порог и выше зелёный. Метка — белая
+        риска на месте порога (80 %): видно, сколько осталось.
+        """
+        state = self.loop_state or {}
+        box = ctk.CTkFrame(parent, fg_color="transparent", width=104,
+                           height=28)
+        box.pack(side="right", padx=(8, 0))
+        box.pack_propagate(False)
+        if not state:
+            ctk.CTkLabel(box, text="нет данных", font=theme.FONT_SMALL,
+                         text_color=p["muted"]).pack(pady=6)
+            return
+        percent = max(0, min(100, int(state.get("percent") or 0)))
+        edge = int(state.get("pass_percent") or loop_progress.PASS_PERCENT)
+        color = loop_progress.to_hex(loop_progress.color(percent, edge))
+        bar = ctk.CTkProgressBar(box, width=104, height=8, corner_radius=4,
+                                 progress_color=color,
+                                 fg_color=p["surface"])
+        bar.set(percent / 100.0)
+        bar.pack(side="bottom")
+        mark = ctk.CTkFrame(box, width=2, height=10, fg_color=p["text"])
+        mark.place(relx=edge / 100.0, y=15)
+        text = "%d %% · %d" % (percent, edge)
+        ctk.CTkLabel(box, text=text, font=theme.FONT_SMALL,
+                     text_color=p["muted"]).pack(side="top")
 
     # -----------------------------------------------------
     def _pick(self, lesson_id: str) -> None:
