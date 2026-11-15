@@ -1,0 +1,544 @@
+{
+  "level": "a2",
+  "english": "american",
+  "status": "черновик 15.11.2026 — тексты просматривает ученик",
+  "note": "Карточки правил для клика по красному куску реплики. Ключ = id. Поле rule связывает карточку с закрытым списком Аналитика (roles/analyst.py). Если у одного rule несколько карточек — выбирается та, где больше совпадений по words/hints с текстом ошибки (wrong+correct), при равенстве — карточка с \"default\": true. kind=grammar — писал человек; kind=choice — из data/phrase_pairs_a2.json (pair/why/en), поля wrong и hints добавлены отдельно; hints — формы слов, иначе «said» не находит карточку say/tell. Тексты правил модель НЕ сочиняет (решение 67).",
+  "cards": {
+    "article_a": {
+      "rule": "article",
+      "kind": "grammar",
+      "default": true,
+      "title": "Артикль a / an — один любой предмет",
+      "when": "Говорим про ОДИН предмет, любой из многих, впервые. a + согласный звук, an + гласный звук (a jacket, an apple).",
+      "examples": [
+        "I need a jacket.",
+        "She's an engineer.",
+        "Do you have a pen?"
+      ],
+      "wrong": "I need jacket.",
+      "hints": [
+        "a",
+        "an"
+      ]
+    },
+    "article_the": {
+      "rule": "article",
+      "kind": "grammar",
+      "title": "Артикль the — тот самый предмет",
+      "when": "Предмет уже известный: мы его называли или собеседник понимает, о каком речь. Если предмет один такой на свете — тоже the.",
+      "examples": [
+        "The jacket is too big.",
+        "Close the door, please.",
+        "The sun is very bright today."
+      ],
+      "wrong": "Jacket is too big.",
+      "hints": [
+        "the"
+      ]
+    },
+    "plural_s": {
+      "rule": "plural",
+      "kind": "grammar",
+      "default": true,
+      "title": "Множественное число: -s / -es",
+      "when": "Больше одного — прибавляем -s: two books. После -s, -sh, -ch, -x — -es: boxes. Согласная + y меняется на -ies: city → cities.",
+      "examples": [
+        "I bought two books.",
+        "There are three boxes here.",
+        "We visited two cities."
+      ],
+      "wrong": "I bought two book."
+    },
+    "plural_irregular": {
+      "rule": "plural",
+      "kind": "grammar",
+      "title": "Множественное число без -s: men, women, children",
+      "when": "У некоторых слов особая форма: man → men, woman → women, child → children, person → people, foot → feet, tooth → teeth.",
+      "examples": [
+        "Two men are waiting outside.",
+        "The children are at school.",
+        "My feet hurt."
+      ],
+      "wrong": "Two mans are waiting outside.",
+      "hints": [
+        "man",
+        "men",
+        "woman",
+        "women",
+        "child",
+        "children",
+        "person",
+        "people",
+        "foot",
+        "feet",
+        "tooth",
+        "teeth",
+        "mouse",
+        "mice"
+      ]
+    },
+    "past_simple_ed": {
+      "rule": "past_simple",
+      "kind": "grammar",
+      "default": true,
+      "title": "Прошедшее время: -ed",
+      "when": "Действие было и закончилось. Правильный глагол + -ed: work → worked, play → played. В вопросе и в «не» — did + обычная форма.",
+      "examples": [
+        "I worked all day yesterday.",
+        "We played football on Sunday.",
+        "I didn't work yesterday."
+      ],
+      "wrong": "Yesterday I work all day."
+    },
+    "past_irregular": {
+      "rule": "past_simple",
+      "kind": "grammar",
+      "title": "Прошедшее время: went, bought, saw",
+      "when": "Неправильные глаголы меняются целиком: go → went, buy → bought, see → saw, have → had, take → took. После didn't — снова обычная форма: didn't go.",
+      "examples": [
+        "I went to the shop.",
+        "She bought a new phone.",
+        "I didn't go to the shop."
+      ],
+      "wrong": "I didn't went to the shop.",
+      "hints": [
+        "went",
+        "bought",
+        "saw",
+        "had",
+        "was",
+        "were",
+        "did",
+        "took",
+        "made",
+        "said",
+        "got",
+        "came",
+        "ate",
+        "drank",
+        "wrote",
+        "spoke",
+        "ran",
+        "gave",
+        "found",
+        "thought",
+        "knew",
+        "told",
+        "felt",
+        "left",
+        "met",
+        "paid",
+        "sold",
+        "taught",
+        "caught",
+        "brought",
+        "began",
+        "broke",
+        "chose",
+        "drove",
+        "fell",
+        "forgot",
+        "heard",
+        "kept",
+        "lost",
+        "meant",
+        "slept",
+        "spent",
+        "stood",
+        "understood",
+        "won",
+        "wore",
+        "flew",
+        "swam",
+        "sang",
+        "sat"
+      ]
+    },
+    "aux_verb": {
+      "rule": "aux_verb",
+      "kind": "grammar",
+      "default": true,
+      "title": "Do / does / did — вопрос и «не»",
+      "when": "В вопросе и в отрицании нужен помощник: do (I, you, we, they), does (he, she, it), did (прошлое). После него глагол в обычной форме.",
+      "examples": [
+        "Do you like coffee?",
+        "Does she work here?",
+        "I didn't see him."
+      ],
+      "wrong": "You like coffee?"
+    },
+    "verb_form_modal": {
+      "rule": "verb_form",
+      "kind": "grammar",
+      "title": "После can / will / must — обычный глагол",
+      "when": "После can, will, must, should, could, would глагол стоит в обычной форме, без -s и без -ed: I can swim, she will come, he must go.",
+      "examples": [
+        "I can swim.",
+        "She will come tomorrow.",
+        "He must go now."
+      ],
+      "wrong": "She will comes tomorrow.",
+      "hints": [
+        "can",
+        "could",
+        "will",
+        "would",
+        "must",
+        "should",
+        "may",
+        "might",
+        "shall"
+      ]
+    },
+    "verb_form_ing": {
+      "rule": "verb_form",
+      "kind": "grammar",
+      "default": true,
+      "title": "like + -ing, am + -ing",
+      "when": "После like, love, enjoy, hate — глагол с -ing: I like swimming. Действие прямо сейчас — am / is / are + -ing: I am working.",
+      "examples": [
+        "I like swimming.",
+        "She enjoys cooking.",
+        "I am working now."
+      ],
+      "wrong": "I like swim.",
+      "hints": [
+        "like",
+        "likes",
+        "love",
+        "loves",
+        "enjoy",
+        "enjoys",
+        "hate",
+        "hates",
+        "finish",
+        "finishes",
+        "ing"
+      ]
+    },
+    "word_order": {
+      "rule": "word_order",
+      "kind": "grammar",
+      "default": true,
+      "title": "Порядок слов в вопросе",
+      "when": "Вопросительное слово → помощник → кто → глагол → что. Where do you live? По-русски «Ты где живёшь?», по-английски порядок другой.",
+      "examples": [
+        "Where do you live?",
+        "What did you buy?",
+        "Why is she late?"
+      ],
+      "wrong": "Where you live?"
+    },
+    "preposition_time": {
+      "rule": "preposition",
+      "kind": "grammar",
+      "default": true,
+      "title": "Предлоги времени: in / on / at",
+      "when": "at — точное время и ночь: at 5 o'clock, at night. on — дни и даты: on Monday, on May 5. in — месяцы, годы, части дня: in May, in 2026, in the morning.",
+      "examples": [
+        "The lesson is at 5 o'clock.",
+        "I'll see you on Monday.",
+        "I was born in 1998."
+      ],
+      "wrong": "I'll see you in Monday.",
+      "hints": [
+        "o'clock",
+        "oclock",
+        "morning",
+        "afternoon",
+        "evening",
+        "night",
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+        "weekend",
+        "january",
+        "february",
+        "march",
+        "april",
+        "may",
+        "june",
+        "july",
+        "august",
+        "september",
+        "october",
+        "november",
+        "december",
+        "year",
+        "years",
+        "month",
+        "week",
+        "summer",
+        "winter",
+        "spring",
+        "autumn",
+        "fall"
+      ]
+    },
+    "preposition_place": {
+      "rule": "preposition",
+      "kind": "grammar",
+      "title": "Предлоги места: in / on / at",
+      "when": "in — внутри: in the room, in the box. on — на поверхности: on the table, on the wall. at — у точки, у места: at the door, at work, at home.",
+      "examples": [
+        "The keys are in my bag.",
+        "The cup is on the table.",
+        "I'm at work now."
+      ],
+      "wrong": "The cup is in the table.",
+      "hints": [
+        "room",
+        "box",
+        "bag",
+        "table",
+        "wall",
+        "work",
+        "home",
+        "door",
+        "street",
+        "floor",
+        "car",
+        "city",
+        "country",
+        "bus",
+        "train",
+        "shop"
+      ]
+    },
+    "spelling": {
+      "rule": "spelling",
+      "kind": "grammar",
+      "default": true,
+      "title": "Написание: stopped, making, studied",
+      "when": "Короткий глагол с согласной на конце удваивает её: stop → stopped. Немая -e уходит: make → making. Согласная + y → -ied: study → studied.",
+      "examples": [
+        "He stopped the car.",
+        "She is making tea.",
+        "I studied all evening."
+      ],
+      "wrong": "He stoped the car."
+    },
+    "a2.lay_lie": {
+      "rule": "word_choice",
+      "kind": "choice",
+      "source": "phrase_pairs_a2.json",
+      "words": [
+        "lay",
+        "lie"
+      ],
+      "title": "lie — лежать (сам) / lay — класть (что-то)",
+      "when": "Сам ложусь — lie (lie – lay – lain). Кладут ЧТО-ТО — после lay стоит предмет.",
+      "examples": [
+        "I lie down on the sofa after work.",
+        "Lay the book on the table.",
+        "Lie down and don't get up."
+      ],
+      "wrong": "I lay down on the sofa after work.",
+      "hints": [
+        "lay",
+        "lie",
+        "lays",
+        "lies",
+        "lying",
+        "laid",
+        "lain"
+      ]
+    },
+    "a2.say_tell": {
+      "rule": "word_choice",
+      "kind": "choice",
+      "source": "phrase_pairs_a2.json",
+      "words": [
+        "say",
+        "tell"
+      ],
+      "title": "say — произнести / tell — сказать кому-то",
+      "when": "Просто произнёс слова — say, человека после него нет. Говоришь КОМУ-то — после tell сразу человек.",
+      "examples": [
+        "What did you say?",
+        "Tell your brother that dinner is ready.",
+        "She said she was late."
+      ],
+      "wrong": "She said me the truth.",
+      "hints": [
+        "say",
+        "says",
+        "said",
+        "saying",
+        "tell",
+        "tells",
+        "told",
+        "telling"
+      ]
+    },
+    "a2.do_make": {
+      "rule": "word_choice",
+      "kind": "choice",
+      "source": "phrase_pairs_a2.json",
+      "words": [
+        "do",
+        "make"
+      ],
+      "title": "do — делать работу / make — изготовить, создать",
+      "when": "Работа, задание — do. Изготовил новый предмет — make.",
+      "examples": [
+        "I do my homework every evening.",
+        "I made a cake for her birthday.",
+        "I do the dishes after dinner."
+      ],
+      "wrong": "I make my homework every evening.",
+      "hints": [
+        "do",
+        "does",
+        "did",
+        "done",
+        "doing",
+        "make",
+        "makes",
+        "made",
+        "making"
+      ]
+    },
+    "a2.wear_puton": {
+      "rule": "word_choice",
+      "kind": "choice",
+      "source": "phrase_pairs_a2.json",
+      "words": [
+        "wear",
+        "put on"
+      ],
+      "title": "wear — носить (состояние) / put on — надеть (действие)",
+      "when": "Действие, делаешь один раз — put on. Носишь, состояние — wear.",
+      "examples": [
+        "Put on your hat, it's cold.",
+        "I am wearing a new sweater today.",
+        "Put on these shoe covers, please."
+      ],
+      "wrong": "I put on a new sweater every day.",
+      "hints": [
+        "wear",
+        "wears",
+        "wore",
+        "worn",
+        "wearing",
+        "put on",
+        "puts on",
+        "putting on"
+      ]
+    },
+    "a2.borrow_lend": {
+      "rule": "word_choice",
+      "kind": "choice",
+      "source": "phrase_pairs_a2.json",
+      "words": [
+        "borrow",
+        "lend"
+      ],
+      "title": "borrow — взять на время / lend — дать на время",
+      "when": "Беру на время — borrow from. Даю на время — lend + человек.",
+      "examples": [
+        "Can I borrow ten rubles from you?",
+        "I can lend you a drill for the weekend.",
+        "I borrowed a book from the library."
+      ],
+      "wrong": "Can I lend ten rubles from you?",
+      "hints": [
+        "borrow",
+        "borrows",
+        "borrowed",
+        "borrowing",
+        "lend",
+        "lends",
+        "lent",
+        "lending"
+      ]
+    },
+    "a2.bring_take": {
+      "rule": "word_choice",
+      "kind": "choice",
+      "source": "phrase_pairs_a2.json",
+      "words": [
+        "bring",
+        "take"
+      ],
+      "title": "bring — принести сюда / take — унести отсюда",
+      "when": "Несут СЮДА, к тому, кто просит — bring. Беру С СОБОЙ, отсюда туда — take.",
+      "examples": [
+        "Can you bring me some water?",
+        "I take an umbrella with me.",
+        "Bring two chairs to the kitchen, please."
+      ],
+      "wrong": "Can you take me some water?",
+      "hints": [
+        "bring",
+        "brings",
+        "brought",
+        "bringing",
+        "take",
+        "takes",
+        "took",
+        "taken",
+        "taking"
+      ]
+    },
+    "a2.hear_listen": {
+      "rule": "word_choice",
+      "kind": "choice",
+      "source": "phrase_pairs_a2.json",
+      "words": [
+        "hear",
+        "listen"
+      ],
+      "title": "hear — слышать (само) / listen to — слушать (специально)",
+      "when": "Нечаянно, ушами — hear. Специально, с вниманием — listen to.",
+      "examples": [
+        "I didn't hear the door.",
+        "I listen to music in the evening.",
+        "I hear a strange noise in the kitchen."
+      ],
+      "wrong": "Yesterday I heard to music.",
+      "hints": [
+        "hear",
+        "hears",
+        "heard",
+        "hearing",
+        "listen",
+        "listens",
+        "listened",
+        "listening"
+      ]
+    },
+    "a2.see_watch": {
+      "rule": "word_choice",
+      "kind": "choice",
+      "source": "phrase_pairs_a2.json",
+      "words": [
+        "see",
+        "watch"
+      ],
+      "title": "see — видеть (само) / watch — смотреть (специально)",
+      "when": "Попало в глаза само — see. Смотришь специально, долго — watch.",
+      "examples": [
+        "I saw my friend in the crowd.",
+        "I watched the match in the evening.",
+        "I can see the sea from the balcony."
+      ],
+      "wrong": "I watched my friend in the crowd.",
+      "hints": [
+        "see",
+        "sees",
+        "saw",
+        "seen",
+        "seeing",
+        "watch",
+        "watches",
+        "watched",
+        "watching"
+      ]
+    }
+  }
+}

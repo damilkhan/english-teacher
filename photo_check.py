@@ -175,7 +175,7 @@ GOOD_NOTE = "\u2705 No grammar mistakes in your description \u2014 nice English!
 SPOKEN_GOOD = "No grammar mistakes in your description. Nice English!"
 
 
-def spans_for_changes(text, changes):
+def spans_for_changes(text, changes, with_rule=False):
     """Где в ТЕКСТЕ УЧЕНИКА стояли неверные куски → [(начало, конец, "err")].
 
     Нужно, чтобы подсветить ошибки прямо в его реплике (красным). Ищем по
@@ -190,14 +190,23 @@ def spans_for_changes(text, changes):
     spans = []
     after = 0
     for change in (changes or ()):
-        target = str((change or {}).get("wrong") or "").strip().lower().split()
+        change = change or {}
+        target = str(change.get("wrong") or "").strip().lower().split()
         if not target:
             continue
         found = _find_run(items, target, after)
         if found is None:
             continue
         first, last = found
-        spans.append((items[first][0], items[last][1], "err"))
+        if with_rule:
+            # §79: вместе с куском отдаём ПРАВИЛО ошибки (article, past_simple…)
+            # и правильный вариант — чтобы клик по красному открыл нужную
+            # карточку, а если карточки нет, показал хотя бы «так лучше».
+            rule = str(change.get("rule") or "").strip().lower()
+            right = str(change.get("correct") or "").strip()
+            spans.append((items[first][0], items[last][1], "err", rule, right))
+        else:
+            spans.append((items[first][0], items[last][1], "err"))
         after = last + 1
     return spans
 

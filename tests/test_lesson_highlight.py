@@ -90,9 +90,12 @@ def test_speaking_paints():
     check("реплика передана в mark_message", len(app.chat_view.painted) == 1,
           app.chat_view.painted)
     spans = app.chat_view.painted[0][1] if app.chat_view.painted else []
-    check("кусок — именно 'is'", [app._last_student_text[a:b] for a, b, _ in spans] == ["is"],
+    check("кусок — именно 'is'", [app._last_student_text[i[0]:i[1]] for i in spans] == ["is"],
           spans)
     check("стиль err", spans and spans[0][2] == "err", spans)
+    # §79: кусок несёт ПРАВИЛО ошибки — по нему клик открывает карточку.
+    check("правило доехало до куска", spans and spans[0][3] == "verb_form", spans)
+    check("и 'как надо' тоже", spans and spans[0][4] == "are", spans)
 
 
 def test_unknown_correction_skipped():

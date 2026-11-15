@@ -29,6 +29,7 @@ import tkinter as tk
 import customtkinter as ctk
 
 import audio_vad
+import cards
 import character
 import commands
 import config
@@ -903,7 +904,8 @@ class EnglishTeacherApp:
         # метка, чтобы потом заменить строку уровня в этом же сообщении.
         self.chat_view = ChatView(self.chat_tab, p, on_replay=self._replay_reply,
                                   on_hover_word=self._hover_translation,
-                                  on_speak_word=self._speak_word)
+                                  on_speak_word=self._speak_word,
+                                  on_card=self._rule_card)
 
         # ---------- нижняя часть вкладки «Чат» ----------
         # Решение ученика 23.10.2026: робот живёт ПОД чатом отдельным блоком
@@ -4348,6 +4350,25 @@ class EnglishTeacherApp:
         if step is not None and step.get("finished"):
             self._finish_exam()          # 10-й ответ: итог и запись в профиль
 
+    def _rule_card(self, rule, right="", wrong=""):
+        """Карточка правила для клика по красному куску реплики (§79).
+
+        Тексты правил лежат в data/cards_a2.json и написаны человеком
+        (решение 67) — модель их не сочиняет. Если карточки для этого
+        правила нет, возвращаем None: окно честно скажет, что правила
+        пока нет, вместо выдуманного объяснения.
+        """
+        try:
+            card = cards.pick(rule, wrong, right)
+        except Exception as exc:
+            print("⚠️ Карточки правил сбились: %s" % exc)
+            return None
+        if card is None:
+            print("📖 Карточки для правила нет: %s" % (rule or "—"))
+            return None
+        print("📖 Карточка правила: %s (%s)" % (card.get("id"), rule or "—"))
+        return card
+
     def _highlight_mistakes(self, result):
         """Красит ошибочные куски в последней реплике ученика (§77).
 
@@ -4377,7 +4398,9 @@ class EnglishTeacherApp:
         if not text.strip():
             return 0
         try:
-            spans = photo_check.spans_for_changes(text, errors)
+            # with_rule=True: вместе с куском отдаём правило ошибки (§79),
+            # чтобы клик по красному открыл карточку правила.
+            spans = photo_check.spans_for_changes(text, errors, with_rule=True)
         except Exception as exc:
             print("⚠️ Подсветка ошибок сбилась: %s" % exc)
             return 0

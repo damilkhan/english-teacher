@@ -111,6 +111,29 @@ def _clean_spans(spans):
     return out
 
 
+def _split_spans(spans):
+    """Разделить раскраску на куски и правила (§79).
+
+    Куски — обычные [(начало, конец, стиль)]. Правила — [(начало, конец,
+    правило, что_было_написано, как_надо)]: по ним клик по КРАСНОМУ куску
+    открывает карточку правила, а не перевод слова.
+    """
+    plain, rules = [], []
+    for item in (spans or ()):
+        try:
+            start, end, style = item[0], item[1], item[2]
+            start, end = int(start), int(end)
+            style = str(style or "").strip().lower()
+        except (TypeError, ValueError, IndexError):
+            continue
+        rule = str(item[3] or "").strip().lower() if len(item) > 3 else ""
+        right = str(item[4] or "").strip() if len(item) > 4 else ""
+        plain.append((start, end, style))
+        if style == "err" and rule:
+            rules.append((start, end, rule, right))
+    return plain, rules
+
+
 class _Message:
     """Одна реплика: всё, что нужно, чтобы её обновить или перекрасить."""
 
@@ -139,7 +162,8 @@ class _Message:
 
 class ChatView(ctk.CTkFrame):
     def __init__(self, parent, palette, greeting=None, corner_radius=None,
-                 on_replay=None, on_hover_word=None, on_speak_word=None):
+                 on_replay=None, on_hover_word=None, on_speak_word=None,
+                 on_card=None):
         super().__init__(parent, fg_color=palette["chat_bg"],
                          corner_radius=corner_radius or theme.R["card"],
                          border_width=0,
@@ -157,6 +181,10 @@ class ChatView(ctk.CTkFrame):
         # callback(слово, медленно?) — клик по слову озвучивает его (25.10.2026).
         # Первый клик — обычный темп, второй по тому же слову — вдвое медленнее.
         self.on_speak_word = on_speak_word
+        # callback(правило, как_надо, что_было_написано) → карточка (§79).
+        # Клик по КРАСНОМУ куску открывает правило, а не перевод.
+        self.on_card = on_card
+        self._card_tip = None     # окно карточки правила
         self._gloss_said = None   # какое слово уже произносили
         self._gloss_slow = False  # текущий темп для этого слова
 
@@ -577,9 +605,19 @@ class ChatView(ctk.CTkFrame):
         msg = self._messages.get(mark)
         if msg is None or msg.body is None:
             return False
-        msg.spans = _clean_spans(spans)
+        plain, rules = _split_spans(spans)
+        msg.spans = _clean_spans(plain)
         if not msg.spans:
             return False
+        text = str(getattr(msg, "text", "") or "")
+        prepared = []
+        for start, end, rule, right in rules:
+            said = text[start:end] if 0 <= start < end <= len(text) else ""
+            prepared.append((start, end, rule, right, said))
+        try:
+            msg.body._err_rules = prepared   # клик по красному (§79)
+        except Exception:
+            pass
         return self._apply_spans(msg) > 0
 
     def last_user_mark(self):
@@ -632,6 +670,8 @@ class ChatView(ctk.CTkFrame):
         третий — снова обычный (поочерёдно). Клик мимо слова просто закрывает
         подсказку, как раньше.
         """
+        if self._card_click(body, event):
+            return                        # клик по красному — карточка правила
         hit = self._gloss_hit_at(body, event)
         if not hit or self.on_speak_word is None:
             self._gloss_hide()
@@ -701,6 +741,131 @@ class ChatView(ctk.CTkFrame):
             except Exception:
                 pass
             self._gloss_tip = None
+
+    # ---------------- карточка правила по клику на красное (§79) -----------
+    def _tk_to_src(self, body, tk_offset):
+        """Индекс tk.Text → смещение в ТЕКСТЕ РЕПЛИКИ (обратно `_src_index`)."""
+        table = getattr(body, "_src_map", None) or [(0, 0)]
+        src_off, tk_off = table[0]
+        for s_off, k_off in table:
+            if k_off <= tk_offset:
+                src_off, tk_off = s_off, k_off
+            else:
+                break
+        return src_off + max(0, tk_offset - tk_off)
+
+    def _err_at(self, body, event):
+        """Попал ли клик в КРАСНЫЙ кусок: (правило, как_надо, как_было)."""
+        rules = getattr(body, "_err_rules", None) or ()
+        if not rules:
+            return None
+        try:
+            index = body.index("@%d,%d" % (event.x, event.y))
+            src = self._tk_to_src(body, len(body.get("1.0", index)))
+        except Exception:
+            return None
+        for start, end, rule, right, said in rules:
+            if start <= src < end:
+                return rule, right, said
+        return None
+
+    def _card_click(self, body, event):
+        """Клик по красному куску → карточка правила. True, если попал.
+
+        Решение ученика 12.11.2026: перевод по наведению остаётся как был,
+        а клик по КРАСНОМУ (ошибка) открывает правило с примерами. Оба
+        механизма сидят на одной карте смещений — конфликта нет.
+        """
+        if self.on_card is None:
+            return False
+        found = self._err_at(body, event)
+        if found is None:
+            return False
+        self._gloss_hide()
+        rule, right, said = found
+        try:
+            card = self.on_card(rule, right, said)
+        except Exception as exc:
+            print("⚠️ Карточка правила не открылась: %s" % exc)
+            return False
+        self._card_show(card, right, event.x_root, event.y_root)
+        return True
+
+    def _card_show(self, card, right, x_root, y_root):
+        """Окно правила: заголовок, когда, примеры, «как не надо»."""
+        self._card_hide()
+        p = self.palette
+        card = dict(card or {})
+        if not str(card.get("title") or "").strip():
+            # Карточки нет — НЕ выдумываем правило, говорим честно.
+            card = {"title": "Правило ещё не написано",
+                    "when": "Для этого места текста правила пока нет.",
+                    "examples": [], "wrong": ""}
+        try:
+            tip = tk.Toplevel(self)
+        except Exception:
+            return
+        tip.wm_overrideredirect(True)
+        try:
+            tip.wm_attributes("-topmost", True)
+        except Exception:
+            pass
+        tip.configure(bg=p["border"])
+        box = tk.Frame(tip, bg=p["btn"], bd=0)
+        box.pack(padx=1, pady=1)
+        wrap = 360
+        tk.Label(box, text=str(card.get("title")), bg=p["btn"], fg=p["text"],
+                 font=theme.FONT_SECTION, justify="left", anchor="w",
+                 wraplength=wrap, padx=11).pack(fill="x", pady=(9, 2))
+        when = str(card.get("when") or "").strip()
+        if when:
+            tk.Label(box, text=when, bg=p["btn"], fg=p["text"],
+                     font=theme.FONT_SMALL, justify="left", anchor="w",
+                     wraplength=wrap, padx=11).pack(fill="x", pady=(0, 5))
+        examples = [str(x) for x in (card.get("examples") or []) if str(x).strip()]
+        if examples:
+            tk.Label(box, text="Например:", bg=p["btn"], fg=p["muted"],
+                     font=theme.FONT_HEAD, anchor="w", padx=11).pack(fill="x")
+            for ex in examples[:4]:
+                tk.Label(box, text="• " + ex, bg=p["btn"], fg=p["text"],
+                         font=theme.FONT_SMALL, justify="left", anchor="w",
+                         wraplength=wrap, padx=16).pack(fill="x")
+        bad = str(card.get("wrong") or "").strip()
+        if bad:
+            tk.Label(box, text="Как не надо: " + bad, bg=p["btn"],
+                     fg=p.get("err", "#EF4444"), font=theme.FONT_SMALL,
+                     justify="left", anchor="w", wraplength=wrap,
+                     padx=11).pack(fill="x", pady=(6, 9))
+        elif str(right or "").strip():
+            tk.Label(box, text="Так лучше: " + str(right), bg=p["btn"],
+                     fg=p.get("ok", p["text"]), font=theme.FONT_SMALL,
+                     justify="left", anchor="w", wraplength=wrap,
+                     padx=11).pack(fill="x", pady=(6, 9))
+        tip.update_idletasks()
+        x = x_root + 12
+        y = y_root + 18
+        screen_w = tip.winfo_screenwidth()
+        screen_h = tip.winfo_screenheight()
+        if x + tip.winfo_reqwidth() > screen_w - 8:
+            x = max(8, screen_w - tip.winfo_reqwidth() - 8)
+        if y + tip.winfo_reqheight() > screen_h - 8:
+            y = max(8, y_root - tip.winfo_reqheight() - 10)
+        tip.wm_geometry("+%d+%d" % (x, y))
+        self._card_tip = tip
+        for widget in [tip, box] + list(box.winfo_children()):
+            try:
+                widget.bind("<Button-1>", lambda _e: self._card_hide(), add="+")
+            except Exception:
+                pass
+
+    def _card_hide(self):
+        """Закрыть окно карточки правила."""
+        if self._card_tip is not None:
+            try:
+                self._card_tip.destroy()
+            except Exception:
+                pass
+            self._card_tip = None
 
     def _text_index(self, body, offset):
         """Смещение в чистом тексте → индекс tk.Text (эмодзи считаются)."""
