@@ -185,6 +185,7 @@ class ChatView(ctk.CTkFrame):
         # Клик по КРАСНОМУ куску открывает правило, а не перевод.
         self.on_card = on_card
         self._card_tip = None     # окно карточки правила
+        self._card_binds = []     # привязки «клик где угодно закрывает»
         self._gloss_said = None   # какое слово уже произносили
         self._gloss_slow = False  # текущий темп для этого слова
 
@@ -852,14 +853,40 @@ class ChatView(ctk.CTkFrame):
             y = max(8, y_root - tip.winfo_reqheight() - 10)
         tip.wm_geometry("+%d+%d" % (x, y))
         self._card_tip = tip
-        for widget in [tip, box] + list(box.winfo_children()):
+        # Закрытие — ЛЮБОЙ клик в окне приложения (решение ученика 15.11.2026).
+        # Через after(1): клик, которым карточку открыли, уже закончился,
+        # иначе карточка закрывалась бы сразу после открытия.
+        try:
+            self.after(1, self._card_watch)
+        except Exception:
+            pass
+
+    def _card_watch(self):
+        """Повесить закрытие карточки на клик в любом месте окна и на Esc."""
+        if self._card_tip is None:
+            return
+        top = self.winfo_toplevel()
+        self._card_binds = []
+        for sequence in ("<Button-1>", "<Escape>"):
             try:
-                widget.bind("<Button-1>", lambda _e: self._card_hide(), add="+")
+                funcid = top.bind(sequence, self._card_any_click, add="+")
+                self._card_binds.append((top, sequence, funcid))
             except Exception:
                 pass
 
+    def _card_any_click(self, _event=None):
+        """Клик мимо (или по) карточке просто её закрывает."""
+        self._card_hide()
+        return None
+
     def _card_hide(self):
-        """Закрыть окно карточки правила."""
+        """Закрыть окно карточки правила и снять привязки закрытия."""
+        for widget, sequence, funcid in getattr(self, "_card_binds", []):
+            try:
+                widget.unbind(sequence, funcid)
+            except Exception:
+                pass
+        self._card_binds = []
         if self._card_tip is not None:
             try:
                 self._card_tip.destroy()
