@@ -59,10 +59,15 @@ def point(number, title, lessons, prefix="", layout=None):
             "id": "%s%d.%d" % (prefix, number, i),
             "code": "%d.%d" % (number, i),
             "title": name, "type": ltype})
+    # §80: ПИЛОТ петли — 4-й урок БЛОКА 4 города: «работа над ошибками»
+    # вместо экзамена. Остальные 33 блока пока с экзаменом: менять сразу
+    # всё — после живой проверки пилота.
+    is_loop = (prefix.rstrip("/") == "city" and number == 4)
     out["lessons"].append({"id": "%s%d.4" % (prefix, number),
                            "code": "%d.4" % number,
-                           "title": "Проверка: " + title,
-                           "type": "check"})
+                           "title": ("Работа над ошибками" if is_loop
+                                     else "Проверка: " + title),
+                           "type": "loop" if is_loop else "check"})
     return out
 
 

@@ -1,0 +1,40 @@
+{
+  "level": "A2",
+  "english": "american",
+  "status": "pilot",
+  "note": "Фразы ДЛЯ ПЕТЛИ (§80): по одному блоку на правило Аналитика. Русская фраза → ученик строит английскую. Материал пишется человеком (решение 67), модель фраз не сочиняет.",
+  "rules": {
+    "word_order": [
+      {
+        "ru": "Ты где живёшь?",
+        "en": "Where do you live?",
+        "why": "Вопрос: слово-вопрос → помощник do → кто → глагол. По-русски «где живёшь», по-английски do перед you."
+      },
+      {
+        "ru": "Что ты купил вчера?",
+        "en": "What did you buy yesterday?",
+        "why": "Прошлое: помощник did, а глагол в первой форме — buy, не bought."
+      },
+      {
+        "ru": "Почему она опоздала?",
+        "en": "Why was she late?",
+        "why": "was стоит перед «кто»: why was she, а не why she was."
+      },
+      {
+        "ru": "Сколько стоит эта книга?",
+        "en": "How much does this book cost?",
+        "why": "does перед предметом: how much does this book cost."
+      },
+      {
+        "ru": "Где ты был вчера вечером?",
+        "en": "Where were you last night?",
+        "why": "were перед you: where were you."
+      },
+      {
+        "ru": "Куда ты идёшь?",
+        "en": "Where are you going?",
+        "why": "are перед you: where are you going. Порядок: вопрос → помощник → кто → глагол."
+      }
+    ]
+  }
+}

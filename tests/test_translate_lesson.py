@@ -110,6 +110,8 @@ class FakeApp(object):
     _translate_pass = None
     _translate_miss = None
     _translate_record = None
+    _current_phrase = None
+    _after_credit = None
 
     def __init__(self, session):
         self.lesson = FakeLesson(session)
@@ -156,6 +158,8 @@ def _bind():
     FakeApp._translate_pass = App._translate_pass
     FakeApp._translate_miss = App._translate_miss
     FakeApp._translate_record = App._translate_record
+    FakeApp._current_phrase = App._current_phrase
+    FakeApp._after_credit = App._after_credit
 
 
 def _app(lesson_id="city/5.1"):

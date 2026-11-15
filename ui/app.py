@@ -39,6 +39,8 @@ import glossary
 from controllers.glossary_controller import GlossaryController
 import lesson as lesson_mod
 import lesson_summary
+import loop_progress
+import loop_tasks
 import model_registry
 import photo_check
 import phrases
@@ -1660,6 +1662,9 @@ class EnglishTeacherApp:
         # верно, а приложение считало это промахом.
         if self._start_mistake_drill(session):
             return session          # задание говорит приложение, модель не нужна
+        # §80: 4-й урок блока — петля. Задания тоже даёт ПРИЛОЖЕНИЕ.
+        if self._start_loop_lesson(session):
+            return session
         # §82: у урока есть русские фразы — задание даёт ПРИЛОЖЕНИЕ,
         # модель не нужна вообще (как в сцене).
         if self._start_translate_lesson(session):
@@ -2270,8 +2275,9 @@ class EnglishTeacherApp:
             return False
         try:
             if (lesson_mod.is_check_lesson(session.lesson_type)
-                    or lesson_mod.is_story_lesson(session.lesson_type)):
-                return False
+                    or lesson_mod.is_story_lesson(session.lesson_type)
+                    or getattr(session, "is_loop", False)):
+                return False        # петля и так состоит из отработки
         except Exception:
             return False
         try:
@@ -2615,9 +2621,10 @@ class EnglishTeacherApp:
         session = self.lesson.current()
         if session is None:
             return False
-        if getattr(session, "task_phase", "") != lesson_mod.TASK_TRANSLATE:
+        if getattr(session, "task_phase", "") not in (
+                lesson_mod.TASK_TRANSLATE, lesson_mod.TASK_LOOP):
             return False
-        phrase = translate_task.pick(session.lesson_id, session.tasks_done)
+        phrase = self._current_phrase(session)
         if not phrase:
             return False
         want = str(phrase.get("en") or "")
@@ -2656,9 +2663,7 @@ class EnglishTeacherApp:
         self._offer_alts(want)
         print("🏁 Перевод засчитан: %r -> %r" % (text or "", want))
         self._credit_task(session, text, marked=False)
-        if (getattr(session, "is_active", False)
-                and getattr(session, "has_tasks", False)):
-            self._translate_ask(session)      # следующая фраза
+        self._after_credit(session, phrase, ok=True)
         return True
 
     def _translate_miss(self, session, text, phrase, soft=False):
@@ -2678,9 +2683,7 @@ class EnglishTeacherApp:
             self._offer_alts(want)
             self._translate_record(session, text, phrase)   # это и есть пробел
             self._credit_task(session, text, marked=True)
-            if (getattr(session, "is_active", False)
-                    and getattr(session, "has_tasks", False)):
-                self._translate_ask(session)
+            self._after_credit(session, phrase, ok=False)
             return True
         if soft:
             hint = "🤏 In English, please — even a few words."
@@ -2732,6 +2735,140 @@ class EnglishTeacherApp:
         print("📝 Промах перевода в пробелы: %r -> %r (правило %s)"
               % (said[:40], want, phrase.get("rule") or "?"))
         return True
+
+    # ---------------- урок-петля: работа над ошибками (§80) ----------------
+    def _start_loop_lesson(self, session):
+        """4-й урок блока — ПЕТЛЯ вместо экзамена (решение ученика 15.11.2026).
+
+        Правила берём из пробелов ученика (loop_progress.session_rules), пункты
+        собирает loop_tasks из data/*.json. Модель в петле не нужна совсем.
+        Материала нет — урок пойдёт как раньше (модель ведёт занятие), чтобы
+        не запирать ученика в пустом уроке.
+        """
+        if session is None or not getattr(session, "is_loop", False):
+            return False
+        try:
+            rules = [str(b.get("rule") or "")
+                     for b in loop_progress.session_rules()]
+        except Exception as exc:
+            print("⚠️ Пробелы для петли не собрались: %s" % exc)
+            return False
+        items = loop_tasks.plan(rules)
+        missing = loop_tasks.missing(rules)
+        if missing:
+            print("🔁 Петля: нет материала по правилам %s" % ", ".join(missing))
+        if not items:
+            print("🔁 Петля: отрабатывать нечего — урок поведёт модель")
+            return False
+        if not session.start_loop(items):
+            return False
+        print("🔁 Петля: правила %s, пунктов %d"
+              % (", ".join(session.loop_rules), len(items)))
+        self.add_message(self.teacher_name,
+                         "🔁 Работа над ошибками. Сегодня — только то, что не "
+                         "получалось: %s.\nПунктов: %d, порог — %d %%."
+                         % (", ".join(gaps.RULE_RU.get(r, r)
+                                       for r in session.loop_rules),
+                            len(items), loop_progress.PASS_PERCENT))
+        self._loop_ask(session)
+        return True
+
+    def _loop_ask(self, session):
+        """Показать пункт петли: правило и РУССКАЯ фраза (текстом, не голосом)."""
+        if session is None or not getattr(session, "is_active", False):
+            return False
+        item = session.loop_current()
+        if not item:
+            return False
+        session.start_loop()          # зачёт возвращает фазу в TASK_ASK
+        rule = str(item.get("rule") or "")
+        self.add_message(self.teacher_name,
+                         "🎯 %d/%d · %s\n🇷🇺 %s"
+                         % (session.task_index, session.tasks_total,
+                            gaps.RULE_RU.get(rule, rule), item.get("ru")))
+        print("🔁 Петля %d/%d (%s): %r"
+              % (session.task_index, session.tasks_total, rule,
+                 item.get("ru")))
+        try:
+            self.lesson_bar.set_progress(session.progress_text())
+        except Exception:
+            pass
+        return True
+
+    def _loop_finish(self, session, state):
+        """Порог взят: урок закрывается СРАЗУ, остальные пункты не нужны."""
+        state = state or {}
+        percent = int(state.get("percent") or 0)
+        edge = int(state.get("pass_percent") or loop_progress.PASS_PERCENT)
+        self.add_message(self.teacher_name,
+                         "🏅 Порог взят: %d %% (нужно %d %%). Это правило "
+                         "больше не пробел." % (percent, edge))
+        print("🏁 Петля пройдена: %d %% (порог %d), пунктов сделано %d из %d"
+              % (percent, edge, session.tasks_done, session.tasks_total))
+        try:
+            # Итог урока не должен врать «сдано 4 из 9»: план сокращён до
+            # сделанного — цель достигнута, лишние пункты не нужны.
+            session.tasks_total = max(1, session.tasks_done)
+            session.finish()
+            self._close_lesson_after_credit()
+        except Exception as exc:
+            print("⚠️ Петля не закрылась: %s" % exc)
+        return True
+
+    def _loop_exhausted(self, session):
+        """Пункты кончились, а порог не взят — говорим честно и закрываем."""
+        self.add_message(self.teacher_name,
+                         "🏁 Пункты кончились, а порог ещё не взят — "
+                         "вернёмся к этому правилу в следующий раз.")
+        print("🔁 Петля: материал кончился, порог не взят")
+        try:
+            session.finish()
+            self._close_lesson_after_credit()
+        except Exception as exc:
+            print("⚠️ Петля не закрылась: %s" % exc)
+        return True
+
+    def _current_phrase(self, session):
+        """Фраза текущего задания: у петли — из плана, у перевода — из файла."""
+        if getattr(session, "is_loop", False):
+            return session.loop_current()
+        return translate_task.pick(session.lesson_id, session.tasks_done)
+
+    def _after_credit(self, session, phrase, ok):
+        """После зачёта задания: петля считает порог, перевод даёт новую фразу.
+
+        ok=True — ответ был верный (серия правила растёт), ok=False — эталон
+        показали (серия сбрасывается, правило остаётся в работе).
+        """
+        if session is None or not getattr(session, "is_active", False):
+            return False
+        if not getattr(session, "has_tasks", False):
+            return False
+        if not getattr(session, "is_loop", False):
+            self._translate_ask(session)
+            return True
+        rule = str((phrase or {}).get("rule") or "")
+        if rule:
+            try:
+                if ok:
+                    stats_store.drill_ok(rule, step=1)
+                else:
+                    stats_store.drill_fail(rule)
+            except Exception as exc:
+                print("⚠️ Отметка правила в петле не записалась: %s" % exc)
+        if ok:
+            try:
+                state = loop_progress.progress()
+            except Exception as exc:
+                print("⚠️ Порог петли не посчитался: %s" % exc)
+                state = {}
+            print("🔁 Порог петли: %d %% (пройден: %s)"
+                  % (int(state.get("percent") or 0), state.get("pass")))
+            if state.get("pass"):
+                return self._loop_finish(session, state)
+        if self._loop_ask(session):
+            return True
+        return self._loop_exhausted(session)
 
     def _drill_finish(self, session):
         """Дрилл кончился: короткое слово ученику. Задание НЕ засчитываем (§70)."""

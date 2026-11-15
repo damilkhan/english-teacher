@@ -69,24 +69,28 @@ def test_plan():
           all(len(PM.points_of(i)) == 9 for i in ids),
           [(i, len(PM.points_of(i))) for i in ids])
 
-    print("\n[2] В каждом блоке 3 урока + проверка")
+    print("\n[2] В каждом блоке 3 урока + проверка (или петля)")
     total = 0
     checks = 0
     problems = []
+    # §80 (15.11.2026): 4-й урок блока — точка контроля. Пилот петли стоит в
+    # city/4.4, поэтому «последний урок» — это check ИЛИ loop.
+    CONTROL = ("check", "loop")
     for loc_id in ids:
         for point in PM.points_of(loc_id):
             lessons = PM.lessons_of(point["id"])
             types = [l.get("type") for l in lessons]
+            last = str((lessons[-1] or {}).get("type") or "") if lessons else ""
             total += len(lessons)
-            if len(lessons) != 4 or types.count("check") != 1:
+            if len(lessons) != 4 or last not in CONTROL:
                 problems.append((point["id"], types))
-            checks += types.count("check")
+            checks += 1 if last in CONTROL else 0
     check("всего 468 уроков", total == 468, total)
-    check("117 проверочных занятий (по одному на блок)", checks == 117, checks)
-    check("в каждом блоке ровно 4 урока, один из них check",
+    check("117 точек контроля (по одной на блок)", checks == 117, checks)
+    check("в каждом блоке ровно 4 урока, последний — check или loop",
           not problems, problems[:3])
-    check("проверка — последний урок блока",
-          all(PM.lessons_of(p["id"])[-1].get("type") == "check"
+    check("точка контроля — последний урок блока",
+          all(PM.lessons_of(p["id"])[-1].get("type") in CONTROL
               for loc_id in ids for p in PM.points_of(loc_id)))
 
     print("\n[3] id уникальны во всём плане")

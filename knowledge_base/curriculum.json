@@ -1127,8 +1127,8 @@
             {
               "id": "city/4.4",
               "code": "4.4",
-              "title": "Проверка: Comparing Things",
-              "type": "check"
+              "title": "Работа над ошибками",
+              "type": "loop"
             }
           ]
         },

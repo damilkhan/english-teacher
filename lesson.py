@@ -45,8 +45,12 @@ MIXED = "mixed"                 # не используем в UI (совмес�
 # Реплики участника (официанта) ведёт ПРИЛОЖЕНИЕ: готовые вопросы берутся из
 # scenes.py по номеру шага, модель в сцене не зовётся совсем (вариант А).
 SCENE = "scene"
+# §80 (15.11.2026): ПЕТЛЯ — «работа над ошибками» ВМЕСТО экзамена (4-й урок
+# блока). Задания даёт приложение (loop_tasks по правилам из пробелов),
+# урок идёт, пока loop_progress.progress()["pass"] не станет True.
+LOOP = "loop"
 
-KNOWN_TYPES = (SPEAKING, CHAT, LISTENING, CHECK, MIXED, SCENE)
+KNOWN_TYPES = (SPEAKING, CHAT, LISTENING, CHECK, MIXED, SCENE, LOOP)
 DEFAULT_TYPE = SPEAKING
 
 TYPE_LABELS = {
@@ -56,6 +60,7 @@ TYPE_LABELS = {
     CHECK: "проверка",
     MIXED: "смешанный",
     SCENE: "сцена",
+    LOOP: "петля",
 }
 
 # Каналы ответа (наборы), по типам уроков.
@@ -115,6 +120,9 @@ SCENE_TRIES = 1
 # ученик видит РУССКУЮ фразу и строит английскую сам. Модель фразу не сочиняет —
 # иначе она менялась бы от урока к уроку, и сверять было бы не с чем.
 TASK_TRANSLATE = "translate"
+# §80: фаза ПЕТЛИ. Пункт плана даёт приложение (loop_tasks), ответ
+# сверяется как перевод, зачёт двигает серию правила.
+TASK_LOOP = "loop"
 
 # Что вернул Аналитик про ответ ученика (вариант Б, §36).
 ANSWER_CORRECT = "correct"      # ответ по заданию и без реальных ошибок
@@ -153,9 +161,10 @@ def allowed_inputs(lesson_type: Any) -> Set[str]:
     name = normalize_type(lesson_type)
     if name == CHAT:
         return set(_TEXT)
-    if name in (MIXED, SCENE):
+    if name in (MIXED, SCENE, LOOP):
         # сцена-пилот: на время проверки отвечаем и голосом, и текстом
-        # (решение ученика 02.11.2026), чтобы быстрее поймать баги
+        # (решение ученика 02.11.2026), чтобы быстрее поймать баги.
+        # §80: в петле — так же: материал повторный, текст не мешает.
         return set(_VOICE) | set(_TEXT)
     # speaking / listening / check — только голос
     return set(_VOICE)
@@ -614,6 +623,9 @@ class LessonSession:
         self.scene_skipped = 0       # вопросов, брошенных после двух осечек
         self.scene_step_skipped = 0  # брошенных вопросов В ТЕКУЩЕМ шаге
         self.scene_said = []         # ответы ученика: [{q, a, step}] для разбора
+        # §80: план петли (пункты по правилам) и место в нём
+        self.loop_items = []         # type: List[Dict[str, Any]]
+        self.loop_rules = []         # type: List[str]
 
     # ---------- свойства ----------
     @property
@@ -1055,6 +1067,38 @@ class LessonSession:
         self.task_phase = TASK_TRANSLATE
         return True
 
+    # ---------- петля: работа над ошибками (§80) ----------
+    @property
+    def is_loop(self) -> bool:
+        """Урок-петля (работа над ошибками вместо экзамена)."""
+        return self.lesson_type == LOOP
+
+    def start_loop(self, items=None) -> bool:
+        """Включить петлю и задать план пунктов (порядок — loop_tasks).
+
+        items не задан — только вернуть фазу (зачёт задания её сбрасывает
+        в TASK_ASK, а пункт петли всё тот же).
+        """
+        if not self.is_active or not self.has_tasks:
+            return False
+        if items is not None:
+            self.loop_items = [dict(it) for it in (items or ()) if it]
+            self.tasks_total = max(1, len(self.loop_items))
+            self.loop_rules = []
+            for item in self.loop_items:
+                rule = str(item.get("rule") or "")
+                if rule and rule not in self.loop_rules:
+                    self.loop_rules.append(rule)
+        self.task_phase = TASK_LOOP
+        return True
+
+    def loop_current(self):
+        """Пункт петли, который сейчас на экране (None — план кончился)."""
+        index = self.tasks_done
+        if 0 <= index < len(self.loop_items):
+            return self.loop_items[index]
+        return None
+
 
     def finish_drill(self, clean: bool = True) -> bool:
         """Дрилл пройден — задание НЕ засчитывается: это разминка (§70).
@@ -1280,6 +1324,8 @@ class LessonSession:
                 return "Разминка"
             if self.task_phase == TASK_TRANSLATE:
                 return "Перевод %d/%d" % (self.task_index, self.tasks_total)
+            if self.task_phase == TASK_LOOP:
+                return "Петля %d/%d" % (self.task_index, self.tasks_total)
 
             return "Задание %d/%d" % (self.task_index, self.tasks_total)
         return "%d/%d" % (self.replies, self.reply_target)
