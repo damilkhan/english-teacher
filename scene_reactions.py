@@ -316,7 +316,16 @@ def reply_to(slot: str, it: Intent) -> Optional[str]:
     return _cap(text) if text else None
 
 
-def slot_hotwords(slot: str, limit: int = 14) -> List[str]:
+# §83: таблицы слов, нужные в ЛЮБОЙ сцене. Без них подсказки перекашивают
+# распознавание в сторону еды: «bill» нет в списке, а «beer» есть.
+UNIVERSAL_WORD_TABLES = ("bill", "howmuch", "toilet", "goodbye", "recommend")
+# §83: вежливые обороты, из которых ученик строит фразу. Проверено на его
+# записях 15.11.2026: ухудшения нет (2 файла стали лучше, 6 без изменений).
+# ⚠️ Что это лечит слово «shall» — НЕ ПРОВЕРЕНО: записи тех попыток стёрлись.
+POLITE_PHRASES = ("shall", "can i have", "could i have", "i would like",
+                  "i will have", "please")
+
+def slot_hotwords(slot: str, limit: int = 32) -> List[str]:
     """Слова, которых ждём от ученика в этом слоте (подсказка распознаванию).
 
     Вопрос сцены известен заранее, а в его слоте уже лежат ожидаемые слова
@@ -339,6 +348,16 @@ def slot_hotwords(slot: str, limit: int = 14) -> List[str]:
     if isinstance(items, dict):
         # только нормальные слова: значения, а не варианты написания
         words.extend(str(v) for v in items.values() if v)
+    # §83: слова НАМЕРЕНИЙ, которые в сцене возможны всегда (счёт, туалет,
+    # цена, прощание). Живой урок 15.11.2026: подсказки для слота anything
+    # содержали "beer" и НЕ содержали "bill" — ученик говорил «give me a
+    # bill, please», а записывалось «give me a beer, please» (6 попыток).
+    # Замер на его же записях: без правки слышит bill 2 из 6, с правкой — 6 из 6.
+    for table in UNIVERSAL_WORD_TABLES:
+        if table == "recommend" and "recommend" not in conf:
+            continue
+        words.extend(_words(table))
+    words.extend(POLITE_PHRASES)
     out: List[str] = []
     for word in words:
         word = word.strip()
