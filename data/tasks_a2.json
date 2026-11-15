@@ -1,0 +1,122 @@
+{
+  "level": "a2",
+  "english": "american",
+  "status": "пилот 15.11.2026 — блок city/5, ученик просматривает",
+  "note": "Фразы для уроков-«выявления пробелов» (§82). Ученик видит РУССКУЮ фразу и переводит её на английский. Эталон ОДИН (решение §77: смысл оценивает модель, списков вариантов нет). Поле rule — правило Аналитика, по нему промах попадает в пробелы ученика и в работу над ошибками (§80). Поле why — одна строка объяснения после ответа.",
+  "tasks": {
+    "city/5.1": [
+      {
+        "ru": "Ты когда-нибудь был в Нью-Йорке?",
+        "en": "Have you ever been to New York?",
+        "rule": "aux_verb",
+        "why": "Про опыт в жизни: have + been. По-русски «был», по-английски не was, а have been."
+      },
+      {
+        "ru": "Ты когда-нибудь пробовал суши?",
+        "en": "Have you ever tried sushi?",
+        "rule": "aux_verb",
+        "why": "Вопрос про опыт: Have you ever + третья форма (tried)."
+      },
+      {
+        "ru": "Она когда-нибудь ездила за границу?",
+        "en": "Has she ever been abroad?",
+        "rule": "aux_verb",
+        "why": "Она / он / оно — не have, а HAS."
+      },
+      {
+        "ru": "Вы когда-нибудь видели эту гору?",
+        "en": "Have you ever seen this mountain?",
+        "rule": "verb_form",
+        "why": "see — saw — seen. После have нужна ТРЕТЬЯ форма: seen."
+      },
+      {
+        "ru": "Ты когда-нибудь летал на самолёте?",
+        "en": "Have you ever flown on a plane?",
+        "rule": "verb_form",
+        "why": "fly — flew — flown. После have — flown, не fly и не flew."
+      },
+      {
+        "ru": "Они когда-нибудь жили в другой стране?",
+        "en": "Have they ever lived in another country?",
+        "rule": "verb_form",
+        "why": "Жили когда-то в жизни — have + lived. Конкретное время не называем."
+      }
+    ],
+    "city/5.2": [
+      {
+        "ru": "Я никогда не пробовал это.",
+        "en": "I have never tried this.",
+        "rule": "verb_form",
+        "why": "never стоит МЕЖДУ have и глаголом: have never tried."
+      },
+      {
+        "ru": "Он никогда не был в театре.",
+        "en": "He has never been to a theater.",
+        "rule": "verb_form",
+        "why": "Он — has. И «в театре» про место — предлог to после be: been to a theater."
+      },
+      {
+        "ru": "Мы никогда не ели такое.",
+        "en": "We have never eaten anything like this.",
+        "rule": "word_choice",
+        "why": "eat — ate — eaten. После have — eaten."
+      },
+      {
+        "ru": "Я никогда не водил машину.",
+        "en": "I have never driven a car.",
+        "rule": "verb_form",
+        "why": "drive — drove — driven. После have — driven."
+      },
+      {
+        "ru": "Она никогда не опаздывала.",
+        "en": "She has never been late.",
+        "rule": "verb_form",
+        "why": "«Опаздывала» — это состояние: has never been late."
+      },
+      {
+        "ru": "Я ещё не закончил.",
+        "en": "I haven't finished yet.",
+        "rule": "aux_verb",
+        "why": "«Ещё не» — haven't … yet. yet стоит в конце."
+      }
+    ],
+    "city/5.3": [
+      {
+        "ru": "Я был в трёх странах.",
+        "en": "I have been to three countries.",
+        "rule": "plural",
+        "why": "Сколько всего в жизни — have been. И «страны» во множественном: countries."
+      },
+      {
+        "ru": "Я дважды видел этот фильм.",
+        "en": "I have seen this movie twice.",
+        "rule": "verb_form",
+        "why": "seen — третья форма. «Дважды» — twice, в конце фразы."
+      },
+      {
+        "ru": "Мы живём здесь два года.",
+        "en": "We have lived here for two years.",
+        "rule": "preposition",
+        "why": "for + сколько времени: for two years. «Два года» — years, множественное."
+      },
+      {
+        "ru": "Он работает в банке с 2020 года.",
+        "en": "He has worked in a bank since 2020.",
+        "rule": "preposition",
+        "why": "since + точка отсчёта (2020), for + отрезок (two years)."
+      },
+      {
+        "ru": "Я только что поел.",
+        "en": "I have just eaten.",
+        "rule": "word_choice",
+        "why": "«Только что» — just между have и глаголом: have just eaten."
+      },
+      {
+        "ru": "Ты уже сделал домашнюю работу?",
+        "en": "Have you done your homework yet?",
+        "rule": "aux_verb",
+        "why": "«Уже» в вопросе — yet в конце: Have you done … yet?"
+      }
+    ]
+  }
+}
