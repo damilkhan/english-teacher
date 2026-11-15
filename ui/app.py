@@ -50,6 +50,7 @@ import progress_map
 import reactions
 import server_manager
 import translate
+import translate_task
 import settings_store
 import stt_engine
 import theme
@@ -1659,6 +1660,10 @@ class EnglishTeacherApp:
         # верно, а приложение считало это промахом.
         if self._start_mistake_drill(session):
             return session          # задание говорит приложение, модель не нужна
+        # §82: у урока есть русские фразы — задание даёт ПРИЛОЖЕНИЕ,
+        # модель не нужна вообще (как в сцене).
+        if self._start_translate_lesson(session):
+            return session
         if self.server_ready:
             self._open_lesson_dialog(lesson_payload, student_text)
         else:
@@ -2551,6 +2556,183 @@ class EnglishTeacherApp:
         threading.Thread(target=worker, daemon=True).start()
         return True
 
+    # ---------------- урок с переводом РУССКИХ фраз (§82) ----------------
+    def _start_translate_lesson(self, session):
+        """Фразы есть — задание даёт приложение, модель не зовём (§82).
+
+        Решение ученика 15.11.2026: уроки ДО петли — не «ответь официанту»,
+        а перевод РУССКОЙ фразы: ученик строит английскую сам. Фраза лежит
+        в data/tasks_a2.json, поэтому от урока к уроку не меняется.
+        """
+        if session is None or not translate_task.has(session.lesson_id):
+            return False
+        try:
+            if (lesson_mod.is_check_lesson(session.lesson_type)
+                    or lesson_mod.is_story_lesson(session.lesson_type)):
+                return False
+        except Exception:
+            return False
+        if not session.start_translate():
+            return False
+        print("🇷🇺 Урок с переводом фраз: %s (заданий %d, фраз в файле %d)"
+              % (session.lesson_id, session.tasks_total,
+                 len(translate_task.phrases_for(session.lesson_id))))
+        self._translate_ask(session)
+        return True
+
+    def _translate_ask(self, session):
+        """Показать русскую фразу — ТЕКСТОМ: английский голос её не прочтёт.
+
+        Задание нумеруется как обычное (полоса урока), фразу модель НЕ
+        сочиняет и НЕ переводит — сверка идёт с эталоном из файла.
+        """
+        if session is None or not getattr(session, "is_active", False):
+            return False
+        phrase = translate_task.pick(session.lesson_id, session.tasks_done)
+        if not phrase:
+            return False
+        session.start_translate()      # зачёт возвращает фазу в TASK_ASK
+        self.add_message(self.teacher_name,
+                         "🎯 Task %d/%d. Say it in English:\n🇷🇺 %s"
+                         % (session.task_index, session.tasks_total,
+                            phrase.get("ru")))
+        print("🇷🇺 Перевод %d/%d (правило %s): %r"
+              % (session.task_index, session.tasks_total,
+                 phrase.get("rule") or "?", phrase.get("ru")))
+        try:
+            self.lesson_bar.set_progress(session.progress_text())
+        except Exception:
+            pass
+        return True
+
+    def _translate_reply(self, text):
+        """Ответ на перевод: сверяет ПРИЛОЖЕНИЕ, модель — только на MAYBE.
+
+        Возвращает True, если реплику забрал урок-перевод (в модель она не
+        уходит). OK — зачёт; NO (пусто/по-русски) — подсказка без ошибки в
+        базе; MAYBE — смысл оценивает модель (§77), как в дрилле.
+        """
+        session = self.lesson.current()
+        if session is None:
+            return False
+        if getattr(session, "task_phase", "") != lesson_mod.TASK_TRANSLATE:
+            return False
+        phrase = translate_task.pick(session.lesson_id, session.tasks_done)
+        if not phrase:
+            return False
+        want = str(phrase.get("en") or "")
+        verdict = translate_task.check(text, want)
+        if verdict == translate_task.OK:
+            return self._translate_pass(session, text, phrase)
+        if verdict == translate_task.NO:
+            return self._translate_miss(session, text, phrase, soft=True)
+        if self._meaning_second_look(
+                text, want,
+                lambda same: self._translate_verdict(session, text, phrase, same)):
+            return True
+        return self._translate_miss(session, text, phrase)
+
+    def _translate_verdict(self, session, text, phrase, same):
+        """Пришёл ответ модели «тот же смысл?» по фразе перевода."""
+        if session is None or not getattr(session, "is_active", False):
+            return False
+        if same:
+            print("👍 Модель: смысл тот же — засчитываю перевод (%r)" % (text or ""))
+            return self._translate_pass(session, text, phrase, same=True)
+        return self._translate_miss(session, text, phrase)
+
+    def _translate_pass(self, session, text, phrase, same=False):
+        """Перевод принят: эталон вслух, строка «почему», зачёт задания."""
+        want = str(phrase.get("en") or "")
+        why = str(phrase.get("why") or "").strip()
+        line = ("👍 Same meaning — counted. " if same else "✅ ") + want
+        if why:
+            line += "\n" + why
+        self.add_message(self.teacher_name, line)
+        try:
+            self._say(want)
+        except Exception:
+            pass
+        self._offer_alts(want)
+        print("🏁 Перевод засчитан: %r -> %r" % (text or "", want))
+        self._credit_task(session, text, marked=False)
+        if (getattr(session, "is_active", False)
+                and getattr(session, "has_tasks", False)):
+            self._translate_ask(session)      # следующая фраза
+        return True
+
+    def _translate_miss(self, session, text, phrase, soft=False):
+        """Промах: ПОДСКАЗКА, задание не двигаем. После MAX попыток — эталон.
+
+        soft=True — это «NO» (пусто или по-русски): не ответ, а просьба о
+        помощи. Попытку считаем (иначе урок встанет навсегда), но подсказка
+        другая — «скажи по-английски».
+        """
+        want = str(phrase.get("en") or "")
+        tries = session.note_task_attempt()
+        if tries >= lesson_mod.MAX_TASK_ATTEMPTS:
+            why = str(phrase.get("why") or "").strip()
+            self.add_message(self.teacher_name,
+                             "👉 Correct: " + want + ("\n" + why if why else ""))
+            self._say_after_current(want)
+            self._offer_alts(want)
+            self._translate_record(session, text, phrase)   # это и есть пробел
+            self._credit_task(session, text, marked=True)
+            if (getattr(session, "is_active", False)
+                    and getattr(session, "has_tasks", False)):
+                self._translate_ask(session)
+            return True
+        if soft:
+            hint = "🤏 In English, please — even a few words."
+        else:
+            hint = "🤏 Not quite. "
+            rule = str(phrase.get("rule") or "")
+            label = gaps.RULE_RU.get(rule, "")
+            hint += ("Think about: %s." % label) if label else "Try again."
+        self.add_message(self.teacher_name, hint)
+        print("🤏 Перевод не принят (попытка %d, %s): %r"
+              % (tries, "не ответ" if soft else "промах", text or ""))
+        return True
+
+    def _translate_record(self, session, text, phrase):
+        """Промах по фразе — в базу пробелов, с ПРАВИЛОМ из фразы (§82).
+
+        Так и работает «выявление пробелов»: правило задания попадает в
+        пробелы, и петля (§80) берёт его в работу. Ответ без английских
+        слов (пусто, по-русски) НЕ пишем: сверять нечего, база бы засорилась
+        (§62 — она уже засорялась посторонними ошибками).
+        """
+        said = str(text or "").strip()
+        if not any(ch.isascii() and ch.isalpha() for ch in said):
+            print("ℹ️ Промах без английских слов — в пробелы не пишу: %r"
+                  % said[:40])
+            return False
+        want = str(phrase.get("en") or "")
+        analysis = {
+            "move_type": "A", "move_status": "N",
+            # §80 долг: поле lesson раньше было пустым у ВСЕХ записей — новые
+            # пишем с уроком, чтобы было видно, ГДЕ правило не далось.
+            "lesson": getattr(session, "lesson_id", ""),
+            "errors": [{
+                "type": "grammar",
+                "wrong": said[:80],
+                "correct": want[:80],
+                "note": str(phrase.get("ru") or "")[:80],
+                "rule": str(phrase.get("rule") or ""),
+            }],
+        }
+        try:
+            # count_session=False: промах внутри урока — не конец занятия
+            profile_store.record_analysis(
+                analysis, said, "", (self.current_user or {}).get("id"),
+                count_session=False)
+        except Exception as exc:
+            print("⚠️ Промах перевода не записался: %s" % exc)
+            return False
+        print("📝 Промах перевода в пробелы: %r -> %r (правило %s)"
+              % (said[:40], want, phrase.get("rule") or "?"))
+        return True
+
     def _drill_finish(self, session):
         """Дрилл кончился: короткое слово ученику. Задание НЕ засчитываем (§70)."""
         clean = bool(getattr(session, "drill_clean", False))
@@ -2609,6 +2791,10 @@ class EnglishTeacherApp:
                 return False        # урок закрыт зачётом — итог придёт сам
         except Exception:
             return False
+        # §82: урок-перевод и после разминки ведёт ПРИЛОЖЕНИЕ, не модель.
+        if translate_task.has(session.lesson_id):
+            if self._start_translate_lesson(session):
+                return True
         step = getattr(self, "_continue_lesson_dialog", None)
         if step is None:            # заглушка в тестах — молчим
             return False
@@ -4910,6 +5096,9 @@ class EnglishTeacherApp:
             return
         # §55: фразу дрилла принимает приложение — модель не нужна совсем
         if self._drill_reply(text):
+            return
+        # §82: перевод русской фразы — сверяет приложение (модель только на MAYBE)
+        if self._translate_reply(text):
             return
         if _asks_for_story(text):
             self._story_context = True      # ученик просит историю/сказку

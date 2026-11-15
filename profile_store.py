@@ -212,7 +212,8 @@ def record_from_dialogue(user_text, jane_response, user_id=None):
     return notes
 
 
-def record_analysis(analysis, user_text, jane_response="", user_id=None):
+def record_analysis(analysis, user_text, jane_response="", user_id=None,
+                   count_session=True):
     """Записывает СТРУКТУРИРОВАННЫЙ разбор реплики (роль-Аналитик).
 
     В отличие от record_from_dialogue (эвристика по ключевым словам в ответе
@@ -311,7 +312,12 @@ def record_analysis(analysis, user_text, jane_response="", user_id=None):
     })
     profile["analysis_log"] = profile["analysis_log"][-ANALYSIS_LOG_LIMIT:]
 
-    save(profile, user_id)          # отмечает конец занятия (+1), как и раньше
+    if count_session:
+        save(profile, user_id)      # отмечает конец занятия (+1), как и раньше
+    else:
+        # §82: промах ВНУТРИ урока — не конец занятия. Иначе «Занятий» в
+        # профиле росло бы на каждый промах перевода (5 заданий = +5).
+        _write(profile, progress_path(user_id))
 
     if stats_items and getattr(config, "GAPS_ENABLED", True):
         try:

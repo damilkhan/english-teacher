@@ -111,6 +111,11 @@ TASK_SCENE = "scene"
 # (молчание или русский текст), прежде чем идти дальше с пометкой.
 SCENE_TRIES = 1
 
+# §82 (15.11.2026): фаза ПЕРЕВОДА. Задание даёт ПРИЛОЖЕНИЕ (data/tasks_a2.json):
+# ученик видит РУССКУЮ фразу и строит английскую сам. Модель фразу не сочиняет —
+# иначе она менялась бы от урока к уроку, и сверять было бы не с чем.
+TASK_TRANSLATE = "translate"
+
 # Что вернул Аналитик про ответ ученика (вариант Б, §36).
 ANSWER_CORRECT = "correct"      # ответ по заданию и без реальных ошибок
 ANSWER_NEEDS_FIX = "needs_fix"  # пытался, но есть что исправлять
@@ -1038,6 +1043,19 @@ class LessonSession:
             self.asked_tasks.append(value)
         del self.asked_tasks[:-6]
 
+    def start_translate(self) -> bool:
+        """§82: урок-«выявление пробелов» — фразу даёт ПРИЛОЖЕНИЕ, не модель.
+
+        Фаза нужна, чтобы приложение знало, чей ответ слушает: реплика идёт
+        не в модель, а в сверку с эталоном (translate_task.check). Зачёт
+        задания возвращает фазу в TASK_ASK — поэтому её ставят заново.
+        """
+        if not self.is_active or not self.has_tasks:
+            return False
+        self.task_phase = TASK_TRANSLATE
+        return True
+
+
     def finish_drill(self, clean: bool = True) -> bool:
         """Дрилл пройден — задание НЕ засчитывается: это разминка (§70).
 
@@ -1260,6 +1278,8 @@ class LessonSession:
                 return "Шаг %d/%d" % (self.task_index, self.tasks_total)
             if self.task_phase == TASK_DRILL:
                 return "Разминка"
+            if self.task_phase == TASK_TRANSLATE:
+                return "Перевод %d/%d" % (self.task_index, self.tasks_total)
 
             return "Задание %d/%d" % (self.task_index, self.tasks_total)
         return "%d/%d" % (self.replies, self.reply_target)
