@@ -498,6 +498,23 @@ def fix_sentence(said: Any, wrongs: Any, corrections: Any) -> str:
     return result.strip()
 
 
+# §85 (16.11.2026): АРТИКЛЬ РЕШАЕТ. Живой урок city/4.1: ученик сказал
+# «that is a biggest house» вместо «that is the biggest house» — задание
+# засчитано, потому что сравнение по смыслу выбрасывает служебные слова.
+# Для урока, где как раз артикль и отрабатывается, это ложный зачёт.
+_ARTICLES = ("a", "an", "the")
+
+
+def _articles(text: Any):
+    """Список артиклей в тексте — по порядку (для строгой сверки)."""
+    return [w for w in _flat(text).split() if w in _ARTICLES]
+
+
+def same_function_words(said: Any, want: Any) -> bool:
+    """Служебные слова совпадают? Сейчас строго про артикли a/an/the."""
+    return _articles(said) == _articles(want)
+
+
 def says_fix(student_text: Any, corrections) -> bool:
     """Ученик ПОВТОРИЛ исправление? Проверка без модели (вариант В, §36).
 
@@ -518,6 +535,9 @@ def says_fix(student_text: Any, corrections) -> bool:
     if not wanted:
         return False
     for want in wanted:
+        # §85: «a» вместо «the» — это НЕ тот же ответ, повтора не засчитываем.
+        if not same_function_words(said, want):
+            return False
         if want in said:
             continue
         # §65 (решение 109): та же мысль другими словами — тоже зачёт

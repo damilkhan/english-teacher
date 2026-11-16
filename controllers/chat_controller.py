@@ -365,13 +365,18 @@ class ChatController:
                     # отрезает вопрос — ученик не должен слышать его второй
                     # раз. Живой урок 11.11.2026: «повтор не помог» и вопрос
                     # звучал снова.
+                    trimmed_used = False
                     if "same_question" in left:
                         trimmed = prompt_builder.strip_trailing_question(again)
                         if trimmed and trimmed.strip():
                             cleaned = trimmed
+                            trimmed_used = True
+                    # §85 (16.11.2026): раньше сравнивались ПЕРВЫЙ ответ и
+                    # повтор, и лог писал «вопрос отрезан», хотя ничего не
+                    # резалось (живой урок city/4.1). Теперь по флагу.
                     print("⚠️ Повтор не помог (%s) — %s"
                           % (", ".join(reply_checks.names(left)),
-                             "вопрос отрезан" if cleaned != again
+                             "вопрос отрезан" if trimmed_used
                              else "оставляю ответ как есть"))
             else:
                 print("⚠️ Повторный запрос не удался — оставляю ответ как есть")
