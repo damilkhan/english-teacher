@@ -129,7 +129,11 @@ def _split_spans(spans):
         rule = str(item[3] or "").strip().lower() if len(item) > 3 else ""
         right = str(item[4] or "").strip() if len(item) > 4 else ""
         plain.append((start, end, style))
-        if style == "err" and rule:
+        if style == "err":
+            # §85 (16.11.2026): раньше кусок без правила (модель правило не
+            # назвала) молча терялся — клик по красному не открывал ничего.
+            # Теперь окно открывается ВСЕГДА и честно говорит, что правила
+            # нет, показывая «так лучше» (right).
             rules.append((start, end, rule, right))
     return plain, rules
 
@@ -619,7 +623,14 @@ class ChatView(ctk.CTkFrame):
             msg.body._err_rules = prepared   # клик по красному (§79)
         except Exception:
             pass
-        return self._apply_spans(msg) > 0
+        painted = self._apply_spans(msg)
+        # §85: в логе видно и «сколько покрасили», и «сколько правил привязали».
+        # Раньше печаталось только число найденных кусков, и провал клика
+        # выглядел как успех (живой урок city/4.1, 16.11.2026: карточка
+        # не открылась ни разу, а лог молчал).
+        print("🖍️ Раскраска: кусков %d, правил %d, покрашено %d"
+              % (len(msg.spans), len(prepared), painted))
+        return painted > 0
 
     def last_user_mark(self):
         """Метка последней реплики ученика (None, если её ещё не было)."""
@@ -779,8 +790,16 @@ class ChatView(ctk.CTkFrame):
         """
         if self.on_card is None:
             return False
-        found = self._err_at(body, event)
+        try:
+            found = self._err_at(body, event)
+        except Exception as exc:
+            print("⚠️ Клик по красному сбился: %s" % exc)
+            return False
         if found is None:
+            if getattr(body, "_err_rules", None):
+                # кликнул мимо куска: молчать нельзя, иначе «не работает»
+                print("U0001F446 Клик мимо красного куска (правил %d)"
+                      % len(body._err_rules))
             return False
         self._gloss_hide()
         rule, right, said = found

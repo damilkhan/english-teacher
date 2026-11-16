@@ -3607,6 +3607,15 @@ class EnglishTeacherApp:
             return False          # этот же ответ уже засчитан по тексту (В)
         state = str(result.get("answer_state") or "").strip().lower()
         errors = result.get("errors") or []
+        # §85 (16.11.2026): УТОЧНЯЮЩИЙ ВОПРОС — НЕ ОТВЕТ (то же правило, что
+        # §81 для сцен). Живой урок city/4.1: ученик спросил «your question is
+        # strange», приложение записало это как попытку ответить и стало ждать
+        # повтор. Попытку НЕ тратим и повтора не просим: вопрос задан, на него
+        # надо ответить, а задание остаётся открытым.
+        if str(result.get("move_type") or "").strip().upper() == "Q":
+            print("❓ Уточняющий вопрос ученика — попытку не считаю: %r"
+                  % (text or ""))
+            return False
         # §36/§55: замер 31.10.2026 (живой урок 2.1): ученик повторил фразу
         # ВЕРНО, модель похвалила («you repeated it perfectly»), а задание
         # осталось открытым — Аналитик вернул needs_fix из-за заглавной буквы.
@@ -4815,7 +4824,8 @@ class EnglishTeacherApp:
         except Exception as exc:
             print("⚠️ Подсветка не применилась: %s" % exc)
             return 0
-        print("🖍️ Подсветил ошибок в реплике: %d" % len(spans))
+        print("🖍️ Подсветил ошибок в реплике: %d (покрашено %s, правил %s)"
+              % (len(spans), done, len([x for x in spans if len(x) > 3 and str(x[3]).strip()])))
         return len(spans)
 
 
