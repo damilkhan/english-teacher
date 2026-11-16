@@ -380,6 +380,12 @@ def top_pair(user_id=None, rows=None, min_words=2, max_words=8):
     # Записи пришли СНАРУЖИ и ученик не назван → живую базу не читаем
     # (так же считает aggregate): тесты и отчёты видят ровно данное.
     done_ids = mastered_ids(user_id) if (rows is None or user_id is not None) else set()
+    # §85 (16.11.2026): фразу ученик сказал ВЕРНО → в разминку не берём.
+    # Раньше сюда попадала только отметка правила библиотеки, а у пары без
+    # правила её не было вовсе: «want to see -> would like to see» шла первой
+    # на каждом запуске, шесть раз подряд (жалоба ученика 16.11.2026).
+    done_pairs = (stats_store.pairs_done(user_id)
+                  if (rows is None or user_id is not None) else set())
     # Сама ПАРА тоже считается (живой экзамен 09.11.2026): правило word_choice
     # набрало 20 записей, а внутри него была одна случайная фраза «hamburger ->
     # a cold drink or a hot drink» — она и уходила в дрилл только потому, что
@@ -398,6 +404,8 @@ def top_pair(user_id=None, rows=None, min_words=2, max_words=8):
         for size, date, wrong, correct in items:
             key = (wrong.lower(), correct.lower())
             seen_count = pair_counts.get(key, (0,))[0]
+            if done_pairs and stats_store.pair_key(wrong, correct) in done_pairs:
+                continue         # эту фразу ученик уже сказал верно
             lib = library_rule(wrong, correct)
             if lib and lib in done_ids:
                 continue         # эту пару ученик уже отработал

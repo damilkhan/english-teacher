@@ -261,7 +261,56 @@ def drill_state(user_id=None):
 def mastered_rules(user_id=None):
     """Множество правил, которые больше НЕ считаются пробелом."""
     return {rule for rule, item in drill_state(user_id).items()
-            if item.get("mastered_at")}
+            if item.get("mastered_at") and not rule.startswith(PAIR_PREFIX)}
+
+# §85 (16.11.2026): отметка ФРАЗЫ, а не правила. Ученик: «если я повторил
+# правильно — оно больше не должно появляться». Раньше отметка ставилась
+# только по правилу библиотеки, а у пары без правила её не было вовсе:
+# одна и та же фраза шла первой на каждом запуске (6 раз подряд).
+PAIR_PREFIX = "pair|"
+
+
+def _flat_words(value):
+    return " ".join(str(value or "").lower().split())
+
+
+def pair_key(wrong, correct):
+    """Ключ пары «было -> стало» для drill_state (регистр и пробелы не важны)."""
+    second = _flat_words(correct)
+    if not second:
+        return ""
+    return PAIR_PREFIX + _flat_words(wrong) + "|" + second
+
+
+def pair_mastered(wrong, correct, user_id=None):
+    """Фраза сказана ВЕРНО — в разминку больше не берём (§85)."""
+    key = pair_key(wrong, correct)
+    if not key:
+        return {}
+    now = datetime.now().isoformat()
+    with _LOCK:
+        try:
+            conn = _connect(user_id)
+        except Exception as exc:
+            print("Статистика: база недоступна (%s)" % exc)
+            return {}
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO drill_state (rule, streak, mastered_at,"
+                " updated) VALUES (?, ?, ?, ?)", (key, 1, now, now))
+            conn.commit()
+            return {"rule": key, "streak": 1, "mastered_at": now}
+        except Exception as exc:
+            print("Статистика: отметка фразы не записалась (%s)" % exc)
+            return {}
+        finally:
+            conn.close()
+
+
+def pairs_done(user_id=None):
+    """Пары, которые ученик уже сказал верно: их в разминку не берём."""
+    return {rule for rule, item in drill_state(user_id).items()
+            if item.get("mastered_at") and rule.startswith(PAIR_PREFIX)}
 
 
 def drill_ok(rule, step=1, need=DRILL_MASTER_STREAK, user_id=None):

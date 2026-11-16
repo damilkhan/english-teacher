@@ -294,6 +294,30 @@ def _meaning_verdict(raw):
     return None
 
 
+def _mark_pair_done(wrong, correct, user=None):
+    """Фраза сказана ВЕРНО — в разминку её больше не берём (§85).
+
+    Решение ученика 16.11.2026: «если я повторил правильно — оно больше не
+    должно появляться». Раньше отметка ставилась только по правилу
+    библиотеки, а у пары без правила её не было вовсе: одна и та же фраза
+    шла первой на каждом запуске (6 раз подряд в логе).
+    """
+    if not str(correct or "").strip():
+        return False
+    try:
+        import stats_store
+        state = stats_store.pair_mastered(wrong, correct,
+                                         (user or {}).get("id"))
+    except Exception as exc:
+        print("⚠️ Отметка разминки не записалась: %s" % exc)
+        return False
+    if state:
+        print("🏅 Фраза отработана: %r -> %r (больше не спрашиваем)"
+              % (str(wrong or ""), str(correct or "")))
+        return True
+    return False
+
+
 def _said_old_error(wrong, text):
     """Звучит ли СТАРАЯ ошибка в реплике? Тогда модель не зовём (§65)."""
     try:
@@ -2468,6 +2492,8 @@ class EnglishTeacherApp:
         self.add_message(self.teacher_name, said)
         self._say_after_current(want)
         print("🏁 Дрилл (одна фраза) пройден: %r" % text)
+        _mark_pair_done(getattr(session, "drill_wrong", ""), want,
+                       getattr(self, "current_user", None))
         self._offer_alts(want)
         self._credit_task(session, text, marked=False)
         cont = getattr(self, "_continue_after_drill", None)   # заглушки тестов
@@ -2873,6 +2899,8 @@ class EnglishTeacherApp:
     def _drill_finish(self, session):
         """Дрилл кончился: короткое слово ученику. Задание НЕ засчитываем (§70)."""
         clean = bool(getattr(session, "drill_clean", False))
+        pair_wrong = str(getattr(session, "drill_wrong", "") or "")
+        pair_correct = str(getattr(session, "drill_correct", "") or "")
         line = ("🏁 Drill done." if clean
                 else "🏁 Drill done. There were misses — we will repeat it later.")
         self.add_message(self.teacher_name, line)
@@ -2888,6 +2916,9 @@ class EnglishTeacherApp:
             print("⚠️ Разминка не закрылась: %s" % exc)
         if moved:
             self._asked_repeat = ""
+            if clean:
+                _mark_pair_done(pair_wrong, pair_correct,
+                               getattr(self, "current_user", None))
             self._sync_lesson_prompt(drill_done=True)
             try:
                 self.lesson_bar.set_progress(session.progress_text())
@@ -3019,6 +3050,9 @@ class EnglishTeacherApp:
 
     def _scene_drill_pass(self, session, correct):
         """Фраза перед сценой принята: эталон, варианты и начало сцены."""
+        drill = getattr(self, "_scene_drill", None) or {}
+        _mark_pair_done(drill.get("wrong"), correct,
+                        getattr(self, "current_user", None))
         self._scene_drill = None
         self.add_message(self.teacher_name, "✅ " + correct)
         self._offer_alts(correct)
