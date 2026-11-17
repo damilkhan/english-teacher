@@ -1,0 +1,250 @@
+{
+  "level": "a2",
+  "english": "american",
+  "status": "пилот 16.11.2026 — блок city/4, тексты пишет ассистент, ученик просматривает",
+  "note": "Материал урока для модели: мини-сцена (4-6 реплик), вопросы ТОЛЬКО по сцене, фразы, которые ученик должен уметь сказать сам. Модель этот текст НЕ сочиняет и НЕ меняет (решение 67). id совпадает с knowledge_base/curriculum.json. Вопросы в ask — про то, что было в сцене, а не про жизнь ученика. Пустой/отсутствующий урок — прежнее поведение промпта.",
+  "lessons": {
+    "city/4.1": {
+      "topic": "Comparing Things",
+      "title": "Bigger than / the biggest",
+      "words": [
+        "bigger",
+        "smaller",
+        "newer",
+        "the biggest",
+        "more expensive",
+        "the best"
+      ],
+      "phrases": [
+        {
+          "ru": "Синий дом больше, чем жёлтый.",
+          "en": "The blue house is bigger than the yellow one.",
+          "rule": "comparison",
+          "why": "bigger — сравниваем ДВА предмета: к короткому слову + er."
+        },
+        {
+          "ru": "Это самый большой дом на улице.",
+          "en": "This is the biggest house on the street.",
+          "rule": "comparison",
+          "why": "the biggest — самый большой среди всех: the + слово + est."
+        },
+        {
+          "ru": "Моя квартира меньше твоей.",
+          "en": "My flat is smaller than yours.",
+          "rule": "comparison",
+          "why": "smaller than — «меньше, чем»: после than ставим второе."
+        },
+        {
+          "ru": "Он дороже, чем тот.",
+          "en": "It is more expensive than that one.",
+          "rule": "comparison",
+          "why": "more expensive — длинное слово, поэтому more, а не -er."
+        },
+        {
+          "ru": "Какой из них лучше?",
+          "en": "Which one is better?",
+          "rule": "comparison",
+          "why": "Which one is better? — better — особая форма от good."
+        },
+        {
+          "ru": "Это лучший вариант для семьи.",
+          "en": "This is the best choice for a family.",
+          "rule": "comparison",
+          "why": "the best — превосходная степень от good."
+        }
+      ],
+      "scene": [
+        {
+          "who": "Ann",
+          "en": "Look at these two houses. The blue one is bigger."
+        },
+        {
+          "who": "Ben",
+          "en": "Yes, but the yellow one is newer."
+        },
+        {
+          "who": "Ann",
+          "en": "And the blue house has the biggest garden on the street."
+        },
+        {
+          "who": "Ben",
+          "en": "But it is more expensive than the yellow one."
+        },
+        {
+          "who": "Ann",
+          "en": "So which house is better for a family?"
+        }
+      ],
+      "ask": [
+        "Which house is bigger, the blue one or the yellow one?",
+        "Which house has the biggest garden?",
+        "Which house would you take and why?"
+      ],
+      "picture": "a2/mountain-village"
+    },
+    "city/4.2": {
+      "topic": "Comparing Things",
+      "title": "Better or worse?",
+      "words": [
+        "better",
+        "worse",
+        "cheaper",
+        "smaller",
+        "good enough",
+        "the battery"
+      ],
+      "phrases": [
+        {
+          "ru": "Этот телефон лучше, чем тот.",
+          "en": "This phone is better than that one.",
+          "rule": "comparison",
+          "why": "better — особая форма, не «gooder»."
+        },
+        {
+          "ru": "Мой старый телефон был хуже.",
+          "en": "My old phone was worse.",
+          "rule": "comparison",
+          "why": "worse — тоже особая форма, от bad."
+        },
+        {
+          "ru": "Он дешевле, но не лучше.",
+          "en": "It is cheaper, but not better.",
+          "rule": "comparison",
+          "why": "cheaper, but not better — сравниваем две вещи в одной фразе."
+        },
+        {
+          "ru": "Какой телефон лучше для тебя?",
+          "en": "Which phone is better for you?",
+          "rule": "comparison",
+          "why": "better for you — после better можно уточнить, для кого."
+        },
+        {
+          "ru": "Батарея хуже, чем раньше.",
+          "en": "The battery is worse than before.",
+          "rule": "comparison",
+          "why": "worse than before — сравниваем с тем, как было раньше."
+        },
+        {
+          "ru": "Мне и этого хватает.",
+          "en": "This one is good enough for me.",
+          "rule": "comparison",
+          "why": "good enough — «достаточно хороший», без сравнения."
+        }
+      ],
+      "scene": [
+        {
+          "who": "Ann",
+          "en": "Look, two phones! This one is cheaper."
+        },
+        {
+          "who": "Jack",
+          "en": "But that one is better. And it is smaller."
+        },
+        {
+          "who": "Ann",
+          "en": "My old phone was worse than both of them."
+        },
+        {
+          "who": "Jack",
+          "en": "This one takes better photos, but the battery is worse."
+        },
+        {
+          "who": "Ann",
+          "en": "So the cheap one is good enough for me."
+        },
+        {
+          "who": "Jack",
+          "en": "And which one do you like more?"
+        }
+      ],
+      "ask": [
+        "Which phone would you take and why?",
+        "What is worse about the cheap phone?",
+        "Was Ann's old phone better or worse than these two?"
+      ],
+      "picture": "a2/store-inside"
+    },
+    "city/4.3": {
+      "topic": "Comparing Things",
+      "title": "Two phones: which one?",
+      "words": [
+        "which one",
+        "more expensive",
+        "cheaper",
+        "a better camera",
+        "I will take",
+        "is there"
+      ],
+      "phrases": [
+        {
+          "ru": "Какой из них лучше?",
+          "en": "Which one is better?",
+          "rule": "comparison",
+          "why": "Which one is better? — вопрос про выбор из двух."
+        },
+        {
+          "ru": "Он дороже, чем тот.",
+          "en": "It is more expensive than that one.",
+          "rule": "comparison",
+          "why": "more expensive than that one — длинное слово: more."
+        },
+        {
+          "ru": "Маленький дешевле.",
+          "en": "The small one is cheaper.",
+          "rule": "comparison",
+          "why": "The small one is cheaper — the small one = тот маленький."
+        },
+        {
+          "ru": "Я возьму этот.",
+          "en": "I will take this one.",
+          "rule": "comparison",
+          "why": "I will take this one — «возьму этот»."
+        },
+        {
+          "ru": "Есть телефон подешевле?",
+          "en": "Is there a cheaper phone?",
+          "rule": "comparison",
+          "why": "Is there a cheaper phone? — вопрос с there is."
+        },
+        {
+          "ru": "У этого камера лучше.",
+          "en": "This one has a better camera.",
+          "rule": "comparison",
+          "why": "This one has a better camera — better перед словом."
+        }
+      ],
+      "scene": [
+        {
+          "who": "Assistant",
+          "en": "Can I help you?"
+        },
+        {
+          "who": "Ann",
+          "en": "Yes, I need a phone. Which one is better?"
+        },
+        {
+          "who": "Assistant",
+          "en": "This one is more expensive, but the camera is better."
+        },
+        {
+          "who": "Ann",
+          "en": "And the small one? It is cheaper."
+        },
+        {
+          "who": "Assistant",
+          "en": "It is cheaper, but the battery is worse."
+        },
+        {
+          "who": "Ann",
+          "en": "OK, I will take the black one."
+        }
+      ],
+      "ask": [
+        "Which phone did Ann take?",
+        "What is worse about the small phone?",
+        "Would you take the expensive phone or the cheap one? Why?"
+      ],
+      "picture": "a2/store-inside"
+    }
+  }
+}

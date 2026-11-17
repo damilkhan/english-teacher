@@ -22,6 +22,7 @@
 # =========================================================
 
 import os
+import re
 import threading
 import time
 import tkinter as tk
@@ -53,6 +54,7 @@ import reactions
 import server_manager
 import translate
 import translate_task
+import lesson_material
 import settings_store
 import stt_engine
 import theme
@@ -1591,6 +1593,18 @@ class EnglishTeacherApp:
         if session is None:
             return None
 
+        # §86 (17.11.2026): у урока есть готовый материал (data/lessons_a2.json)
+        # — сцена, вопросы по ней и фразы. Заданий тогда больше обычного:
+        # сначала вопросы по сцене (ведёт модель), потом фразы (приложение).
+        material = self._material_of(data.get("id"))
+        # фото после урока берётся ПО ТЕМЕ этого урока (§86, шаг 3)
+        self._picture_material = material or {}
+        if material:
+            try:
+                session.set_tasks_total(lesson_material.tasks_count(data.get("id")))
+            except Exception as exc:
+                print("\u26a0\ufe0f Заданий по материалу не поставил: %s" % exc)
+
         if scene_id and session.start_scene(scene_id, scene_counts):
             # сцена: ШАГИ становятся заданиями урока (6 шагов = 6 заданий)
             print("🎬 Сцена: %s — %s (шагов %d, вопросов %d)"
@@ -1622,6 +1636,11 @@ class EnglishTeacherApp:
         # §36: без заданий task_prompt() пустой — словарь экзамена и
         # аудирования не меняется ни на байт.
         lesson_payload.update(session.task_prompt())
+        # §86: материал уходит в промпт — модель спрашивает по СЦЕНЕ, а не
+        # выдумывает («какое самое большое здание рядом», живой урок 4.1).
+        if material:
+            lesson_payload["scene"] = material.get("scene")
+            lesson_payload["ask"] = material.get("ask")
         self._lesson_payload = dict(lesson_payload)
         try:
             self.chat.set_lesson(lesson_payload)
@@ -1661,6 +1680,12 @@ class EnglishTeacherApp:
         # поэтому перед первым ответом ученика задан 1 вопрос.
         self._sync_exam_asked()
         self.add_message(self.teacher_name, opening)
+        # §86: то, о чём будем говорить, ученик видит ДО вопроса: сцену
+        # пишет человек, модель её не пересказывает (иначе переврёт).
+        if material and material.get("scene"):
+            self.add_message(self.teacher_name,
+                             "🎬 Сцена урока:\n" +
+                             lesson_material.scene_text(data.get("id")))
         try:
             self.tabs.set("Чат")          # урок идёт в чате — покажем его
         except Exception:
@@ -2000,7 +2025,12 @@ class EnglishTeacherApp:
         except Exception as exc:
             print("⚠️ Список показанных фото не прочитан: %s" % exc)
             used = []
-        task = picture_task.describe_task(self._picture_level(), used=used)
+        material = getattr(self, "_picture_material", None) or {}
+        # §86 (шаг 3): фото по теме урока — у каждой картинки в
+        # assets/pictures/pictures.json есть topic и points.
+        task = picture_task.describe_task(self._picture_level(), used=used,
+                                          topic=material.get("topic") or "",
+                                          key=material.get("picture") or "")
         if not task:
             print("ℹ️ Фото для задания не найдено (§18: assets/pictures)")
             # Фото нет — урок всё равно кончился: снимаем блокировку, иначе
@@ -2015,9 +2045,15 @@ class EnglishTeacherApp:
             print("⚠️ Показанное фото не записано: %s" % exc)
         # Текст задания — ПО-АНГЛИЙСКИ (просьба ученика 26.10.2026):
         # русская реплика учителя в истории переключает урок на русский.
+        # §86: слова урока — МЯГКАЯ подсказка, требования нет. Решение
+        # ученика 16.11.2026: фразы урока использовать не обязательно.
+        words = [str(w).strip() for w in (material.get("words") or [])
+                 if str(w).strip()][:5]
+        task["words"] = words
+        hint = (" Try to use: %s." % ", ".join(words)) if words else ""
         text = ("📷 New task: describe what you see in the photo. "
-                "Say or write at least %d letters."
-                % task["threshold"])
+                "Say or write at least %d letters.%s"
+                % (task["threshold"], hint))
         mark = self.add_message(self.teacher_name, text, picture=task["path"])
         try:
             self.input_bar.set_counter(task["threshold"])
@@ -2045,10 +2081,12 @@ class EnglishTeacherApp:
                 self.input_bar.clear_counter()
             except Exception:
                 pass
+            words_line = picture_task.words_report(text, task.get("words"))
             mark = self.add_message(
                 self.teacher_name,
-                "✅ Task accepted: %d letters of %d. Well done!"
-                % (result["letters"], result["threshold"]))
+                "✅ Task accepted: %d letters of %d. Well done!%s"
+                % (result["letters"], result["threshold"],
+                   ("\n" + words_line) if words_line else ""))
             # Голосом тоже: раньше задание было «немым» (§43).
             self._say_after_current(
                 "Task accepted. %d letters of %d. Well done!"
@@ -2589,6 +2627,54 @@ class EnglishTeacherApp:
         return True
 
     # ---------------- урок с переводом РУССКИХ фраз (§82) ----------------
+    # ---------------- материал урока: сцена + вопросы + фразы (§86) --------
+    def _material_of(self, lesson_id):
+        """Материал урока или None (§86). Ошибка файла урок не роняет."""
+        try:
+            return lesson_material.get(lesson_id)
+        except Exception as exc:
+            print("\u26a0\ufe0f Материал урока не прочитался: %s" % exc)
+            return None
+
+    def _material_ask_left(self, session):
+        """Сколько вопросов по сцене осталось (0 — дальше фразы)."""
+        material = self._material_of(getattr(session, "lesson_id", ""))
+        if not material:
+            return 0
+        try:
+            done = int(getattr(session, "tasks_done", 0) or 0)
+        except (TypeError, ValueError):
+            done = 0
+        return max(0, len(material.get("ask") or []) - done)
+
+    def _start_material_translate(self, session):
+        """Вопросы по сцене пройдены — дальше фразы на перевод (§86).
+
+        Решение ученика 17.11.2026 (вариант 3): урок из двух частей.
+        Сначала разговор по сцене — его ведёт МОДЕЛЬ (вопросы открытые,
+        «which phone would you take and why», код такое принять не может).
+        Потом фразы: их даёт ПРИЛОЖЕНИЕ и сверяет с эталоном (§82).
+        """
+        if session is None or not getattr(session, "is_active", False):
+            return False
+        if not getattr(session, "has_tasks", False):
+            return False
+        if getattr(session, "all_tasks_done", False):
+            return False
+        material = self._material_of(session.lesson_id)
+        if not material or not material.get("phrases"):
+            return False
+        if self._material_ask_left(session):
+            return False                 # ещё не все вопросы по сцене
+        try:
+            done = int(getattr(session, "tasks_done", 0) or 0)
+        except (TypeError, ValueError):
+            return False
+        if done != len(material.get("ask") or []):
+            return False                 # фразы уже идут (или ещё рано)
+        print("➡️ §86: вопросы по сцене пройдены — дальше фразы")
+        return bool(self._translate_ask(session))
+
     def _start_translate_lesson(self, session):
         """Фразы есть — задание даёт приложение, модель не зовём (§82).
 
@@ -2603,6 +2689,12 @@ class EnglishTeacherApp:
                     or lesson_mod.is_story_lesson(session.lesson_type)):
                 return False
         except Exception:
+            return False
+        # §86 (17.11.2026): урок из двух частей — сначала разговор по сцене
+        # (его ведёт модель), фразы приложение даёт ПОСЛЕ вопросов.
+        # getattr: у заглушек в тестах этого метода нет (§85).
+        left = getattr(self, "_material_ask_left", None)
+        if left is not None and left(session):
             return False
         if not session.start_translate():
             return False
@@ -5303,6 +5395,11 @@ class EnglishTeacherApp:
         # §36 (вариант В): ученик повторил исправление — задание сдано ДО
         # ответа учителя, поэтому он сразу даёт следующее в той же реплике.
         self._credit_task_by_text(text)
+        # §86 (17.11.2026): вопросы по сцене кончились — дальше фразы на
+        # перевод, их даёт приложение. Модель не зовём: она бы выдала ещё
+        # одно «задание» по теме, а урок уже перешёл к фразам.
+        if self._start_material_translate(session):
+            return
         # §66 (10.11.2026): зачёт мог ЗАКРЫТЬ урок. Тогда модель не зовём:
         # на просьбу «похвали и остановись» она всё равно дописывает вопрос
         # («A card is great, Danil; now tell me, what kind of card do you

@@ -1075,6 +1075,25 @@ class LessonSession:
             self.asked_tasks.append(value)
         del self.asked_tasks[:-6]
 
+    def set_tasks_total(self, total: Any) -> bool:
+        """Сколько заданий в уроке (§86, 17.11.2026).
+
+        У урока с готовым материалом (data/lessons_a2.json) заданий больше,
+        чем обычные для speaking: сначала вопросы по сцене, потом фразы на
+        перевод. Ставится ОДИН раз при старте, до первого задания.
+        """
+        if not self.is_active:
+            return False
+        try:
+            value = int(total)
+        except (TypeError, ValueError):
+            return False
+        if value <= 0:
+            return False
+        self.tasks_total = value
+        return True
+
+
     def start_translate(self) -> bool:
         """§82: урок-«выявление пробелов» — фразу даёт ПРИЛОЖЕНИЕ, не модель.
 

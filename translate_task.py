@@ -16,6 +16,8 @@
 import json
 import os
 
+import lesson_material
+
 ROOT = os.path.dirname(os.path.abspath(__file__))
 TASKS_PATH = os.path.join(ROOT, "data", "tasks_a2.json")
 
@@ -67,8 +69,17 @@ def has(lesson_id):
 
 
 def phrases_for(lesson_id):
-    """Все фразы урока (пустой список — урока нет в файле)."""
-    return list(load().get(str(lesson_id or ""), []))
+    """Все фразы урока (пустой список — урока нет в файле).
+
+    17.11.2026: фразы могут лежать и в data/lessons_a2.json — там они стоят
+    рядом со сценой урока (урок идёт двумя частями: разговор по сцене, потом
+    перевод этих фраз). Формат строки тот же, поэтому разницы для кода нет.
+    """
+    key = str(lesson_id or "")
+    rows = list(load().get(key, []))
+    if rows:
+        return rows
+    return lesson_material.phrases(key)
 
 
 def pick(lesson_id, index=0):

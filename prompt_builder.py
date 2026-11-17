@@ -266,6 +266,49 @@ the student to say the sentence again: praise the answer in three or four words
 and give the NEXT task in the SAME reply — one task per reply, never two.
 """
 
+# §86 (17.11.2026): МАТЕРИАЛ УРОКА. В живом уроке city/4.1 модель не знала,
+# о чём говорить: в промпт уходило только название блока, и она выдумывала
+# вопросы про «самое большое здание рядом». Теперь у урока из
+# data/lessons_a2.json есть готовая мини-сцена и 2-3 вопроса ТОЛЬКО по ней.
+# Урока нет в файле — блока нет, вывод промпта прежний байт-в-байт.
+SCENE_TEMPLATE = """
+\n\U0001F3AC SITUATION of this lesson. This is ready material: do not change it,
+do not add facts and do not move it to another topic.
+{lines}
+Ask the student ONLY these questions, ONE per reply, in this order:
+{questions}
+Do not invent other questions. Never ask about the student's street, city,
+building, job, weekend or plans. If the student asks what something in the
+situation means, answer in ONE short line using the situation itself.
+"""
+
+def _scene_block(lesson):
+    """Блок «готовый материал урока»: сцена и вопросы по ней (§86).
+
+    Пусто, если у урока нет поля scene — тогда промпт прежний байт-в-байт.
+    """
+    if not isinstance(lesson, dict):
+        return ""
+    lines = []
+    for row in (lesson.get("scene") or ()):
+        if not isinstance(row, dict):
+            continue
+        en = str(row.get("en") or "").strip()
+        if not en:
+            continue
+        who = str(row.get("who") or "").strip()
+        lines.append("- %s: %s" % (who, en) if who else "- %s" % en)
+    questions = [str(q).strip() for q in (lesson.get("ask") or ())
+                 if str(q).strip()]
+    if not lines and not questions:
+        return ""
+    numbered = "\r\n".join("%d. %s" % (i + 1, q)
+                             for i, q in enumerate(questions))
+    return SCENE_TEMPLATE.format(
+        lines="\r\n".join(lines) or "-",
+        questions=numbered or "1. Ask one question about the situation.")
+
+
 def _lesson_block(lesson):
     """Блок «идёт занятие». Пусто, если занятия нет (обратная совместимость)."""
     if not lesson:
@@ -283,9 +326,12 @@ def _lesson_block(lesson):
     task_line = ("Do this first: %s\n" % task) if task else ""
     # задания урока: пустая строка, если заданий нет — вывод не меняется
     task_cycle = _task_cycle_block(lesson if isinstance(lesson, dict) else None)
+    # §86: сцена урока стоит ПОСЛЕДНЕЙ — она сильнее строки «дай
+    # следующее задание»: вопросы берутся только из неё.
+    scene_block = _scene_block(lesson if isinstance(lesson, dict) else None)
     return LESSON_BLOCK_TEMPLATE.format(title=title, topic=topic or title,
                                         task_line=task_line,
-                                        task_cycle=task_cycle)
+                                        task_cycle=task_cycle) + scene_block
 
 
 def _task_cycle_block(lesson):

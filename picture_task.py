@@ -73,6 +73,38 @@ def level_for_threshold(level):
     return normalize_level(level) or "A2"
 
 
+def _word_stem(word):
+    """Основа слова для сверки: expensive→expens, bigger→bigg, used→us."""
+    stem = str(word or "").strip().lower()
+    for tail in ("est", "ing", "er", "ed", "s"):
+        if len(stem) > len(tail) + 2 and stem.endswith(tail):
+            return stem[:-len(tail)]
+    return stem
+
+
+def words_report(text, words):
+    """Какие слова урока прозвучали в описании — ФАКТ, без оценки (§86).
+
+    Решение ученика 16.11.2026: фото-задание фразы урока НЕ требует, поэтому
+    это не проверка, а строчка для сведения. Зачёт задания — по буквам.
+    Пустая строка, если слов урока нет.
+    """
+    items = [str(w).strip() for w in (words or ()) if str(w).strip()]
+    if not items:
+        return ""
+    low = str(text or "").lower()
+    used, missed = [], []
+    for word in items:
+        rx = re.compile(r"(?<![a-z0-9])" + re.escape(_word_stem(word)))
+        (used if rx.search(low) else missed).append(word)
+    parts = []
+    if used:
+        parts.append("used: %s" % ", ".join(used))
+    if missed:
+        parts.append("not used: %s" % ", ".join(missed))
+    return "\U0001F50E Words from the lesson — %s." % "; ".join(parts)
+
+
 def threshold_for(level):
     """Порог букв (ЖЁСТКИЙ) для уровня."""
     table = getattr(config, "PICTURE_LETTER_THRESHOLDS", {}) or {}
@@ -190,15 +222,53 @@ def check_description(text, level):
     }
 
 
-def describe_task(level, catalog=None, used=None):
+def pick_by_topic(level, topic="", catalog=None, used=None):
+    """Ключ фото по ТЕМЕ урока (§86, 17.11.2026).
+
+    Сначала ищем фото нужного уровня с той же темой, потом — среди всех.
+    Среди найденных берём ещё не показанное (как pick_picture).
+    Пусто — темы нет в каталоге, вызывающий берёт случайное по уровню.
+    """
+    catalog = load_catalog() if catalog is None else catalog
+    want = str(topic or "").strip().lower()
+    if not want:
+        return None
+    same_level, other_level = [], []
+    for key, card in catalog.items():
+        have = str(card.get("topic") or "").strip().lower()
+        if not have:
+            continue
+        if have != want and want not in have and have not in want:
+            continue
+        if normalize_level(card.get("level")) == normalize_level(level):
+            same_level.append(key)
+        else:
+            other_level.append(key)
+    keys = sorted(same_level) or sorted(other_level)
+    if not keys:
+        return None
+    used = set(used or ())
+    fresh = [k for k in keys if k not in used]
+    return random.choice(fresh or keys)
+
+
+def describe_task(level, catalog=None, used=None, topic="", key=""):
     """Данные задания для одного фото: тема, пункты, путь, порог.
 
     used — ключи уже показанных фото (профиль ученика), чтобы не повторяться.
     """
     catalog = load_catalog() if catalog is None else catalog
-    key = pick_picture(level, used=used, catalog=catalog)
-    if not key:
+    # §86: фото может быть привязано к уроку — по ключу (data/lessons_a2.json,
+    # поле picture) или по теме. Нет ни того, ни другого — как раньше:
+    # случайное среди непоказанных фото этого уровня.
+    chosen = str(key or "").strip()
+    if chosen not in catalog:
+        chosen = pick_by_topic(level, topic, catalog, used) or ""
+    if not chosen:
+        chosen = pick_picture(level, used=used, catalog=catalog) or ""
+    if not chosen:
         return None
+    key = chosen
     entry = dict(catalog[key])
     entry["key"] = key
     entry["threshold"] = threshold_for(level)

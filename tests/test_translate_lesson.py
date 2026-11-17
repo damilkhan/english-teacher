@@ -73,8 +73,10 @@ def test_phase():
 def test_material():
     print("\n[2] Материал: фразы пилота")
     check("фразы для city/5.1 есть", translate_task.has("city/5.1") is True)
-    check("фразы для city/4.1 нет (урок идёт как раньше)",
-          translate_task.has("city/4.1") is False)
+    # 17.11.2026 (§86): у city/4.1 теперь есть МАТЕРИАЛ урока в
+    # data/lessons_a2.json (сцена + фразы), поэтому фразы у него есть.
+    check("фразы для city/2.1 нет (урок идёт как раньше)",
+          translate_task.has("city/2.1") is False)
     phrase = translate_task.pick("city/5.1", 0)
     check("у фразы есть ru/en/rule",
           bool(phrase.get("ru") and phrase.get("en") and phrase.get("rule")),
@@ -183,7 +185,10 @@ def test_start():
     check("полоса урока показывает перевод",
           app.lesson_bar.text == "Перевод 1/5", app.lesson_bar.text)
 
-    app2 = _app("city/4.1")
+    # 17.11.2026 (§86): city/4.1 теперь с МАТЕРИАЛОМ урока — у него есть
+    # и сцена, и фразы. Урок без фраз проверяем на city/2.1 (нет ни в одном
+    # файле): он идёт как раньше, перевод его не забирает.
+    app2 = _app("city/2.1")
     check("урок без фраз переводу не подчиняется",
           app2._start_translate_lesson(app2.lesson.session) is False)
 
