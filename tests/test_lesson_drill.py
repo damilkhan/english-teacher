@@ -186,6 +186,10 @@ def test_flag_and_picker():
 
     real_top = gaps.top_pair
     keep_flag = getattr(config, "LESSON_MISTAKE_DRILL", True)
+    # §86 (17.11.2026): по умолчанию разминка ВЫКЛЮЧЕНА (пары из базы —
+    # обрывки фраз, «a movie» вместо «in the movie»). Здесь проверяется сам
+    # механизм, поэтому флаг включаем явно.
+    config.LESSON_MISTAKE_DRILL = True
     try:
         gaps.top_pair = lambda user_id=None, **kw: {
             "rule": "word_choice", "label": "не то слово", "wrong": WRONG,
