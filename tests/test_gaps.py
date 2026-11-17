@@ -65,7 +65,7 @@ SAMPLE = rows(
 # =========================================================
 def test_normalize():
     print("\n[1] normalize_rule")
-    check("10 правил в списке", len(gaps.RULES) == 10, gaps.RULES)
+    check("11 правил в списке", len(gaps.RULES) == 11, gaps.RULES)
     check("правило из списка проходит", gaps.normalize_rule("past_simple") == "past_simple")
     check("регистр и пробелы чинятся", gaps.normalize_rule(" Word Order ") == "word_order")
     check("дефис тоже", gaps.normalize_rule("past-simple") == "past_simple")

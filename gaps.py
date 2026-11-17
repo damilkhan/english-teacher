@@ -29,7 +29,8 @@ except Exception:                      # pragma: no cover
 
 # Закрытый список правил (модель своё придумать не может).
 RULES = ("past_simple", "aux_verb", "verb_form", "word_order", "article",
-         "preposition", "plural", "spelling", "word_choice", "other")
+         "preposition", "plural", "spelling", "word_choice", "comparison",
+         "other")
 
 # Подписи для вкладки «Профиль» (по-русски, ученик читает их).
 RULE_RU = {
@@ -42,6 +43,7 @@ RULE_RU = {
     "plural": "множественное число",
     "spelling": "написание",
     "word_choice": "не то слово / форма слова",
+    "comparison": "сравнение: bigger / the biggest",
     "other": "прочее (без правила)",
 }
 
@@ -56,6 +58,7 @@ RULE_EN = {
     "plural": "plural of nouns",
     "spelling": "spelling",
     "word_choice": "word choice (wrong word or word form)",
+    "comparison": "comparison (bigger / the biggest / more expensive)",
     "other": "other",
 }
 

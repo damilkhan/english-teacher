@@ -539,6 +539,84 @@
         "watched",
         "watching"
       ]
+    },
+    "a2.comparison": {
+      "rule": "comparison",
+      "kind": "grammar",
+      "default": true,
+      "title": "Сравнение: bigger / the biggest",
+      "when": "Сравниваем ДВА предмета — короткое слово + er + than (bigger than). Один предмет лучше всех — the + слово + est (the biggest). Длинное слово (expensive) — more / the most, а не -er. Особые формы: good → better → the best, bad → worse → the worst.",
+      "examples": [
+        "My city is bigger than this one.",
+        "This is the biggest house on the street.",
+        "It is more expensive than that one.",
+        "This phone is better. That one is worse."
+      ],
+      "wrong": "This is more bigger house.",
+      "words": [
+        "bigger",
+        "biggest",
+        "more expensive",
+        "better",
+        "worse"
+      ],
+      "hints": [
+        "than",
+        "est",
+        "er",
+        "most",
+        "the best",
+        "the worst"
+      ]
+    },
+    "a2.few_a_few": {
+      "rule": "word_choice",
+      "kind": "grammar",
+      "title": "few / a few / little / a little — мало или немного",
+      "when": "few и a few — про то, что МОЖНО посчитать (friends, shops). a few — «немного, но есть». few — «мало, почти нет». little и a little — про то, что не считаем (water, time).",
+      "examples": [
+        "I have a few friends here.",
+        "Few people know this place.",
+        "There is little time.",
+        "Can I have a little water?"
+      ],
+      "wrong": "I have few money.",
+      "words": [
+        "few",
+        "a few",
+        "little",
+        "a little"
+      ],
+      "hints": [
+        "many",
+        "much",
+        "money",
+        "time",
+        "friends"
+      ]
+    },
+    "a2.there_is_are": {
+      "rule": "word_choice",
+      "kind": "grammar",
+      "title": "there is / there are — «что-то есть»",
+      "when": "Говорим, что что-то ЕСТЬ или чего-то НЕТ в каком-то месте. Один предмет — there is, несколько — there are. Вопрос: Is there…? / Are there…?",
+      "examples": [
+        "There is a shop near my house.",
+        "There are two phones on the table.",
+        "Is there a cheaper phone?",
+        "There are not many people here."
+      ],
+      "wrong": "There is two phones on the table.",
+      "words": [
+        "there is",
+        "there are"
+      ],
+      "hints": [
+        "there was",
+        "there were",
+        "are there",
+        "is there"
+      ]
     }
   }
 }

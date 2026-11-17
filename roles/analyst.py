@@ -82,12 +82,13 @@ Rules:
   Each item: {"type": "grammar|vocabulary|spelling|pronunciation", "wrong": "...", "correct": "...", "rule": "...", "note": "short"}.
   "rule" is ONE word from this closed list (your own labels are not allowed):
   past_simple, aux_verb, verb_form, word_order, article, preposition, plural,
-  spelling, word_choice, other.
+  spelling, word_choice, comparison, other.
   past_simple = past tense form; aux_verb = do/does/did, questions, negatives;
   verb_form = verb form after a modal or wrong -ing/-ed; word_order = order of
   words; article = a/an/the; preposition = in/on/at and other prepositions;
   plural = plural of a noun; spelling = letters of a word; word_choice = wrong
-  word or wrong form of a word; other = anything else.
+  word or wrong form of a word; comparison = comparing things (bigger, the
+  biggest, more expensive, better, worse); other = anything else.
   Use [] if there are no real errors. Never invent errors.
 - Speech hesitations: the student talks ALOUD and may repeat a word or phrase
   ("the park in the park", "I I think"). A repetition, a restart or a stutter is
