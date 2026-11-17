@@ -275,8 +275,9 @@ SCENE_TEMPLATE = """
 \n\U0001F3AC SITUATION of this lesson. This is ready material: do not change it,
 do not add facts and do not move it to another topic.
 {lines}
-Ask the student ONLY these questions, ONE per reply, in this order:
+These questions go ONE per reply, in this order (the marker shows where we are):
 {questions}
+{where}
 Do not invent other questions. Never ask about the student's street, city,
 building, job, weekend or plans. If the student asks what something in the
 situation means, answer in ONE short line using the situation itself.
@@ -302,11 +303,38 @@ def _scene_block(lesson):
                  if str(q).strip()]
     if not lines and not questions:
         return ""
-    numbered = "\r\n".join("%d. %s" % (i + 1, q)
-                             for i, q in enumerate(questions))
+    # §86 (17.11.2026): модель должна ЗНАТЬ, на каком вопросе стоит урок.
+    # Живой урок city/4.1: ученик верно ответил на вопрос 1, а модель вместо
+    # вопроса 2 попросила «скажи ещё раз» ту же фразу — она не видела, что
+    # первый вопрос уже позади.
+    try:
+        done = int(lesson.get("ask_done") or 0)
+    except (TypeError, ValueError):
+        done = 0
+    done = max(0, min(len(questions), done))
+    rows = []
+    for i, q in enumerate(questions):
+        if i < done:
+            rows.append("%d. (already answered) %s" % (i + 1, q))
+        elif i == done:
+            rows.append("%d. ASK THIS NOW: %s" % (i + 1, q))
+        else:
+            rows.append("%d. %s" % (i + 1, q))
+    numbered = "\r\n".join(rows)
+    if done < len(questions):
+        where = ("The student has already answered %d of %d questions. Ask "
+                 "number %d now and wait. Do NOT ask the student to repeat an "
+                 "answer he already gave: it was correct."
+                 % (done, len(questions), done + 1))
+    else:
+        where = ("All situation questions are answered. The next tasks are "
+                 "short sentences in English and the application gives them "
+                 "itself: do not ask about the situation any more and do not "
+                 "ask for a repeat.")
     return SCENE_TEMPLATE.format(
         lines="\r\n".join(lines) or "-",
-        questions=numbered or "1. Ask one question about the situation.")
+        questions=numbered or "1. Ask one question about the situation.",
+        where=where)
 
 
 def _lesson_block(lesson):
@@ -396,8 +424,8 @@ def _task_cycle_block(lesson):
                 " words and give task %d of %d right now, in this same reply."
                 " Do NOT ask for the drill phrase again." % (index, total))
     elif lesson.get("task_done_now"):
-        line = ("Task %d of %d is DONE. Praise the repeat in three or four words"
-                " and give task %d of %d right now, in this same reply."
+        line = ("Task %d of %d is DONE. Praise the student's answer in three or"
+                " four words and give task %d of %d right now, in this same reply."
                 % (max(1, index - 1), total, index, total))
     elif last:
         line = ("Task %d of %d is the LAST task. If the student answered correctly,"
@@ -416,6 +444,13 @@ def _task_cycle_block(lesson):
     # одно и то же задание три раза подряд (живой урок city/3.3, 10.11.2026).
     used = ""
     asked = str(lesson.get("asked_tasks") or "").strip()
+    # §86: в уроке с готовой сценой список «уже сделано» не нужен и ВРЕДЕН.
+    # Живой урок city/4.1: засчитывается ОТВЕТ ученика, и в промпт уходило
+    # «Already done: the blue house is bigger than the yellow house» — модель
+    # прочитала это как задание и попросила сказать ту же фразу ещё раз.
+    # Где мы стоим, теперь говорит сам блок сцены (маркер ASK THIS NOW).
+    if lesson.get("ask"):
+        asked = ""
     if asked and phase != "done" and not lesson.get("lesson_closing"):
         used = ("\nAlready done in this lesson: %s. Do NOT ask for these again —"
                 " the student has done them: give a DIFFERENT task on the same"

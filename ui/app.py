@@ -1641,6 +1641,7 @@ class EnglishTeacherApp:
         if material:
             lesson_payload["scene"] = material.get("scene")
             lesson_payload["ask"] = material.get("ask")
+            lesson_payload["ask_done"] = 0
         self._lesson_payload = dict(lesson_payload)
         try:
             self.chat.set_lesson(lesson_payload)
@@ -2295,6 +2296,13 @@ class EnglishTeacherApp:
         except Exception as exc:
             print("⚠️ Задания урока не попали в промпт: %s" % exc)
             return
+        # §86: сколько вопросов по сцене уже позади — по числу засчитанных
+        # заданий (сначала идут вопросы, потом фразы).
+        if merged.get("ask"):
+            try:
+                merged["ask_done"] = int(getattr(session, "tasks_done", 0) or 0)
+            except (TypeError, ValueError):
+                merged["ask_done"] = 0
         if just_credited:
             merged["task_done_now"] = True
         if drill_done:
