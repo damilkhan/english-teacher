@@ -2818,6 +2818,15 @@ class EnglishTeacherApp:
             rule = str(phrase.get("rule") or "")
             label = gaps.RULE_RU.get(rule, "")
             hint += ("Think about: %s." % label) if label else "Try again."
+            # §87.3 (18.11.2026): после ВТОРОГО промаха называем САМО СЛОВО.
+            # Живой урок city/4.2: ученик шесть раз сказал «worse than early»
+            # и шесть раз слышал только название правила: слово before так и не
+            # прозвучало (эталон приходит только на пределе попыток).
+            if tries >= 2:
+                missing = lesson_mod.missing_words(text, want)
+                if 0 < len(missing) <= 2:
+                    hint += " Try this word: %s." % ", ".join(
+                        '"%s"' % w for w in missing)
         self.add_message(self.teacher_name, hint)
         print("🤏 Перевод не принят (попытка %d, %s): %r"
               % (tries, "не ответ" if soft else "промах", text or ""))
@@ -3595,15 +3604,20 @@ class EnglishTeacherApp:
 
     def _credit_task(self, session, text="", marked=False):
         """Засчитать задание: полоса, промпт, а последнее — закрыть урок."""
+        # §87.5 (18.11.2026): «с подсказкой» — про ЭТОТ зачёт, а не про все прошлые.
+        # Раньше печаталось по КУМУЛЯТИВНОМУ tasks_marked, и 6/9…9/9 в логе
+        # выглядели «с подсказкой», хотя сданы верно (живой урок city/4.2).
+        marked_before = getattr(session, "tasks_marked", 0)
         try:
             session.credit_task(text, marked=marked)
         except Exception as exc:
             print("⚠️ Зачёт задания не получился: %s" % exc)
             return False
         self._asked_repeat = ""        # новое задание — новая просьба
+        marked_now = getattr(session, "tasks_marked", 0) > marked_before
         print("✅ Задание засчитано: %d/%d%s (реплика: %.60r)"
               % (session.tasks_done, session.tasks_total,
-                 " с подсказкой" if getattr(session, "tasks_marked", 0) else "",
+                 " с подсказкой" if marked_now else "",
                  text or ""))
         self._sync_lesson_prompt(just_credited=True)
         try:

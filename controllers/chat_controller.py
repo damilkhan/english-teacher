@@ -254,6 +254,15 @@ class ChatController:
             useful = bool(errors) and move != "Q" and state != "unclear"
             check = check if useful else None
             self.last_prechecked = useful
+            # §87.4 (18.11.2026): задание уже ЗАСЧИТАНО по тексту (вариант В).
+            # Тогда блок CORRECTION FIRST спорил с «дай следующее»: модель просила
+            # повторить ПРИНЯТОЕ (живой урок city/4.2, сразу после зачёта 1/9,
+            # в логе «повтор уже сданного задания»). Править нечего:
+            # ответ принят, урок идёт дальше.
+            if check is not None and bool((self._lesson or {}).get("task_done_now")):
+                print("§87.4: задание засчитано — блок правки не отправляю")
+                check = None
+                self.last_prechecked = True    # и своё «скажи ещё раз» не нужно
         ok, payload = self._request(user_text, check=check)
         if not ok:
             self._dispatch(lambda: self._finish_error(payload))

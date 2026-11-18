@@ -408,6 +408,51 @@ def _meaning_words(text: Any) -> List[str]:
             if w and w not in _FILLERS and w not in _SKIP]
 
 
+# §87.1-2 (18.11.2026): ПОРЯДОК служебных слов — тоже смысл.
+# Живой урок city/4.2 засчитал без модели две ОШИБКИ:
+#   «this one is cheaper, but not is better» вместо «but IS NOT better»;
+#   «which is a phone better for you» вместо «which phone is better».
+# Сравнение «все значимые слова на месте» этого не видит: ведь
+# служебные слова из сравнения выбрасываются. Скелет — всё, КРОМЕ
+# значимых слов; его порядок и состав сверяем строго. Спорные
+# случаи уходят к модели (MAYBE), а не в ложный зачёт.
+_SKELETON = frozenset((
+    "a", "an", "the", "not", "no", "never", "nothing", "nobody",
+    "am", "is", "are", "was", "were", "be", "been",
+    "do", "does", "did", "will", "would", "shall", "should", "can",
+    "could", "may", "might", "must", "have", "has", "had",
+    "what", "which", "who", "whom", "whose", "where", "when", "why", "how",
+    "there",
+))
+
+
+def _skeleton(text: Any) -> List[str]:
+    """Служебные слова фразы ПО ПОРЯДКУ (§87)."""
+    return [w for w in _flat(text).split() if w in _SKELETON]
+
+
+# Слова, которые не стоит называть подсказкой: сами по себе
+# они не ответ (а весь смысл всё равно не подскажут).
+_HINT_STOP = frozenset(("than", "that", "to", "of", "for", "in", "on", "at",
+                        "and", "but", "or", "with", "as", "from", "by", "so"))
+
+
+def missing_words(said: Any, want: Any) -> List[str]:
+    """Значимые слова эталона, которых в ответе НЕТ (§87.3).
+
+    Нужно для подсказки после второго промаха: ученик услышит САМО СЛОВО,
+    а не только название правила. Эталон целиком по-прежнему приходит
+    только на пределе попыток: подсказка не должна быть готовым ответом.
+    """
+    have = set(_meaning_words(said))
+    out = []
+    for w in _meaning_words(want):
+        if w in have or w in _HINT_STOP or len(w) < 2 or w in out:
+            continue
+        out.append(w)
+    return out
+
+
 def same_meaning(said: Any, want: Any) -> bool:
     """Сказано ТО ЖЕ САМОЕ, пусть и другими словами? (решение 109)
 
@@ -427,6 +472,8 @@ def same_meaning(said: Any, want: Any) -> bool:
         return False
     bad = sum(1 for w in said_words if w in _NEGATIONS)
     if bad != sum(1 for w in want_words if w in _NEGATIONS):
+        return False
+    if _skeleton(said) != _skeleton(want):
         return False
     have = set(said_words)
     return all(w in have for w in want_words)
@@ -543,6 +590,13 @@ def says_fix(student_text: Any, corrections) -> bool:
         # §65 (решение 109): та же мысль другими словами — тоже зачёт
         if same_meaning(student_text, want):
             continue
+        # §87.1 (18.11.2026): похожесть прощала ОДНО неверное слово:
+        # «the cheap phone has a poor battery» засчитывалось как повтор
+        # «...a bad battery» (0,87 похожести). Живой урок city/4.2: задание 2/9
+        # было засчитано за ответ без нужной правки. Теперь похожесть
+        # работает, только если ВСЕ значимые слова эталона в ответе есть.
+        if missing_words(student_text, want):
+            return False
         if difflib.SequenceMatcher(None, said, want).ratio() >= REPEAT_RATIO:
             continue
         return False
