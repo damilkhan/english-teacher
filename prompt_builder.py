@@ -337,6 +337,51 @@ def _scene_block(lesson):
         where=where)
 
 
+
+# §87 (17.11.2026, вечер). Живой урок city/4.2: учитель отвечал РАНЬШЕ разбора,
+# поэтому на ОДНУ ошибку приходило ДВА пузыря — «That is good, Damil. What is
+# worse about the cheap phone?» и следом «Say it once more». Ученик прав:
+# сначала правка, потом следующие вопросы. Теперь разбор идёт ПЕРВЫМ, а его
+# результат уходит модели готовым фактом — и просит повтор ОНА, а не код.
+CHECK_TEMPLATE = """
+\n\u26A0\uFE0F CORRECTION FIRST. The corrector has ALREADY checked the student's
+last message. These lines are FACTS, not your opinion:
+{facts}
+For THIS single reply:
+- do NOT praise: no "good", "well done", "correct", "nice", "great";
+- in ONE short line show HIS OWN sentence with the fix, then ask him to say
+  that ONE sentence again, correctly;
+- do NOT give the next task and do NOT ask the next question: wait for the repeat.
+Two short sentences in English, nothing else.
+"""
+
+
+def _check_block(check):
+    """Блок «в реплике ученика есть ошибка» (§87).
+
+    Пусто, если разбора нет или ошибок нет — тогда промпт прежний байт-в-байт.
+    Ставится ПОСЛЕДНИМ в меняющейся части: он про эту самую реплику.
+    """
+    if not isinstance(check, dict):
+        return ""
+    rows = []
+    for err in (check.get("errors") or ()):
+        if not isinstance(err, dict):
+            continue
+        wrong = str(err.get("wrong") or "").strip()
+        correct = str(err.get("correct") or "").strip()
+        if not correct:
+            continue
+        rows.append('- "%s" -> "%s"' % (wrong, correct) if wrong
+                    else '- use "%s"' % correct)
+    if not rows:
+        return ""
+    facts = "\r\n".join(rows[:2])
+    said = str(check.get("said") or "").strip()
+    if said:
+        facts += '\r\nThe student said: "%s"' % said[:160]
+    return CHECK_TEMPLATE.format(facts=facts)
+
 def _lesson_block(lesson):
     """Блок «идёт занятие». Пусто, если занятия нет (обратная совместимость)."""
     if not lesson:
@@ -930,7 +975,8 @@ def build_prompt_parts(mode, profile, lang="en", level=None, student=None,
                        variety=False, english_only=False, words=None,
                        american=False, teacher=None, exam=False,
                        exam_questions=None, hesitation=False,
-                       exam_asked=None, word_forms=False, logic=False):
+                       exam_asked=None, word_forms=False, logic=False,
+                       check=None):
     """Промпт ДВУМЯ частями: stable (не меняется по ходу урока) и dynamic.
 
     Зачем (замер 04.11.2026). llama-server кэширует префикс промпта: если
@@ -956,7 +1002,8 @@ def build_prompt_parts(mode, profile, lang="en", level=None, student=None,
         word_forms=word_forms, logic=logic)
     dynamic = (_plan_block(plan) + _lesson_block(lesson) + _now_block(now)
                + _knowledge_block(context) + _words_block(words)
-               + _exam_block(exam, exam_questions, exam_asked))
+               + _exam_block(exam, exam_questions, exam_asked)
+               + _check_block(check))
     prompt = finish_system_prompt(prompt)
     return {"stable": prompt, "dynamic": dynamic}
 

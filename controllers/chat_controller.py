@@ -22,6 +22,7 @@
 import logging
 import re
 import threading
+import time
 from datetime import datetime
 
 import config
@@ -231,25 +232,48 @@ class ChatController:
     def _worker(self, user_text):
         """Фоновый поток: сеть не должна морозить окно.
 
-        Роли вызываются ПОСЛЕДОВАТЕЛЬНО, но независимо: сначала Учитель
-        (его ответ показываем сразу), затем Аналитик. Сбой Аналитика не
-        мешает ответу Учителя (см. _safe_analyze / _record).
+        Обычный порядок: сначала Учитель (его ответ показываем сразу), затем
+        Аналитик. Сбой Аналитика не мешает ответу Учителя.
+
+        ИСКЛЮЧЕНИЕ (§87, 17.11.2026): в части «вопросы по сцене» разбор идёт
+        ПЕРВЫМ. Живой урок city/4.2: ученик ошибся, учитель похвалил и задал
+        следующий вопрос, и только через пару секунд приложение добавило
+        «Say it once more» — два пузыря на одну ошибку. Учитель не может
+        поправить то, о чём ещё не знает, поэтому сначала разбор, потом его
+        результат уходит в промпт, и повтор просит САМА модель.
         """
-        ok, payload = self._request(user_text)
+        self.last_prechecked = False
+        pre, used = self._precheck(user_text)
+        check = pre if (used and pre) else None
+        if check is not None:
+            errors = [e for e in (check.get("errors") or ()) if isinstance(e, dict)]
+            # §85/§81: уточняющий вопрос ученика — не ответ. Требовать повтор
+            # на вопрос «а что значит…» нельзя: сначала надо на него ответить.
+            move = str(check.get("move_type") or "").strip().upper()
+            state = str(check.get("answer_state") or "").strip().lower()
+            useful = bool(errors) and move != "Q" and state != "unclear"
+            check = check if useful else None
+            self.last_prechecked = useful
+        ok, payload = self._request(user_text, check=check)
         if not ok:
             self._dispatch(lambda: self._finish_error(payload))
             return
-        # ответ Учителя — в окно сразу, не ждём Аналитика
+        # ответ Учителя — в окно сразу
         self._dispatch(lambda: self._show_reply(user_text, payload))
-        # Разбор — это ВТОРОЙ запрос к модели (10-12 с на этом железе).
-        # Поле ввода освобождаем ДО него: иначе ученик ждёт разбор, чтобы
-        # сказать следующую фразу, хотя ответ уже прозвучал.
-        self.busy = False
-        self._emit(self.on_busy, False)
-        analysis = self._safe_analyze(user_text, payload)
+        if used and pre is not None:
+            # разбор уже посчитан ДО ответа: второй раз модель не гоняем
+            analysis = dict(pre)
+            analysis.pop("said", None)      # служебное поле, в базу не пишем
+        else:
+            # Разбор — это ВТОРОЙ запрос к модели (10-12 с на этом железе).
+            # Поле ввода освобождаем ДО него: иначе ученик ждёт разбор, чтобы
+            # сказать следующую фразу, хотя ответ уже прозвучал.
+            self.busy = False
+            self._emit(self.on_busy, False)
+            analysis = self._safe_analyze(user_text, payload)
         self._dispatch(lambda: self._finish(user_text, payload, analysis))
 
-    def _request(self, user_text):
+    def _request(self, user_text, check=None):
         """Сборка промпта → запрос к модели → чистка ответа."""
         # Язык ответа выбирает САМА модель (мягкая политика в промпте). Здесь
         # лишь обновляем подсказку по ТЕКУЩЕЙ реплике и НЕ «залипаем»: раньше
@@ -295,7 +319,8 @@ class ChatController:
             hesitation=True,
             word_forms=True,          # lie/lay и прочие слова с двумя значениями
             logic=True,               # вопрос должен иметь смысл (26.10.2026)
-            exam_asked=(self._exam_asked if exam_mode else None))   # повтор — не ошибка
+            exam_asked=(self._exam_asked if exam_mode else None),   # повтор — не ошибка
+            check=check)          # §87: разбор уже есть — он идёт в промпт
         system_prompt, tail = parts["stable"], parts["dynamic"]
 
         print(f"📤 Язык ответа: {'РУССКИЙ' if lang == 'ru' else 'ENGLISH'}")
@@ -323,7 +348,11 @@ class ChatController:
             # §75: на аварийном пути промпт тоже проходит финишер — иначе
             # повтор уходил БЕЗ правила STYLE и С «используй эмодзи».
             system_prompt = prompt_builder.finish_system_prompt(system_prompt)
-            ok, raw = self._ask_model(system_prompt, user_text, short_history=True)
+            # §87: блок проверки на аварийном пути ставим в ХВОСТ — так он
+            # остаётся там же, где и в обычном промпте (ближе к реплике).
+            ok, raw = self._ask_model(system_prompt, user_text,
+                                      tail=prompt_builder._check_block(check),
+                                      short_history=True)
         if not ok:
             return False, self._explain(raw)
 
@@ -523,6 +552,34 @@ class ChatController:
         self._emit(self.on_busy, False)
         self._emit(self.on_message, self.teacher, f"[Ошибка] {payload}")
         self._emit(self.on_status, "● Ошибка", "err")
+
+    def _precheck(self, user_text):
+        """§87: разбор ДО ответа учителя — только в части «вопросы по сцене».
+
+        Возвращает (разбор, был_ли_разбор). Разбор может быть и без ошибок:
+        тогда учитель отвечает как обычно, но второй раз модель не гоняем.
+
+        Почему не везде: разбор — это лишнее ожидание (модель, ~3-6 с).
+        Берём только там, где правка по ходу и так разрешена и где она
+        ломалась живьём: урок с готовой сценой, фаза «вопросы». Сцены,
+        chat-уроки, экзамен и фразы на перевод идут прежним порядком.
+        """
+        if self._opening or self.mode != "lesson":
+            return None, False
+        lesson = self._lesson if isinstance(self._lesson, dict) else {}
+        if not lesson.get("ask"):                  # урока со сценой нет
+            return None, False
+        if str(lesson.get("task_phase") or "").strip().lower() != "ask":
+            return None, False
+        started = time.monotonic()
+        analysis = self._safe_analyze(user_text, "")
+        if not analysis or not analysis.get("ok"):
+            return None, False
+        print("⏱ §87: разбор до ответа учителя — %.1f с"
+              % (time.monotonic() - started))
+        data = dict(analysis)
+        data["said"] = str(user_text or "")
+        return data, True
 
     def _safe_analyze(self, user_text, reply):
         """Разбор реплики Аналитиком. Любая проблема → None (без исключений)."""

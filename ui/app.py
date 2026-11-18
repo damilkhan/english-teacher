@@ -4854,7 +4854,11 @@ class EnglishTeacherApp:
         # §36: разбор решает, сдано ли ТЕКУЩЕЕ задание урока (вариант Б)
         self._task_from_analysis(result)
         # §36b: если задание ждёт ПОВТОРА — попросить его самим (модель молчит)
-        self._ask_repeat_if_needed()
+        # §87: в части «вопросы по сцене» повтор просит УЧИТЕЛЬ — разбор идёт
+        # ДО его ответа, и второй пузырь «Say it once more» был бы ровно тем
+        # дублем, на который пожаловался ученик (живой урок city/4.2).
+        if not getattr(getattr(self, "chat", None), "last_prechecked", False):
+            self._ask_repeat_if_needed()
         # ЭКЗАМЕН: разбор пришёл — теперь можно поставить балл за ответ
         step = self._exam_score_answer(result)
         if step is not None and step.get("finished"):
