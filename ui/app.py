@@ -2828,8 +2828,11 @@ class EnglishTeacherApp:
                     hint += " Try this word: %s." % ", ".join(
                         '"%s"' % w for w in missing)
         self.add_message(self.teacher_name, hint)
-        print("🤏 Перевод не принят (попытка %d, %s): %r"
-              % (tries, "не ответ" if soft else "промах", text or ""))
+        # §87.3: подсказку печатаем ЦЕЛИКОМ — иначе в логе не видно,
+        # показали ли ученику слово (add_message в лог не пишет).
+        print("🤏 Перевод не принят (попытка %d, %s): %r | подсказка: %r"
+              % (tries, "не ответ" if soft else "промах",
+                 text or "", hint))
         return True
 
     def _translate_record(self, session, text, phrase):
