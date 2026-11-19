@@ -356,6 +356,59 @@ Two short sentences in English, nothing else.
 """
 
 
+# §89 (19.11.2026): ОТВЕТ ПО СМЫСЛУ ВОПРОСА.
+# Замер §88: короткий промпт — 0,17-0,41 с, поэтому спрашиваем модель ТОЛЬКО
+# в части «вопросы по сцене», где ответ иначе засчитывался за любую реплику.
+QUESTION_PROMPT = (
+    "You check one answer of an A2 learner of American English. The teacher"
+    " asked a question. Decide whether the student's answer answers THAT"
+    " question.\n"
+    "YES = the answer gives the information the question asks for, even with"
+    " grammar mistakes or short wording.\n"
+    "NO = the answer is about something else, or does not give the asked"
+    " information (the question asks WHICH phone and the answer only"
+    " describes a battery; the question asks WHY and there is no reason).\n"
+    "Answer only YES or NO, nothing else.")
+
+
+OFF_TOPIC_TEMPLATE = """
+⚠️ NOT AN ANSWER. The corrector has ALREADY checked the student's last
+message. He did NOT answer the question you asked: "{question}"
+For THIS single reply:
+- do NOT praise and do NOT give the next task;
+- in ONE short line say that you asked a different question;
+- then repeat YOUR question exactly: "{question}";
+Two short sentences in English, nothing else.
+"""
+
+
+def _off_topic_block(check):
+    """Блок «ответ не на заданный вопрос» (§89). Пусто — блока нет."""
+    if not isinstance(check, dict) or check.get("question_ok") is not False:
+        return ""
+    question = str(check.get("question") or "").strip()
+    if not question:
+        return ""
+    return OFF_TOPIC_TEMPLATE.format(question=question)
+
+
+def yes_no_verdict(raw):
+    """Ответ модели одним словом: True — да, False — нет, None — не понять.
+
+    Разбираем ТОЛЬКО ПЕРВОЕ слово: «no, he took the black one» — это NO, а
+    поиск подстроки в таком ответе дал бы сразу оба варианта.
+    """
+    text = str(raw or "").strip().upper()
+    if not text:
+        return None
+    first = text.split()[0].strip(".,!;:'\"")
+    if first.startswith("YES"):
+        return True
+    if first.startswith("NO"):
+        return False
+    return None
+
+
 def _check_block(check):
     """Блок «в реплике ученика есть ошибка» (§87).
 
@@ -364,6 +417,12 @@ def _check_block(check):
     """
     if not isinstance(check, dict):
         return ""
+    # §89: ответ не на вопрос — этот блок СИЛЬНЕЕ правки. Повторять
+    # ученику нечего (он ответил про другое), поэтому CORRECTION FIRST
+    # в такой реплике не печатаем: два разных требования запутают модель.
+    off = _off_topic_block(check)
+    if off:
+        return off
     rows = []
     for err in (check.get("errors") or ()):
         if not isinstance(err, dict):

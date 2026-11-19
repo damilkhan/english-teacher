@@ -3749,6 +3749,14 @@ class EnglishTeacherApp:
             if session.note_task_attempt() >= lesson_mod.MAX_TASK_ATTEMPTS:
                 return self._credit_task(session, text, marked=True)
             return False
+        # §89 (19.11.2026): ОТВЕТ НЕ НА ВОПРОС — НЕ ЗАЧЁТ. Решение ученика
+        # 18.11.2026: «задание без проверки смысла — бессмысленное задание».
+        # Живой урок city/4.3: на вопрос «Which phone did Ann take?» ученик
+        # сказал «the small phone has a bad battery» — и задание 1/9 было
+        # засчитано (в chat-уроке правка идёт молча и задание сдаётся сразу).
+        if result.get("question_ok") is False:
+            return self._off_topic_miss(session, text,
+                                        str(result.get("question") or ""))
         no_errors = not errors and state != lesson_mod.ANSWER_UNCLEAR
         try:
             target_ok = session.target_repeated(text)
@@ -3808,6 +3816,33 @@ class EnglishTeacherApp:
         # предела реплик, и урок закрывался с «Заданий: 2 из 3» (§41).
         if session.note_task_attempt() >= lesson_mod.MAX_TASK_ATTEMPTS:
             return self._credit_task(session, text, marked=True)
+        return False
+
+    def _off_topic_miss(self, session, text, question=""):
+        """§89: ученик ответил не на заданный вопрос — задание НЕ сдано.
+
+        Переспрашивает УЧИТЕЛЬ: блок NOT AN ANSWER стоит в его промпте, и вопрос
+        звучит в ТОЙ ЖЕ реплике (§87 — не два пузыря на одну ошибку). Поэтому
+        приложение второй пузырь не добавляет; страховка есть со ВТОРОГО
+        промаха: модель не всегда слушается блока, а вопрос ученик должен
+        услышать точно.
+
+        Предел попыток обязателен: без него урок встанет навсегда.
+        """
+        tries = session.note_task_attempt()
+        print("🚫 Ответ не на вопрос (%r): %r — попытка %d/%d"
+              % (question or "-", text or "", tries,
+                 lesson_mod.MAX_TASK_ATTEMPTS))
+        if tries >= lesson_mod.MAX_TASK_ATTEMPTS:
+            print("👉 Предел попыток: засчитываю с пометкой, чтобы урок не встал")
+            return self._credit_task(session, text, marked=True)
+        if tries >= 2 and question:
+            text_out = '🎯 My question: "%s"' % question
+            try:
+                self.add_message(self.teacher_name, text_out)
+                self._say_after_current(question)
+            except Exception as exc:
+                print("⚠️ Вопрос показать не удалось: %s" % exc)
         return False
 
     # ---------- экзамен ----------

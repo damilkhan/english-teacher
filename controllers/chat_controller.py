@@ -263,6 +263,15 @@ class ChatController:
                 print("§87.4: задание засчитано — блок правки не отправляю")
                 check = None
                 self.last_prechecked = True    # и своё «скажи ещё раз» не нужно
+            # §89 (19.11.2026): ответ НЕ НА ВОПРОС — блок нужен и БЕЗ ошибок:
+            # иначе учитель похвалит ответ не по делу и пойдёт дальше. Вопрос
+            # переспрашивает он САМ, в этой же реплике (второго пузыря нет).
+            if (check is None and pre.get("question_ok") is False
+                    and not bool((self._lesson or {}).get("task_done_now"))):
+                check = {"said": user_text,
+                         "question": pre.get("question"),
+                         "question_ok": False, "errors": []}
+                self.last_prechecked = True
         ok, payload = self._request(user_text, check=check)
         if not ok:
             self._dispatch(lambda: self._finish_error(payload))
@@ -586,9 +595,77 @@ class ChatController:
             return None, False
         print("⏱ §87: разбор до ответа учителя — %.1f с"
               % (time.monotonic() - started))
+        # §89 (19.11.2026): ОТВЕТ ПО СМЫСЛУ ВОПРОСА. Решение ученика
+        # 18.11.2026: «задание без проверки смысла — бессмысленное задание».
+        # Словами это не сверить, поэтому спрашиваем модель — но только ЗДЕСЬ:
+        # в части «вопросы по сцене», где иначе засчитывалась любая реплика.
         data = dict(analysis)
         data["said"] = str(user_text or "")
+        data.update(self._question_check(user_text, lesson, data))
         return data, True
+
+    def _question_check(self, user_text, lesson, analysis):
+        """§89: ответил ли ученик на ЗАДАННЫЙ вопрос. Пусто — проверить нельзя.
+
+        Словами это не сверить: «Which phone did Ann take?» и «the small phone
+        has a bad battery» не совпадают ни одним значимым словом. Поэтому
+        спрашиваем модель — короткий промпт (§88: 0,17-0,41 с).
+
+        Молча не проверяем, а СПРАШИВАЕМ: живой урок city/4.3 засчитал 1/9 за
+        ответ не на тот вопрос, и ученик увидел «сделано», не сделав ничего.
+        """
+        if not getattr(config, "LESSON_QUESTION_CHECK", True):
+            return {}
+        if not lesson_mod.looks_like_answer(user_text):
+            return {}          # «bye», «да, спасибо» — это не ответ по заданию
+        if str(analysis.get("move_type") or "").strip().upper() == "Q":
+            return {}          # уточняющий вопрос ученика — не ответ (§81/§85)
+        question = self._asked_question(lesson)
+        if not question:
+            return {}
+        verdict = self._ask_yes_no(prompt_builder.QUESTION_PROMPT, question,
+                                  user_text)
+        if verdict is None:
+            return {}          # модель не ответила — урок из-за этого не держим
+        print("❓ §89: ответ на вопрос %r -> %s"
+              % (question, "да" if verdict else "НЕТ"))
+        return {"question": question, "question_ok": verdict}
+
+    def _asked_question(self, lesson):
+        """Вопрос, на который ученик должен был ответить.
+
+        Сначала — вопрос из ФАЙЛА урока (поле ask: он не меняется от запуска к
+        запуску), затем — тот, что учитель реально задал в своей реплике.
+        """
+        ask = [str(item).strip() for item in (lesson.get("ask") or ()) if str(item).strip()]
+        try:
+            done = int(lesson.get("ask_done") or 0)
+        except (TypeError, ValueError):
+            done = 0
+        if 0 <= done < len(ask) and ask[done]:
+            return ask[done]
+        return str(getattr(self, "_last_question", "") or "").strip()
+
+    def _ask_yes_no(self, system_prompt, question, said):
+        """Один короткий вопрос модели: True/False/None. Никогда не бросает."""
+        llm = getattr(self, "llm", None)
+        if llm is None:
+            return None
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user",
+             "content": 'Question: "%s"\nAnswer: "%s"' % (question, said)},
+        ]
+        try:
+            ok, raw = llm.complete(messages, max_tokens=4, temperature=0.0,
+                                   timeout=20)
+        except Exception as exc:
+            print("⚠️ Проверка ответа по вопросу сбилась: %s" % exc)
+            return None
+        if not ok:
+            print("⚠️ Модель не проверила ответ по вопросу: %s" % raw)
+            return None
+        return prompt_builder.yes_no_verdict(raw)
 
     def _safe_analyze(self, user_text, reply):
         """Разбор реплики Аналитиком. Любая проблема → None (без исключений)."""
