@@ -288,6 +288,51 @@ ok3 = app3._task_from_analysis({"ok": True, "move_type": "A",
 check("без поля question_ok зачёт идёт по-прежнему", ok3 is True, ok3)
 check("задание 1", s3.tasks_done == 1, s3.tasks_done)
 
+print("9) Подсказка распознаванию: имена из материала урока (§89.1)")
+
+MATERIAL = {
+    "scene": [{"who": "Assistant", "en": "Can I help you?"},
+              {"who": "Ann", "en": "Yes, I need a phone."}],
+    "ask": [Q1, Q2],
+}
+
+
+def make_stt_app(material, scene_lesson=False):
+    app = types.SimpleNamespace()
+    session = types.SimpleNamespace(
+        is_active=True, is_scene=scene_lesson, lesson_id="city/4.3",
+        repeat_expected=[], drill_correct="", topic="Comparing Things")
+    app.lesson = types.SimpleNamespace(current=lambda: session)
+    app._material_of = lambda lesson_id: material
+    app._vocab_stt_card = lambda: None
+    app._scene_stt_words = lambda: []
+    app._picture = None
+    for name in ("_lesson_stt_words", "_material_stt_names",
+                 "_my_stt_words", "_picture_stt_words"):
+        setattr(app, name, types.MethodType(getattr(App, name), app))
+    return app
+
+
+stt = make_stt_app(MATERIAL)
+words = stt._lesson_stt_words()
+check("имя «Ann» попало в подсказку", "Ann" in words, words)
+check("действующее лицо сцены тоже", "Assistant" in words, words)
+check("имя стоит в начале (предел 24 слова его не съест)",
+      words[:2] in (["Assistant", "Ann"], ["Ann", "Assistant"]), words)
+check("слова-вопросы не стали именами («Which», «What»)",
+      "Which" not in words and "What" not in words, words)
+check("тема урока по-прежнему в подсказке", "Comparing" in words, words)
+
+empty = make_stt_app(None)
+check("материала нет — подсказки прежние, без имён",
+      isinstance(empty._lesson_stt_words(), list)
+      and "Ann" not in empty._lesson_stt_words(),
+      empty._lesson_stt_words())
+
+scene_app = make_stt_app(MATERIAL, scene_lesson=True)
+check("урок-сцена идёт своим списком (не дублируем)",
+      scene_app._lesson_stt_words() == [], scene_app._lesson_stt_words())
+
 print()
 if FAILED:
     print("ПРОВАЛЕНО: %d -> %s" % (len(FAILED), FAILED))

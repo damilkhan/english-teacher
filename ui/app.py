@@ -5234,6 +5234,50 @@ class EnglishTeacherApp:
         return list(out)
 
 
+    def _material_stt_names(self, session):
+        """ИМЕНА из материала урока — подсказка распознаванию (§89.1).
+
+        Живой урок 21.11.2026 (city/4.3). Вопрос «Which phone did Ann take?»,
+        ученик говорит «Ann took a black phone», а Whisper пишет «n took a
+        black phone», «and took a black phone», «n, duke, and black phone» —
+        четыре реплики подряд. Замер на ЕГО ЖЕ записях (logs/_probe_ann.txt):
+            как сейчас (без подсказки): "N took a black phone."   НЕВЕРНО
+            beam=5:                     "N took a black phone."   НЕВЕРНО
+            модель medium:              "N took a black phone."   НЕВЕРНО
+            подсказка "Ann":            "Ann took a black phone"  ВЕРНО (8 из 10)
+        То есть дело НЕ в модели и НЕ в поиске, а в отсутствии подсказки: имя
+        «Ann» не встречается нигде, кроме сцены и вопроса, а в подсказку шли
+        только фраза повтора, дрилл и тема.
+
+        Берём имена действующих лиц сцены и имена собственные из вопросов (не
+        первое слово вопроса: там «Which», «What»). Пусто — материал не найден.
+        """
+        out = []
+        try:
+            material = self._material_of(getattr(session, "lesson_id", ""))
+        except Exception as exc:
+            print("⚠️ Имена урока не прочитались: %s" % exc)
+            return []
+        if not material:
+            return []
+        for row in (material.get("scene") or ()):
+            if not isinstance(row, dict):
+                continue
+            who = " ".join(str(row.get("who") or "").split())
+            if who and who not in out:
+                out.append(who)
+        for question in (material.get("ask") or ()):
+            parts = str(question or "").split()
+            for index, word in enumerate(parts):
+                word = "".join(ch for ch in word if ch.isalpha() or ch == "'")
+                if index == 0 or len(word) < 3 or not word[:1].isupper():
+                    continue
+                if word.lower() in ("english", "russian"):
+                    continue
+                if word not in out:
+                    out.append(word)
+        return out[:8]
+
     def _lesson_stt_words(self):
         """Слова ИДУЩЕГО УРОКА — подсказка распознаванию (§76).
 
@@ -5256,7 +5300,7 @@ class EnglishTeacherApp:
             return []
         if getattr(session, "is_scene", False):
             return []
-        words = []
+        words = self._material_stt_names(session)
         for item in (getattr(session, "repeat_expected", None) or []):
             words.extend(str(item).split())
         drill = str(getattr(session, "drill_correct", "") or "")
