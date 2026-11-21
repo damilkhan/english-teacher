@@ -244,34 +244,7 @@ class ChatController:
         """
         self.last_prechecked = False
         pre, used = self._precheck(user_text)
-        check = pre if (used and pre) else None
-        if check is not None:
-            errors = [e for e in (check.get("errors") or ()) if isinstance(e, dict)]
-            # §85/§81: уточняющий вопрос ученика — не ответ. Требовать повтор
-            # на вопрос «а что значит…» нельзя: сначала надо на него ответить.
-            move = str(check.get("move_type") or "").strip().upper()
-            state = str(check.get("answer_state") or "").strip().lower()
-            useful = bool(errors) and move != "Q" and state != "unclear"
-            check = check if useful else None
-            self.last_prechecked = useful
-            # §87.4 (18.11.2026): задание уже ЗАСЧИТАНО по тексту (вариант В).
-            # Тогда блок CORRECTION FIRST спорил с «дай следующее»: модель просила
-            # повторить ПРИНЯТОЕ (живой урок city/4.2, сразу после зачёта 1/9,
-            # в логе «повтор уже сданного задания»). Править нечего:
-            # ответ принят, урок идёт дальше.
-            if check is not None and bool((self._lesson or {}).get("task_done_now")):
-                print("§87.4: задание засчитано — блок правки не отправляю")
-                check = None
-                self.last_prechecked = True    # и своё «скажи ещё раз» не нужно
-            # §89 (19.11.2026): ответ НЕ НА ВОПРОС — блок нужен и БЕЗ ошибок:
-            # иначе учитель похвалит ответ не по делу и пойдёт дальше. Вопрос
-            # переспрашивает он САМ, в этой же реплике (второго пузыря нет).
-            if (check is None and pre.get("question_ok") is False
-                    and not bool((self._lesson or {}).get("task_done_now"))):
-                check = {"said": user_text,
-                         "question": pre.get("question"),
-                         "question_ok": False, "errors": []}
-                self.last_prechecked = True
+        check = self._prepare_check(user_text, pre if used else None)
         ok, payload = self._request(user_text, check=check)
         if not ok:
             self._dispatch(lambda: self._finish_error(payload))
@@ -555,8 +528,73 @@ class ChatController:
             print(f"⚠️ RAG: контекст не собран ({exc})")
             return ""
 
+    def _prepare_check(self, user_text, pre):
+        """Что показать Учителю как ФАКТ перед этой репликой (§87-§90).
+
+        Возвращает словарь для блока промпта или None. Заодно ставит
+        self.last_prechecked: True — тогда приложение своё «скажи ещё раз»
+        не добавляет (второй пузырь на одну ошибку, жалоба 17.11.2026).
+
+        Отдельным методом — чтобы правило было ПРОВЕРЯЕМЫМ тестом, а не
+        строчкой посреди фонового потока (§90, живой урок 21.11.2026).
+        """
+        self.last_prechecked = False
+        if not isinstance(pre, dict):
+            return None
+        check = pre
+        errors = [e for e in (check.get("errors") or ()) if isinstance(e, dict)]
+        # §85/§81: уточняющий вопрос ученика — не ответ. Требовать повтор
+        # на вопрос «а что значит…» нельзя: сначала надо на него ответить.
+        move = str(check.get("move_type") or "").strip().upper()
+        state = str(check.get("answer_state") or "").strip().lower()
+        useful = bool(errors) and move != "Q" and state != "unclear"
+        check = check if useful else None
+        self.last_prechecked = useful
+        # §87.4 (18.11.2026): задание уже ЗАСЧИТАНО по тексту (вариант В).
+        # Тогда блок CORRECTION FIRST спорил с «дай следующее»: модель просила
+        # повторить ПРИНЯТОЕ (живой урок city/4.2, сразу после зачёта 1/9,
+        # в логе «повтор уже сданного задания»). Править нечего:
+        # ответ принят, урок идёт дальше.
+        if check is not None and bool((self._lesson or {}).get("task_done_now")):
+            print("§87.4: задание засчитано — блок правки не отправляю")
+            check = None
+            self.last_prechecked = True    # и своё «скажи ещё раз» не нужно
+        # §90 (21.11.2026): В CHAT-УРОКЕ ПРАВКУ ПО ХОДУ НЕ ПРОСИМ (§77).
+        # Живой урок city/4.3: ученик верно ответил «ann, took the black
+        # phone.», Аналитик выдумал ошибку «took -> take» (замер: 7 ложных
+        # правок на 15 ВЕРНЫХ фраз), и блок CORRECTION FIRST велел учителю
+        # показать правку и попросить повторить — в уроке, где по §77 поправки
+        # идут МОЛЧА. Ученик слышал «скажи ещё раз» на верный ответ. Ошибки
+        # не теряются: они уходят в базу через _record, разбор в конце — тоже.
+        lesson_type = str((self._lesson or {}).get("type") or "")
+        if check is not None and not lesson_mod.corrects_on_the_fly(lesson_type):
+            print("🔇 §90: урок %s — правку по ходу не прошу (задание сдаст "
+                  "приложение)" % (lesson_type or "?"))
+            check = None
+            self.last_prechecked = True    # и своё «скажи ещё раз» не нужно
+        # §89 (19.11.2026): ответ НЕ НА ВОПРОС — блок нужен и БЕЗ ошибок:
+        # иначе учитель похвалит ответ не по делу и пойдёт дальше. Вопрос
+        # переспрашивает он САМ, в этой же реплике (второго пузыря нет).
+        # §90 (21.11.2026): вопрос кладём в разбор ВСЕГДА, когда ответ не по
+        # нему — даже если правка уже есть. Иначе в speaking-уроке с ошибкой
+        # модель получала CORRECTION FIRST («повтори фразу») вместо «ты не
+        # ответил на вопрос». Приоритет решает _check_block (§89).
+        if (pre.get("question_ok") is False
+                and not bool((self._lesson or {}).get("task_done_now"))):
+            check = dict(check or {})
+            check["question"] = pre.get("question")
+            check["question_ok"] = False
+            check.setdefault("said", user_text)
+            check.setdefault("errors", [])
+            self.last_prechecked = True
+        return check
+
     def _show_reply(self, user_text, response):
         """Главный поток: показать ответ Учителя как можно раньше."""
+        # §90: реплику печатаем в лог. 21.11.2026 ученик спросил «почему бот
+        # просит повторить, если я сказал верно» — и ответить было НЕЛЬЗЯ:
+        # add_message в лог не пишет, текста реплики нигде не оставалось.
+        print("💬 Учитель: %s" % str(response or "").replace("\n", " ")[:220])
         self._emit(self.on_message, self.teacher, response)
         self._emit(self.on_response, user_text, response)
 

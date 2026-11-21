@@ -333,6 +333,52 @@ scene_app = make_stt_app(MATERIAL, scene_lesson=True)
 check("урок-сцена идёт своим списком (не дублируем)",
       scene_app._lesson_stt_words() == [], scene_app._lesson_stt_words())
 
+print("10) §90: в chat-уроке правку по ходу НЕ просим (§77)")
+
+
+def prep(lesson_type, pre, question_ok=None):
+    ctl = cc.ChatController.__new__(cc.ChatController)
+    ctl._lesson = {"type": lesson_type, "ask": [Q1], "ask_done": 0}
+    ctl._teacher = "Jane"
+    data = dict(pre)
+    if question_ok is not None:
+        data["question_ok"] = question_ok
+        data["question"] = Q1          # контроллер всегда кладёт вопрос рядом
+    out = ctl._prepare_check(OFF, data)
+    return out, ctl.last_prechecked
+
+
+ERR = {"ok": True, "move_type": "A", "answer_state": "needs_fix",
+       "errors": [{"type": "grammar", "wrong": "took", "correct": "take",
+                   "rule": "verb_form"}]}
+
+out, pre_done = prep("speaking", ERR)
+check("speaking: правка уходит учителю (как в §87)",
+      bool(out) and out.get("errors"), out)
+check("speaking: своё «скажи ещё раз» приложение не добавляет",
+      pre_done is True, pre_done)
+
+out, pre_done = prep("chat", ERR)
+check("chat: блок правки НЕ уходит", out is None, out)
+check("chat: и своё «скажи ещё раз» не добавляется",
+      pre_done is True, pre_done)
+
+out, _ = prep("chat", ERR, question_ok=False)
+check("chat: ответ не на вопрос — блок всё равно уходит (§89 сильнее)",
+      bool(out) and out.get("question_ok") is False, out)
+check("и в нём НЕТ правки (ученику нечего повторять)",
+      out and not out.get("errors"), out)
+
+out, _ = prep("speaking", ERR, question_ok=False)
+block = prompt_builder._check_block(out) if out else ""
+check("speaking + не по вопросу — в промпте только блок вопроса",
+      "NOT AN ANSWER" in block and "CORRECTION FIRST" not in block, block)
+
+out, pre_done = prep("chat", {"ok": True, "move_type": "A",
+                              "answer_state": "correct", "errors": []})
+check("chat без ошибок — блока нет", out is None, out)
+check("и разбор всё равно посчитан", pre_done is False, pre_done)
+
 print()
 if FAILED:
     print("ПРОВАЛЕНО: %d -> %s" % (len(FAILED), FAILED))
