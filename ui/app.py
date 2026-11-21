@@ -3707,6 +3707,22 @@ class EnglishTeacherApp:
                                 mark=mark)
         return True
 
+    def _form_silent(self, session):
+        """Идёт ли часть «вопросы по сцене» (§90, вариант Б).
+
+        Там форма не правится: задание сдаётся за ответ ПО СМЫСЛУ вопроса,
+        ошибки уходят в базу и в разбор в конце урока. Когда вопросы
+        кончились (дальше фразы) — правило снимается, правка работает как
+        раньше.
+        """
+        if not getattr(config, "LESSON_ASK_PHASE_SILENT", True):
+            return False
+        try:
+            return self._material_ask_left(session) > 0
+        except Exception as exc:
+            print("⚠️ Часть урока не определилась: %s" % exc)
+            return False
+
     def _task_from_analysis(self, result):
         """Вариант Б: разбор Аналитика решает, сдано ли задание (§36).
 
@@ -3757,6 +3773,25 @@ class EnglishTeacherApp:
         if result.get("question_ok") is False:
             return self._off_topic_miss(session, text,
                                         str(result.get("question") or ""))
+        # §90 (21.11.2026, решение ученика — вариант Б): в части «вопросы по
+        # сцене» ФОРМА не правится. Ответил по вопросу — задание сдано, даже
+        # если в форме есть ошибки. Ошибки не теряются: их пишет _record и
+        # показывает разбор в конце урока. Причина: проверка находила ошибки
+        # на ВЕРНЫХ фразах (замер: 7 ложных на 15), и ученик слышал «скажи
+        # ещё раз» за правильный ответ.
+        # getattr: у заглушек в тестах этого метода нет (§85), живое приложение
+        # его всегда имеет.
+        form_silent = getattr(self, "_form_silent", None)
+        silent = bool(form_silent(session)) if form_silent is not None else False
+        if state != lesson_mod.ANSWER_UNCLEAR and silent:
+            wrong = [str(i.get("wrong")) for i in errors
+                     if isinstance(i, dict) and i.get("wrong")]
+            fix = [str(i.get("correct")) for i in errors
+                   if isinstance(i, dict) and i.get("correct")]
+            print("🔇 Форма не правится (вопросы по сцене): %s -> %s "
+                  "(задание сдано)"
+                  % (", ".join(wrong) or "-", ", ".join(fix) or "-"))
+            return self._credit_task(session, text, marked=False)
         no_errors = not errors and state != lesson_mod.ANSWER_UNCLEAR
         try:
             target_ok = session.target_repeated(text)

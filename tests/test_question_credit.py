@@ -333,51 +333,124 @@ scene_app = make_stt_app(MATERIAL, scene_lesson=True)
 check("урок-сцена идёт своим списком (не дублируем)",
       scene_app._lesson_stt_words() == [], scene_app._lesson_stt_words())
 
-print("10) §90: в chat-уроке правку по ходу НЕ просим (§77)")
-
-
-def prep(lesson_type, pre, question_ok=None):
-    ctl = cc.ChatController.__new__(cc.ChatController)
-    ctl._lesson = {"type": lesson_type, "ask": [Q1], "ask_done": 0}
-    ctl._teacher = "Jane"
-    data = dict(pre)
-    if question_ok is not None:
-        data["question_ok"] = question_ok
-        data["question"] = Q1          # контроллер всегда кладёт вопрос рядом
-    out = ctl._prepare_check(OFF, data)
-    return out, ctl.last_prechecked
+print("10) §90 (вариант Б): в части «вопросы по сцене» форму НЕ правим")
 
 
 ERR = {"ok": True, "move_type": "A", "answer_state": "needs_fix",
        "errors": [{"type": "grammar", "wrong": "took", "correct": "take",
                    "rule": "verb_form"}]}
 
-out, pre_done = prep("speaking", ERR)
-check("speaking: правка уходит учителю (как в §87)",
-      bool(out) and out.get("errors"), out)
-check("speaking: своё «скажи ещё раз» приложение не добавляет",
-      pre_done is True, pre_done)
 
-out, pre_done = prep("chat", ERR)
-check("chat: блок правки НЕ уходит", out is None, out)
-check("chat: и своё «скажи ещё раз» не добавляется",
-      pre_done is True, pre_done)
+def prep(lesson_type, pre, question_ok=None, ask=True, phase="ask"):
+    ctl = cc.ChatController.__new__(cc.ChatController)
+    ctl._lesson = {"type": lesson_type, "task_phase": phase}
+    if ask:
+        ctl._lesson["ask"] = [Q1]
+        ctl._lesson["ask_done"] = 0
+    data = dict(pre)
+    if question_ok is not None:
+        data["question_ok"] = question_ok
+        data["question"] = Q1
+    out = ctl._prepare_check(OFF, data)
+    return out, ctl.last_prechecked
+
+
+out, done = prep("speaking", ERR)
+check("speaking, вопросы по сцене: блок правки НЕ уходит", out is None, out)
+check("и своё «скажи ещё раз» приложение не добавляет", done is True, done)
+
+out, done = prep("chat", ERR)
+check("chat, вопросы по сцене: блок правки НЕ уходит", out is None, out)
+check("chat: «скажи ещё раз» тоже не добавляется", done is True, done)
 
 out, _ = prep("chat", ERR, question_ok=False)
-check("chat: ответ не на вопрос — блок всё равно уходит (§89 сильнее)",
+check("не по вопросу: блок вопроса уходит (§89)",
       bool(out) and out.get("question_ok") is False, out)
-check("и в нём НЕТ правки (ученику нечего повторять)",
+check("и правки в нём нет (повторять нечего)",
       out and not out.get("errors"), out)
 
 out, _ = prep("speaking", ERR, question_ok=False)
 block = prompt_builder._check_block(out) if out else ""
-check("speaking + не по вопросу — в промпте только блок вопроса",
+check("в промпте только блок вопроса",
       "NOT AN ANSWER" in block and "CORRECTION FIRST" not in block, block)
 
-out, pre_done = prep("chat", {"ok": True, "move_type": "A",
+out, done = prep("speaking", {"ok": True, "move_type": "A",
                               "answer_state": "correct", "errors": []})
-check("chat без ошибок — блока нет", out is None, out)
-check("и разбор всё равно посчитан", pre_done is False, pre_done)
+check("без ошибок — блока нет", out is None, out)
+check("и разбор всё равно посчитан", done is False, done)
+
+keep_flag = config.LESSON_ASK_PHASE_SILENT
+config.LESSON_ASK_PHASE_SILENT = False
+try:
+    out, _ = prep("speaking", ERR)
+finally:
+    config.LESSON_ASK_PHASE_SILENT = keep_flag
+check("выключатель возвращает §87: правка снова уходит учителю",
+      bool(out) and out.get("errors"), out)
+check("выключатель снова включён (вариант Б)",
+      config.LESSON_ASK_PHASE_SILENT is True)
+
+print("11) §90: ответ по вопросу — зачёт, даже если форма с ошибкой")
+
+MATERIAL_ASK = {"ask": [Q1, Q2, "Why?"],
+                "phrases": [{"ru": "Я возьму этот.", "en": "I will take this one."}]}
+
+
+def make_scene_app(lesson_type="speaking", tasks_done=0):
+    app = make_app(lesson_type)
+    session = app.lesson.current()
+    session.tasks_done = tasks_done
+    app._material_of = lambda lesson_id: MATERIAL_ASK
+    for name in ("_material_ask_left", "_form_silent"):
+        setattr(app, name, types.MethodType(getattr(App, name), app))
+    return app
+
+
+a = make_scene_app("speaking")
+se = a.lesson.current()
+a._last_student_text = "ann took a black phone"
+a._task_from_analysis({"ok": True, "move_type": "A", "answer_state": "needs_fix",
+                       "errors": [{"type": "grammar", "wrong": "took",
+                                   "correct": "take", "rule": "verb_form"}]})
+check("задание сдано, хотя разбор нашёл «ошибку»",
+      se.tasks_done == 1, se.tasks_done)
+check("повтор не просили", se.repeat_expected == [], se.repeat_expected)
+check("фаза не «ждём повтор»", se.task_phase == lesson.TASK_ASK, se.task_phase)
+check("с пометкой не засчитано (ответ был по делу)",
+      se.tasks_marked == 0, se.tasks_marked)
+
+b = make_scene_app("speaking", tasks_done=3)
+sf = b.lesson.current()
+b._last_student_text = "i am looking for jacket"
+b._task_from_analysis({"ok": True, "move_type": "A", "answer_state": "needs_fix",
+                       "errors": [{"type": "article", "wrong": "for jacket",
+                                   "correct": "for a jacket"}]})
+check("вопросы кончились — правка снова работает (§87)",
+      sf.task_phase == lesson.TASK_FIX, sf.task_phase)
+check("и задание пока НЕ сдано", sf.tasks_done == 3, sf.tasks_done)
+
+c = make_scene_app("speaking")
+su = c.lesson.current()
+c._last_student_text = "hmm i think so"
+ok_unclear = c._task_from_analysis({"ok": True, "move_type": "A",
+                                    "answer_state": "unclear", "errors": []})
+check("непонятный ответ зачёта не даёт (unclear)",
+      ok_unclear is False and su.tasks_done == 0,
+      (ok_unclear, su.tasks_done))
+
+d = make_scene_app("speaking")
+sd = d.lesson.current()
+d._last_student_text = "ann took a black phone"
+config.LESSON_ASK_PHASE_SILENT = False
+try:
+    d._task_from_analysis({"ok": True, "move_type": "A",
+                           "answer_state": "needs_fix",
+                           "errors": [{"type": "grammar", "wrong": "took",
+                                       "correct": "take"}]})
+finally:
+    config.LESSON_ASK_PHASE_SILENT = keep_flag
+check("выключатель вернул прежний путь: ждём повтор",
+      sd.task_phase == lesson.TASK_FIX, sd.task_phase)
 
 print()
 if FAILED:
