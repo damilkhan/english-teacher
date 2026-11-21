@@ -453,6 +453,110 @@ def missing_words(said: Any, want: Any) -> List[str]:
     return out
 
 
+# §90.1 (21.11.2026): ПРОМАХ ПО СЛОВУ — не то же, что промах по ФОРМЕ.
+# Решение ученика (вариант Б): в части «вопросы по сцене» форму не правим.
+# Но «poor» вместо «bad», «incheap» вместо «cheap» — это НЕ форма, это
+# нехватка слова. Такое нельзя молча прощать: ученик должен услышать верное
+# слово и получить его в словарь, а не в пробелы по грамматике (§88, находка 5).
+#
+# Чьи ярлыки: закрытый список правил Аналитика (roles/analyst.py).
+# word_choice — не то слово или не та форма слова; spelling — буквы.
+WORD_RULES = frozenset(("word_choice", "spelling"))
+
+
+def lesson_words(lesson: Any) -> Set[str]:
+    """Слова МАТЕРИАЛА урока в нижнем регистре: сцена, вопросы, слова темы.
+
+    Нужны как фильтр от выдумок: «верное» слово, которого нет ни в сцене, ни
+    в вопросе, ни в словах урока, — это догадка модели, а не словарь ученика.
+    """
+    out: Set[str] = set()
+    if not isinstance(lesson, dict):
+        return out
+    chunks: List[str] = []
+    for word in (lesson.get("words") or ()):
+        chunks.append(str(word or ""))
+    for row in (lesson.get("scene") or ()):
+        if isinstance(row, dict):
+            chunks.append(str(row.get("en") or ""))
+    for question in (lesson.get("ask") or ()):
+        chunks.append(str(question or ""))
+    for chunk in chunks:
+        out.update(re.findall(r"[a-z']+", chunk.lower()))
+    return out
+
+
+def is_word_miss(err: Any, known: Optional[Set[str]] = None) -> bool:
+    """Это промах по СЛОВУ, а не по форме? known — слова материала урока.
+
+    Три условия, все обязательны:
+      1) ярлык правила из «словарных» (word_choice / spelling);
+      2) правка НЕ та же самая строка (иначе это не правка);
+      3) каждое значимое слово правки ЕСТЬ в материале урока. Условие 3 —
+         фильтр от выдумок: на верной фразе «the battery is worse» модель
+         выдавала «worse -> bad», а слова bad в уроке нет.
+    """
+    if not isinstance(err, dict):
+        return False
+    rule = str(err.get("rule") or "").strip().lower()
+    if rule not in WORD_RULES:
+        return False
+    wrong = _flat(err.get("wrong"))
+    correct = _flat(err.get("correct"))
+    if not correct or wrong == correct:
+        return False
+    want = [w for w in _meaning_words(correct) if w not in _HINT_STOP]
+    if not want:
+        return False
+    if known:
+        known = {str(w).lower() for w in known}
+        if not all(w in known for w in want):
+            return False
+    return True
+
+
+def word_misses(errors: Any, lesson: Any = None) -> List[Dict[str, str]]:
+    """Промахи по СЛОВУ из разбора: [{"wrong": ..., "correct": ...}] (§90.1)."""
+    known = lesson_words(lesson)
+    out: List[Dict[str, str]] = []
+    for err in (errors or ()):
+        if not is_word_miss(err, known):
+            continue
+        item = {"wrong": str(err.get("wrong") or "").strip(),
+                "correct": str(err.get("correct") or "").strip()}
+        if item not in out:
+            out.append(item)
+    return out
+
+
+def mark_word_misses(analysis: Any, lesson: Any = None) -> Any:
+    """Промах по слову записать как vocabulary, а не как грамматику (§90.1).
+
+    Так он попадает в СЛОВАРЬ и в «Работу над ошибками» по слову, а не в
+    пробелы по правилу: лечится он не правилом, а словом.
+    """
+    if not isinstance(analysis, dict):
+        return analysis
+    errors = [e for e in (analysis.get("errors") or ()) if isinstance(e, dict)]
+    if not errors:
+        return analysis
+    known = lesson_words(lesson)
+    out = []
+    changed = False
+    for err in errors:
+        item = err
+        if (is_word_miss(err, known)
+                and str(err.get("type") or "").strip().lower() != "vocabulary"):
+            item = dict(err)
+            item["type"] = "vocabulary"
+            changed = True
+        out.append(item)
+    if not changed:
+        return analysis
+    data = dict(analysis)
+    data["errors"] = out
+    return data
+
 def same_meaning(said: Any, want: Any) -> bool:
     """Сказано ТО ЖЕ САМОЕ, пусть и другими словами? (решение 109)
 

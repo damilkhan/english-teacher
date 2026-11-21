@@ -574,9 +574,21 @@ class ChatController:
                   and str(payload.get("task_phase") or "").strip().lower() == "ask")
         if (check is not None and asking
                 and getattr(config, "LESSON_ASK_PHASE_SILENT", True)):
-            print("🔇 §90: вопросы по сцене — форму не правлю "
-                  "(разбор в конце урока)")
-            check = None
+            # §90.1 (21.11.2026): ФОРМУ не правим, а СЛОВО — надо.
+            # «poor» вместо «bad», «incheap» вместо «cheap» — это нехватка
+            # слова, а не правило. Молча прощать нельзя: ученик услышит
+            # верное слово в реплике учителя (без «скажи ещё раз»), а само
+            # слово уйдёт в СЛОВАРЬ, а не в пробелы по грамматике.
+            misses = lesson_mod.word_misses(check.get("errors"), self._lesson)
+            if misses:
+                print("🔤 §90.1: промах по СЛОВУ: %s (в словарь)"
+                      % ", ".join("%s -> %s" % (m["wrong"], m["correct"])
+                                  for m in misses))
+                check = {"said": user_text, "errors": [], "words": misses}
+            else:
+                print("🔇 §90: вопросы по сцене — форму не правлю "
+                      "(разбор в конце урока)")
+                check = None
             self.last_prechecked = True    # и своё «скажи ещё раз» не нужно
         # §89 (19.11.2026): ответ НЕ НА ВОПРОС — блок нужен и БЕЗ ошибок:
         # иначе учитель похвалит ответ не по делу и пойдёт дальше. Вопрос
@@ -788,6 +800,9 @@ class ChatController:
         if analysis and analysis.get("ok"):
             try:
                 analysis = self._only_target_errors(analysis)
+                # §90.1: промах по СЛОВУ пишем как vocabulary — его лечит
+                # словарь, а не правило (иначе он идёт в пробелы по грамматике).
+                analysis = lesson_mod.mark_word_misses(analysis, self._lesson)
                 return profile_store.record_analysis(
                     self._with_origin(analysis), user_text, response, self.user_id)
             except Exception as exc:

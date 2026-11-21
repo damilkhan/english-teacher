@@ -1642,6 +1642,8 @@ class EnglishTeacherApp:
             lesson_payload["scene"] = material.get("scene")
             lesson_payload["ask"] = material.get("ask")
             lesson_payload["ask_done"] = 0
+            # §90.1: слова темы — фильтр «промах по слову или выдумка модели»
+            lesson_payload["words"] = material.get("words")
         self._lesson_payload = dict(lesson_payload)
         try:
             self.chat.set_lesson(lesson_payload)
@@ -3791,6 +3793,16 @@ class EnglishTeacherApp:
             print("🔇 Форма не правится (вопросы по сцене): %s -> %s "
                   "(задание сдано)"
                   % (", ".join(wrong) or "-", ", ".join(fix) or "-"))
+            # §90.1 (21.11.2026): молча прощать НЕЛЬЗЯ, если промах по СЛОВУ.
+            # «poor» вместо «bad» — это нехватка слова, а не форма. Задание
+            # всё равно сдано (вариант Б), но ученик увидит, чего не хватило,
+            # и слово уйдёт в словарь (mark_word_misses в контроллере).
+            missed = lesson_mod.word_misses(errors, getattr(
+                self, "_lesson_payload", None))
+            if missed:
+                print("🔤 Промах по СЛОВУ: %s"
+                      % ", ".join("%s -> %s" % (m["wrong"], m["correct"])
+                                  for m in missed))
             return self._credit_task(session, text, marked=False)
         no_errors = not errors and state != lesson_mod.ANSWER_UNCLEAR
         try:

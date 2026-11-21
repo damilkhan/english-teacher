@@ -452,6 +452,83 @@ finally:
 check("выключатель вернул прежний путь: ждём повтор",
       sd.task_phase == lesson.TASK_FIX, sd.task_phase)
 
+print("12) §90.1: промах по СЛОВУ — не форма; в словарь, а не в грамматику")
+
+LESSON_WORDS = {"words": ["cheap", "better", "battery"],
+                "scene": [{"who": "Ann", "en": "It is cheaper, but the battery is worse."}],
+                "ask": ["Which phone did Ann take?", "Is there a cheaper phone?"]}
+KNOWN = lesson.lesson_words(LESSON_WORDS)
+check("слова материала собраны", "cheaper" in KNOWN and "battery" in KNOWN,
+      sorted(KNOWN)[:8])
+
+
+def err(correct, rule, wrong="said"):
+    return {"type": "grammar", "wrong": wrong, "correct": correct, "rule": rule}
+
+
+check("настоящий промах по слову проходит",
+      lesson.is_word_miss(err("cheap", "word_choice", "incheap"), KNOWN), "?")
+check("выдумка модели отсекается (слова нет в уроке)",
+      not lesson.is_word_miss(err("bad", "word_choice", "worse"), KNOWN), "?")
+check("форма глагола — не слово",
+      not lesson.is_word_miss(err("take", "verb_form", "took"), KNOWN), "?")
+check("сравнение — не слово",
+      not lesson.is_word_miss(err("more expensive", "comparison"), KNOWN), "?")
+check("артикль — не слово",
+      not lesson.is_word_miss(err("the small one", "article"), KNOWN), "?")
+check("пустая правка не считается",
+      not lesson.is_word_miss({"correct": "", "rule": "word_choice"}, KNOWN), "?")
+
+misses = lesson.word_misses(
+    [err("cheap", "word_choice", "incheap"),
+     err("take", "verb_form", "took")], LESSON_WORDS)
+check("в словарь попал только промах по слову",
+      misses == [{"wrong": "incheap", "correct": "cheap"}], misses)
+
+marked = lesson.mark_word_misses(
+    {"ok": True, "errors": [err("cheap", "word_choice", "incheap"),
+                            err("take", "verb_form", "took")]}, LESSON_WORDS)
+check("слово записано как vocabulary", marked["errors"][0]["type"] == "vocabulary",
+      marked["errors"][0])
+check("форма осталась grammar", marked["errors"][1]["type"] == "grammar",
+      marked["errors"][1])
+check("исходный разбор не испорчен",
+      lesson.mark_word_misses({"ok": True, "errors": [err("take", "verb_form")]},
+                              LESSON_WORDS).get("errors")[0]["type"] == "grammar",
+      "?")
+
+block = prompt_builder._check_block(
+    {"said": "the incheap phone", "errors": [],
+     "words": [{"wrong": "incheap", "correct": "cheap"}]})
+check("блок «одно слово» есть", "ONE WORD" in block, block)
+check("верное слово названо", "cheap" in block, block)
+check("повтор ЗАПРЕЩЁН прямо (фраза «say it once more» стоит под запретом)",
+      "do NOT say \"say it" in block, block)
+check("и требует употребить слово в своём ответе",
+      "NATURALLY in your own reply" in block, block)
+check("правку формы не просит", "CORRECTION FIRST" not in block, block)
+check("без промаха по слову блока нет",
+      prompt_builder._check_block({"errors": []}) == "", "?")
+
+ctl = cc.ChatController.__new__(cc.ChatController)
+ctl._lesson = {"type": "speaking", "task_phase": "ask", "ask": [Q1],
+               "ask_done": 0, "words": LESSON_WORDS["words"],
+               "scene": LESSON_WORDS["scene"]}
+out = ctl._prepare_check(OFF, {"ok": True, "move_type": "A",
+                               "answer_state": "needs_fix",
+                               "errors": [err("cheap", "word_choice", "incheap")]})
+check("контроллер отдал блок слова",
+      bool(out) and out.get("words"), out)
+check("и правки в нём нет (повтор не просим)",
+      out and not out.get("errors"), out)
+check("своё «скажи ещё раз» приложение не добавит",
+      ctl.last_prechecked is True, ctl.last_prechecked)
+
+out2 = ctl._prepare_check(OFF, {"ok": True, "move_type": "A",
+                                "answer_state": "needs_fix",
+                                "errors": [err("take", "verb_form", "took")]})
+check("промах по ФОРМЕ — по-прежнему молча", out2 is None, out2)
+
 print()
 if FAILED:
     print("ПРОВАЛЕНО: %d -> %s" % (len(FAILED), FAILED))

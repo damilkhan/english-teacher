@@ -382,6 +382,38 @@ Two short sentences in English, nothing else.
 """
 
 
+WORD_TEMPLATE = """
+\n\U0001F4A1 ONE WORD. The student did not use the wrong grammar: he used a
+wrong WORD for the thing in this situation.
+Correct word(s): {words}
+For THIS single reply:
+- do NOT ask the student to say the sentence again and do NOT say "say it
+  once more": this lesson is a talk, not a repetition;
+- do NOT praise the wrong word as if it were right;
+- answer his message and use the correct word(s) NATURALLY in your own reply;
+- then go on with the lesson as usual.
+One or two short sentences in English, nothing else.
+"""
+
+
+def _word_block(check):
+    """Блок «не то СЛОВО» (§90.1). Пусто — блока нет.
+
+    Ставится вместо блока правки: повторять нечего (в части «вопросы по
+    сцене» форму мы не правим, вариант Б), но и молча прощать нельзя —
+    ученик должен услышать верное слово в ответе учителя.
+    """
+    if not isinstance(check, dict) or not check.get("words"):
+        return ""
+    shown = []
+    for item in (check.get("words") or ()):
+        word = str((item or {}).get("correct") or "").strip()
+        if word and word not in shown:
+            shown.append(word)
+    if not shown:
+        return ""
+    return WORD_TEMPLATE.format(words=", ".join(shown[:3]))
+
 def _off_topic_block(check):
     """Блок «ответ не на заданный вопрос» (§89). Пусто — блока нет."""
     if not isinstance(check, dict) or check.get("question_ok") is not False:
@@ -423,6 +455,10 @@ def _check_block(check):
     off = _off_topic_block(check)
     if off:
         return off
+    # §90.1: не то СЛОВО — сильнее правки формы и НЕ просит повтора
+    words = _word_block(check)
+    if words:
+        return words
     rows = []
     for err in (check.get("errors") or ()):
         if not isinstance(err, dict):
