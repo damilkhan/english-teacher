@@ -47,6 +47,12 @@ CREDITS = os.path.join(PICTURE_DIR, "CREDITS.txt")
 META = os.path.join(PICTURE_DIR, "pictures.json")
 
 WIDTH = 1024
+# §91.5 (22.11.2026): фото для задания «опиши» бывает нужно КРУПНЕЕ 1024 —
+# ученик не мог разглядеть ценники на фото магазина. Такие ключи лежат в
+# BIG_WIDTH: пишем 2000 px по ширине (в чате всё равно 460, но по клику
+# открывается крупно и ценники читаются).
+BIG_WIDTH = 2000
+BIG_KEYS = ("a2/phones-shop",)
 MIN_SOURCE = 1000               # исходник уже этого — не берём (замер: ложный брак)
 PAUSE = 3.0                     # пауза между запросами к API, секунды
 USER_AGENT = ("VerbotEnglishTeacher/1.0 "
@@ -127,6 +133,13 @@ TASKS = [
     ("a2", "store-inside", ["supermarket shelves products photo",
                             "grocery store aisle with food"],
      "At the Store", ["shelves", "products", "food", "store"]),
+    # §91.5 (22.11.2026): фото под урок city/4.3 «Two phones: which one?».
+    # Прежнее фото (store-inside) было про полки с едой — спрашивать про
+    # телефоны по нему было нельзя. Здесь телефоны и ЦЕННИКИ (крупно, 2000 px,
+    # см. BIG_KEYS): на нём видно дорогой и дешёвый телефон.
+    ("a2", "phones-shop", ["Motorola One Zoom Media Markt smartphone price",
+                           "smartphone on display with price tag in a shop"],
+     "Buying a phone", ["phones", "price tags", "shop", "counter"]),
     ("a2", "football-field", ["children playing soccer on grass field photo",
                               "football players on a field"],
      "Sport & Fitness", ["field", "ball", "players", "grass"]),
@@ -216,8 +229,8 @@ def _looks_like_photo(im) -> str:
     return ""
 
 
-def _store(blob: bytes, path: str) -> str:
-    """Байты → JPEG шириной WIDTH. Возвращает причину отказа или пусто."""
+def _store(blob: bytes, path: str, width: int = WIDTH) -> str:
+    """Байты → JPEG шириной width (по умолчанию WIDTH). Отказ или пусто."""
     try:
         from io import BytesIO
         from PIL import Image
@@ -228,8 +241,8 @@ def _store(blob: bytes, path: str) -> str:
         reason = _looks_like_photo(im)
         if reason:
             return reason
-        if im.width > WIDTH:
-            im = im.resize((WIDTH, max(1, round(im.height * WIDTH / im.width))),
+        if im.width > width:
+            im = im.resize((width, max(1, round(im.height * width / im.width))),
                            Image.LANCZOS)
         im = im.convert("RGB")
         out = BytesIO()
@@ -271,6 +284,7 @@ def main() -> None:
         folder = os.path.join(PICTURE_DIR, level)
         os.makedirs(folder, exist_ok=True)
         path = os.path.join(folder, key + ".jpg")
+        width = BIG_WIDTH if name in BIG_KEYS else WIDTH
         if not (force and name in force):
             if os.path.exists(path) and os.path.getsize(path) > 20000:
                 skipped += 1
@@ -295,7 +309,7 @@ def main() -> None:
                 except Exception:                # noqa: BLE001
                     time.sleep(PAUSE)
                     continue
-                reason = _store(blob, path)
+                reason = _store(blob, path, width)
                 if reason:
                     print("  · %s: отказ — %s (%s)"
                           % (key, reason, candidate["title"][:50]))
