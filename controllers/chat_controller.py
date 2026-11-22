@@ -33,6 +33,7 @@ import exam as exam_mod
 import lesson as lesson_mod
 import prompt_builder
 import reply_checks
+import scene_material
 import vocabulary
 import rag
 import user_manager
@@ -400,6 +401,9 @@ class ChatController:
                              else "оставляю ответ как есть"))
             else:
                 print("⚠️ Повторный запрос не удался — оставляю ответ как есть")
+        # §91.7: в фазе «вопросы по сцене» вопрос вне материала заменяем
+        # вопросом из файла урока — иначе урок спрашивает о том, чего нет.
+        cleaned = self._keep_question_in_material(cleaned)
         self._last_question = self._question_of(cleaned)
         return True, cleaned
 
@@ -686,6 +690,42 @@ class ChatController:
         print("❓ §89: ответ на вопрос %r -> %s"
               % (question, "да" if verdict else "НЕТ"))
         return {"question": question, "question_ok": verdict}
+
+    def _keep_question_in_material(self, reply):
+        """§91.7: в фазе «вопросы по сцене» спрашиваем только ПРО материал.
+
+        Живой урок city/4.3: модель спросила «What color was the other phone?»
+        — цвета второй трубки в сцене нет (есть только «I will take the black
+        one»). Ученик ответил на выдуманный вопрос, и урок стал бессмысленным.
+        §91.2 спасает от «ответ не на вопрос», но не от пустой сцены.
+
+        Решение ученика 22.11.2026: режем ТОЛЬКО вопрос ВНЕ материала. Вопрос
+        про материал остаётся живым, даже если его нет в списке ask урока.
+        Выключатель: config.LESSON_ASK_MATERIAL_ONLY.
+        """
+        if not getattr(config, "LESSON_ASK_MATERIAL_ONLY", True):
+            return reply
+        lesson = self._lesson if isinstance(self._lesson, dict) else {}
+        if not lesson.get("scene") or not lesson.get("ask"):
+            return reply          # нет материала — трогать нечего (сцены, чат)
+        phase = str(lesson.get("task_phase") or "").strip().lower()
+        if phase != lesson_mod.TASK_ASK:
+            return reply          # ждём исправление/повтор — там свои правила
+        question = self._question_of(reply)
+        if not question:
+            return reply
+        bad, culprit = scene_material.outside_material(question, lesson)
+        if not bad:
+            return reply
+        head = scene_material.without_question(reply)
+        own = scene_material.next_question(lesson)
+        print("🛡️ Вопрос не по материалу (%s) — беру вопрос урока: %s"
+              % (culprit, own or "-"))
+        if not own:
+            return head or reply
+        if not head:
+            return own
+        return head + " " + own
 
     def _asked_question(self, lesson):
         """Вопрос, на который ученик должен был ответить.
