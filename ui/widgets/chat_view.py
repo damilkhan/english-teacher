@@ -519,16 +519,35 @@ class ChatView(ctk.CTkFrame):
             pass
 
         def _wheel(event):
-            step = -1 if getattr(event, "delta", 0) > 0 else 1
-            canvas.yview_scroll(step * 3, "units")
+            # 🔴 22.11.2026 (живой урок): 20 исключений TclError в логе —
+            # `bind_all` остаётся привязанным и ПОСЛЕ закрытия окна, а колесо
+            # крутят уже в чате. Tk пытается прокрутить уничтоженный canvas.
+            # Поэтому: сначала проверяем, живо ли окно, потом ловим TclError.
+            try:
+                if not win.winfo_exists():
+                    return
+                step = -1 if getattr(event, "delta", 0) > 0 else 1
+                canvas.yview_scroll(step * 3, "units")
+            except Exception:
+                pass
+
+        def _unbind():
+            """Снять привязку колеса: без этого Tk ругается после закрытия."""
+            try:
+                canvas.unbind_all("<MouseWheel>")
+            except Exception:
+                pass
 
         def _close(_event=None):
+            _unbind()
             try:
                 win.destroy()
             except Exception:
                 pass
 
         canvas.bind_all("<MouseWheel>", _wheel)
+        # колесо может остаться привязанным, если окно закрыли не кнопкой
+        win.bind("<Destroy>", lambda _e: _unbind(), add="+")
         win.bind("<Escape>", _close)
         win.protocol("WM_DELETE_WINDOW", _close)
         return True

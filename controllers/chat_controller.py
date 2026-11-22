@@ -977,11 +977,58 @@ class ChatController:
             data["lesson"] = str(lesson.get("lesson_id") or "")
         return data
 
+    # Подсказки, а не ошибки: если в пояснении Аналитика есть такие слова, он
+    # предлагает «как лучше», а не исправляет ошибку. Живой урок 22.11.2026:
+    # «bad -> poor, More natural adjective» и «took -> take, if context
+    # implies present tense» — ученик сказал ВЕРНО, а запись ушла в базу, и
+    # следующее занятие дриллило несуществующую ошибку.
+    SOFT_NOTES = ("more natural", "if context", "would be better",
+                  "sounds better", "sounds more", "optional", "you could",
+                  "может быть", "лучше звучит", "более естественно")
+
+    def _drop_soft_errors(self, analysis):
+        """Убрать из разбора ПОДСКАЗКИ и артикли в фазе вопросов по сцене."""
+        errors = list((analysis or {}).get("errors") or [])
+        if not errors:
+            return analysis
+        lesson = self._lesson if isinstance(self._lesson, dict) else {}
+        phase = str(lesson.get("task_phase") or "").strip().lower()
+        scene_ask = bool(lesson.get("scene")) and phase == lesson_mod.TASK_ASK
+        keep = []
+        dropped = []
+        for item in errors:
+            if not isinstance(item, dict):
+                continue
+            note = str(item.get("note") or "").lower()
+            rule = str(item.get("rule") or "").strip().lower()
+            if any(word in note for word in self.SOFT_NOTES):
+                dropped.append(item)      # подсказка, а не ошибка
+                continue
+            if scene_ask and rule in ("article", "determiner"):
+                # §90: в части «вопросы по сцене» форму не правим. Артикль
+                # там судить нечем: «the expensive phone» — ТА САМАЯ трубка
+                # из сцены, и менять её на «an» нельзя. Аналитик этого не
+                # видит и придумывает правку (5 ложных из 5 за 22.11.2026).
+                dropped.append(item)
+                continue
+            keep.append(item)
+        if len(keep) == len(errors):
+            return analysis
+        print("🧹 Подсказки/артикли в базу не пишем: %d -> %d (%s)"
+              % (len(errors), len(keep),
+                 ", ".join("%s->%s" % (d.get("wrong"), d.get("correct"))
+                           for d in dropped[:3])))
+        data = dict(analysis)
+        data["errors"] = keep
+        return data
+
     def _record(self, user_text, response, analysis):
         """Прогресс: есть разбор Аналитика → структурно, иначе — прежняя эвристика."""
         if analysis and analysis.get("ok"):
             try:
                 analysis = self._only_target_errors(analysis)
+                # 22.11.2026: подсказки и артикли в фазе вопросов — НЕ ошибки
+                analysis = self._drop_soft_errors(analysis)
                 # §90.1: промах по СЛОВУ пишем как vocabulary — его лечит
                 # словарь, а не правило (иначе он идёт в пробелы по грамматике).
                 analysis = lesson_mod.mark_word_misses(analysis, self._lesson)

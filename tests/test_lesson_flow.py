@@ -242,6 +242,41 @@ check("переход на фразы был", result["transitioned"] is True)
 check("повторов нет", len(result["sequence"]) == len(set(result["sequence"])),
       result["sequence"])
 
+print("\\n[6] §91.11: ложные правки Аналитика в базу НЕ идут")
+# Живой урок 22.11.2026: 8 из 10 записей в базе ошибок были ЛОЖНЫМИ —
+# ученик говорил верно, а Аналитик «исправлял»: bad->poor, the->a,
+# took->take. Следующее занятие дриллило несуществующие ошибки.
+FALSE_ONES = [
+    {"wrong": "bad", "correct": "poor",
+     "note": "More natural adjective for battery life", "rule": "word_choice"},
+    {"wrong": "took", "correct": "take",
+     "note": "Should use base form if context implies present",
+     "rule": "verb_form"},
+    {"wrong": "the expensive phone", "correct": "an expensive phone",
+     "note": "Use 'an' before a vowel sound.", "rule": "article"},
+]
+REAL_ONES = [
+    {"wrong": "he don't", "correct": "he doesn't", "note": "do/does",
+     "rule": "verb_form"},
+    {"wrong": "i am go", "correct": "i am going", "note": "время",
+     "rule": "tense"},
+]
+
+
+def soft_test(errors, phase):
+    ctl = cc.ChatController.__new__(cc.ChatController)
+    ctl._lesson = {"scene": [{"en": "x"}], "task_phase": phase}
+    return ctl._drop_soft_errors({"ok": True, "errors": list(errors)})["errors"]
+
+
+for item in FALSE_ONES:
+    check("ложная правка не записана: %s -> %s" % (item["wrong"], item["correct"]),
+          soft_test([item], "ask") == [], item)
+for item in REAL_ONES:
+    check("настоящая ошибка записана: %s -> %s" % (item["wrong"], item["correct"]),
+          len(soft_test([item], "ask")) == 1, item)
+check("вне фазы вопросов артикль не трогаем (это не сцена)",
+      len(soft_test([FALSE_ONES[2]], "translate")) == 1)
 print()
 if FAILS:
     print("ПРОВАЛЕНО: %d" % len(FAILS))
