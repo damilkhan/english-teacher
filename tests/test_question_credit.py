@@ -529,6 +529,94 @@ out2 = ctl._prepare_check(OFF, {"ok": True, "move_type": "A",
                                 "errors": [err("take", "verb_form", "took")]})
 check("промах по ФОРМЕ — по-прежнему молча", out2 is None, out2)
 
+# =========================================================
+# 13) ВОПРОС УЧИТЕЛЯ ВАЖНЕЕ НОМЕРА В ФАЙЛЕ (22.11.2026)
+# =========================================================
+# Живой урок city/4.3 (22.11.2026, 10:16-11:21). Учитель спросил
+# «What color was the other phone?», а проверка сравнивала ответ с ТРЕТЬИМ
+# вопросом файла урока: ask_done = число ЗАСЧИТАННЫХ заданий, а в фазе
+# вопросов оно почти не двигалось. Верный ответ получал «не на вопрос» —
+# в логе три раза подряд.
+print()
+print("13) вопрос, который учитель РЕАЛЬНО задал")
+
+Q3 = "Would you take the expensive phone or the cheap one? Why?"
+INVENTED = "What color was the other phone?"
+
+c13 = make_controller(FakeLLM("YES"), ask=[Q1, Q2, Q3], ask_done=2,
+                      last_question="What color was the other phone")
+got = c13._asked_question(c13._lesson)
+check("берём вопрос из реплики учителя, а не ask[done]",
+      got == "What color was the other phone", got)
+
+out = c13._question_check("this text doesn't have another color.",
+                          c13._lesson, {"move_type": "A"})
+check("проверялся именно этот вопрос", out.get("question") ==
+      "What color was the other phone", out)
+check("ответ на заданный вопрос — зачёт", out.get("question_ok") is True, out)
+
+c14 = make_controller(FakeLLM("YES"), ask=[Q1, Q2, Q3], ask_done=2,
+                      last_question="")
+check("учитель ничего не спросил — вопрос из файла по номеру",
+      c14._asked_question(c14._lesson) == Q3, c14._asked_question(c14._lesson))
+c14._last_question = "   "
+check("пробелы считаем пустотой", c14._asked_question(c14._lesson) == Q3, "?")
+
+_old = getattr(config, "LESSON_ASK_LAST_QUESTION", True)
+config.LESSON_ASK_LAST_QUESTION = False
+c15 = make_controller(FakeLLM("YES"), ask=[Q1, Q2, Q3], ask_done=2,
+                      last_question="What color was the other phone")
+check("выключатель возвращает прежнее поведение (файл урока)",
+      c15._asked_question(c15._lesson) == Q3, c15._asked_question(c15._lesson))
+config.LESSON_ASK_LAST_QUESTION = _old
+
+# --- фото-задание снимается вместе с уроком (живой баг 22.11.2026) ---
+print()
+print("14) фото-задание не съедает реплики нового урока")
+
+import ui.app as app_mod          # noqa: E402  (нужен только класс)
+
+APP_SOURCE = open(os.path.join(ROOT, "ui", "app.py"), encoding="utf-8").read()
+
+
+def _body(name):
+    """Исходник метода (до следующего метода того же уровня)."""
+    start = APP_SOURCE.find("    def %s(" % name)
+    if start < 0:
+        return ""
+    rest = APP_SOURCE[start:]
+    end = rest.find("\n    def ", 1)
+    return rest if end < 0 else rest[:end]
+
+
+check("метод снятия задания есть", bool(_body("_clear_picture_task")), "?")
+check("новый урок снимает фото",
+      "self._clear_picture_task()" in _body("_begin_lesson"), "?")
+check("конец урока снимает фото",
+      "self._clear_picture_task()" in _body("_end_lesson"), "?")
+check("новый урок снимает флаг «урок закрывается»",
+      "self._lesson_closing = False" in _body("_begin_lesson"), "?")
+
+
+class FakeCounter:
+    def __init__(self):
+        self.cleared = 0
+
+    def clear_counter(self):
+        self.cleared += 1
+
+
+stub = types.SimpleNamespace(_picture={"key": "a2/store-inside"},
+                             input_bar=FakeCounter())
+stub._clear_picture_task = types.MethodType(
+    app_mod.EnglishTeacherApp._clear_picture_task, stub)
+check("фото снято", stub._clear_picture_task() is True and stub._picture is None,
+      stub._picture)
+check("счётчик букв убран", stub.input_bar.cleared == 1,
+      stub.input_bar.cleared)
+check("повторный вызов ничего не ломает",
+      stub._clear_picture_task() is False and stub.input_bar.cleared == 1,
+      stub.input_bar.cleared)
 print()
 if FAILED:
     print("ПРОВАЛЕНО: %d -> %s" % (len(FAILED), FAILED))
