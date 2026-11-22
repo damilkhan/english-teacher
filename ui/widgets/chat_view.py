@@ -89,7 +89,9 @@ BUBBLE_MIN_PX = 170    # уже этого текст не переносим (�
 
 
 # Максимальная ширина фото в облачке (px). Фото меньше — не растягиваем.
-PICTURE_MAX_PX = 340
+# §91.5 (22.11.2026): было 340 — ученик не мог разглядеть ценники. Теперь 460,
+# а полный размер открывается по клику (см. _open_picture).
+PICTURE_MAX_PX = 460
 
 
 def _clean_spans(spans):
@@ -456,11 +458,79 @@ class ChatView(ctk.CTkFrame):
                              highlightthickness=0,
                              bg=self._bubble_bg(msg.is_user))
             label.pack(fill="x", pady=(6, 0))
+            # §91.5: фото в чате маленькое (340 px) — по клику открываем
+            # его крупно в отдельном окне с прокруткой.
+            label.configure(cursor="hand2")
+            label.bind("<Button-1>",
+                       lambda _e, pth=path: self._open_picture(pth))
             msg.picture_lbl = label
         except Exception as exc:                       # noqa: BLE001
             print("ℹ️ Фото не показать: %s" % exc)
             return False
         self._scroll_to_bottom()
+        return True
+
+    # ---------------- фото крупно по клику (§91.5) -----------------------
+    def _open_picture(self, path):
+        """Фото в ОТДЕЛЬНОМ окне с прокруткой: в чате видно только 340 px.
+
+        Ученик 22.11.2026: «ценников не разглядеть». Файл теперь 2000 px, а
+        в облачке он всё равно урезан — поэтому клик открывает окно, где
+        фото показано 1:1 (или по ширине экрана) и листается колесом мыши.
+        Нет Pillow / файла — тихо ничего не делаем.
+        """
+        if not path or not os.path.exists(path):
+            return False
+        try:
+            from PIL import Image, ImageTk
+            image = Image.open(path)
+            image.load()
+        except Exception as exc:                       # noqa: BLE001
+            print("ℹ️ Фото крупно не открыть: %s" % exc)
+            return False
+        win = tk.Toplevel(self)
+        win.title("Фото — %s" % os.path.basename(path))
+        win.configure(bg="#1e1e1e")
+        canvas = tk.Canvas(win, bg="#1e1e1e", highlightthickness=0)
+        bar_y = tk.Scrollbar(win, orient="vertical", command=canvas.yview)
+        bar_x = tk.Scrollbar(win, orient="horizontal", command=canvas.xview)
+        canvas.configure(yscrollcommand=bar_y.set, xscrollcommand=bar_x.set)
+        canvas.grid(row=0, column=0, sticky="nsew")
+        bar_y.grid(row=0, column=1, sticky="ns")
+        bar_x.grid(row=1, column=0, sticky="ew")
+        win.rowconfigure(0, weight=1)
+        win.columnconfigure(0, weight=1)
+        # окно не больше экрана: на 2000 px иначе уедет за края
+        max_w = max(320, win.winfo_screenwidth() - 120)
+        max_h = max(240, win.winfo_screenheight() - 160)
+        if image.width > max_w or image.height > max_h:
+            shown = image.copy()
+            shown.thumbnail((max_w, max_h), Image.LANCZOS)
+        else:
+            shown = image
+        photo = ImageTk.PhotoImage(shown, master=canvas)
+        canvas.create_image(0, 0, anchor="nw", image=photo)
+        canvas.configure(scrollregion=(0, 0, shown.width, shown.height))
+        canvas.image = photo          # ссылка: иначе Tk-картинку съест GC
+        try:
+            win.geometry("%dx%d" % (min(shown.width, max_w),
+                                   min(shown.height, max_h)))
+        except Exception:
+            pass
+
+        def _wheel(event):
+            step = -1 if getattr(event, "delta", 0) > 0 else 1
+            canvas.yview_scroll(step * 3, "units")
+
+        def _close(_event=None):
+            try:
+                win.destroy()
+            except Exception:
+                pass
+
+        canvas.bind_all("<MouseWheel>", _wheel)
+        win.bind("<Escape>", _close)
+        win.protocol("WM_DELETE_WINDOW", _close)
         return True
 
     def _fill_body(self, msg):
