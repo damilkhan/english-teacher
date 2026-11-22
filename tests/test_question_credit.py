@@ -617,6 +617,25 @@ check("счётчик букв убран", stub.input_bar.cleared == 1,
 check("повторный вызов ничего не ломает",
       stub._clear_picture_task() is False and stub.input_bar.cleared == 1,
       stub.input_bar.cleared)
+# ---------------------------------------------------------
+# 15) §91.7 (22.11.2026): сравнительная степень без «more»
+# ---------------------------------------------------------
+# Живой урок 4.3, лог 9592: ученик сказал «this one is expensive than that
+# one» вместо «It is more expensive than that one». Смысл тот же, но судья
+# отказал: при «than» слово more — только маркер сравнения.
+print("15) «expensive than» = «more expensive than»")
+check("без more — тот же смысл",
+      lesson.same_meaning("this one is expensive than that one",
+                              "It is more expensive than that one."), "нет")
+check("другое слово по-прежнему рубится",
+      not lesson.same_meaning("this one is better than that one.",
+                                  "It is more expensive than that one."), "?")
+check("без than «more expensive» != «expensive»",
+      not lesson.same_meaning("this one is expensive.",
+                                  "It is more expensive than that one."), "?")
+check("эталон по-прежнему засчитывается",
+      lesson.same_meaning("this one is more expensive than that one",
+                              "It is more expensive than that one."), "?")
 print()
 if FAILED:
     print("ПРОВАЛЕНО: %d -> %s" % (len(FAILED), FAILED))

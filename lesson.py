@@ -634,6 +634,13 @@ def same_meaning(said: Any, want: Any, rule: Any = None) -> bool:
         return False
     said_words = [w for w in said_all
                   if w not in _FILLERS and w not in _SKIP]
+    # §91.7 (22.11.2026): живой урок 4.3 — ученик сказал «this one is expensive
+    # than that one» вместо «It is more expensive than that one». Смысл тот же:
+    # при «than» слово more — только маркер сравнения, а не отдельное слово.
+    # Без «than» НЕ трогаем: «more expensive» и «expensive» — разный смысл.
+    if "than" in said_all and "than" in want_all:
+        want_words = [w for w in want_words if w != "more"]
+        said_words = [w for w in said_words if w != "more"]
     if not said_words:
         return False
     bad = sum(1 for w in said_words if w in _NEGATIONS)
