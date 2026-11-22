@@ -690,9 +690,17 @@ class ChatController:
     def _asked_question(self, lesson):
         """Вопрос, на который ученик должен был ответить.
 
-        Сначала — вопрос из ФАЙЛА урока (поле ask: он не меняется от запуска к
-        запуску), затем — тот, что учитель реально задал в своей реплике.
+        🔴 22.11.2026: сначала — вопрос, который учитель РЕАЛЬНО задал в своей
+        последней реплике (`_last_question`), и только потом — вопрос из файла
+        урока (поле ask). Живой урок city/4.3: учитель спросил «What color was
+        the other phone?», а проверка сравнивала ответ с ТРЕТЬИМ вопросом файла
+        (`ask_done` = число засчитанных заданий, а в фазе вопросов оно почти не
+        двигалось) — верный ответ на заданный вопрос получал «🚫 не на вопрос».
+        Файл урока нужен как запасной путь: учитель мог не задать вопроса.
         """
+        said = str(getattr(self, "_last_question", "") or "").strip()
+        if said and getattr(config, "LESSON_ASK_LAST_QUESTION", True):
+            return said
         ask = [str(item).strip() for item in (lesson.get("ask") or ()) if str(item).strip()]
         try:
             done = int(lesson.get("ask_done") or 0)
@@ -700,7 +708,7 @@ class ChatController:
             done = 0
         if 0 <= done < len(ask) and ask[done]:
             return ask[done]
-        return str(getattr(self, "_last_question", "") or "").strip()
+        return said
 
     def _ask_yes_no(self, system_prompt, question, said):
         """Один короткий вопрос модели: True/False/None. Никогда не бросает."""
