@@ -98,11 +98,58 @@ def test_fields():
     check("правила из списка Аналитика", rules <= set(gaps.RULES), rules)
 
 
+# =========================================================
+# §91.6 (22.11.2026): ЖИВЫЕ ОТВЕТЫ УЧЕНИКА ПРИНИМАЮТСЯ
+# =========================================================
+# Живой урок city/4.3 (22.11.2026). Код отдавал модели 6 фраз из 8, и
+# 4 из них модель судила НЕВЕРНО: «have you any cheaper phone?» и
+# «i'll take that one.» получали DIFFERENT. Причина — буквальное сравнение
+# служебных слов: артикль «a» в эталоне заменялся на «any» в ответе, и
+# скелет переставал совпадать. Теперь «есть ли», any/some/a и this/that
+# считаются одним и тем же, а the ↔ a ОСТАЁТСЯ ошибкой.
+LIVE_OK = [
+    ("is there any cheaper phone?", "Is there a cheaper phone?"),
+    ("have you any cheaper phone?", "Is there a cheaper phone?"),
+    ("do you have any cheaper phone?", "Is there a cheaper phone?"),
+    ("do you have some cheaper phone?", "Is there a cheaper phone?"),
+    ("there is any cheaper phone", "Is there a cheaper phone?"),
+    ("i'll take that one.", "I will take this one."),
+    ("this one is more expensive than one.", "It is more expensive than that one."),
+    ("this one has a better camera", "This one has a better camera."),
+]
+# А это по-прежнему ПРОМАХ: смысл другой.
+LIVE_NO = [
+    ("the small phone has a bad battery", "A small phone has a bad battery."),
+    ("these phones are cheap", "This phone is cheap."),
+    ("this one is cheaper.", "The small one is cheaper."),
+    ("i do not like it", "I like it."),
+    ("i go to school", "I went to school."),
+]
+
+
+def test_live_variants():
+    """Живые формулировки ученика: код должен решать САМ, без модели."""
+    print("\n5) живые варианты ученика (§91.6)")
+    import lesson
+    for said, want in LIVE_OK:
+        check("принято кодом: %r" % said[:38], lesson.same_meaning(said, want) is True,
+              "модель бы спросили зря")
+    for said, want in LIVE_NO:
+        check("осталось промахом: %r" % said[:34],
+              lesson.same_meaning(said, want) is False, "ложный зачёт")
+    check("подсказка называет настоящее слово, а не 'a'",
+          lesson.missing_words("have you any cheaper phone",
+                               "Is there a cheaper phone?") == ["there"],
+          lesson.missing_words("have you any cheaper phone",
+                               "Is there a cheaper phone?"))
+
+
 def main():
     test_load()
     test_pick()
     test_check()
     test_fields()
+    test_live_variants()
     print("\n" + "=" * 60)
     if FAILED:
         print("ПРОВАЛЕНО: %d" % len(FAILED))

@@ -428,7 +428,7 @@ _SKELETON = frozenset((
 
 def _skeleton(text: Any) -> List[str]:
     """Служебные слова фразы ПО ПОРЯДКУ (§87)."""
-    return [w for w in _flat(text).split() if w in _SKELETON]
+    return _skeleton_words(_flat(text).split())
 
 
 # Слова, которые не стоит называть подсказкой: сами по себе
@@ -557,8 +557,66 @@ def mark_word_misses(analysis: Any, lesson: Any = None) -> Any:
     data["errors"] = out
     return data
 
-def same_meaning(said: Any, want: Any) -> bool:
+# §91.6 (22.11.2026): ПРИНИМАЕМ ТО, ЧЕМУ УЧИМ.
+# Замер на живых ответах ученика (logs/_probe_sm.py): код отдавал модели
+# 6 фраз из 8, и 4 из них модель судила НЕВЕРНО. Причина — буквальное
+# сравнение служебных слов: скелет «Is there a cheaper phone?» = (is, there,
+# a), а у ответа «is there any cheaper phone?» = (is, there): артикль
+# заменился на any — и верный ответ объявлен чужим. Так же ломались
+# this/that и четыре способа спросить «есть ли у вас X».
+#
+# Правило (живая речь, а не учебник):
+#   • any / some / a — ОДНО И ТО ЖЕ в вопросе о наличии: «do you have any
+#     cheaper phone», «is there a cheaper phone», «have you got some»;
+#   • the ↔ a — РАЗНОЕ и остаётся разным: «the small phone» (тот самый) и
+#     «a small phone» (какой-то) — это настоящая ошибка, а не вариант;
+#   • this / that (и these / those) при выборе из двух — одно и то же;
+#     единственное и множественное — РАЗНОЕ (this ≠ these).
+_DEMO = {"this": "dem", "that": "dem", "these": "dem_pl", "those": "dem_pl"}
+_DET_ONE = {"any": "a", "some": "a"}
+_POSSESSION = (("is there ", "have "), ("are there ", "have "),
+               ("there is ", "have "), ("there are ", "have "),
+               ("do you have ", "have "), ("do they have ", "have "),
+               ("have you got ", "have "), ("have you any ", "have a "))
+
+
+def _canon_words(text: Any) -> List[str]:
+    """Слова фразы в ОДНОЙ форме: стяжки, «есть ли», any/some, указательные.
+
+    §91.6. Нужна только для СВЕРКИ СМЫСЛА; в подсказках (missing_words)
+    остаются настоящие слова ученика — иначе подсказка называла бы «a»
+    вместо «any» и путала.
+    """
+    value = " " + _flat(text) + " "
+    for short, full in _CONTRACTIONS:
+        value = value.replace(" " + short + " ", " " + full + " ")
+    for short, full in _SPOKEN:
+        value = value.replace(" " + short + " ", " " + full + " ")
+    for short, full in _POSSESSION:
+        value = value.replace(short, full)
+    return [_DEMO.get(w, _DET_ONE.get(w, w)) for w in value.split() if w]
+
+
+def _canon_meaning(text: Any) -> List[str]:
+    """Значимые слова в канонической форме (§91.6)."""
+    return [w for w in _canon_words(text)
+            if w not in _FILLERS and w not in _SKIP]
+
+
+def _skeleton_words(words: List[str], loose: bool = False) -> List[str]:
+    """Служебные слова ПО ПОРЯДКУ (§87). loose — артикли не в счёт (§91.6)."""
+    keep = _SKELETON - frozenset(_ARTICLES) if loose else _SKELETON
+    return [w for w in words if w in keep]
+
+
+def same_meaning(said: Any, want: Any, rule: Any = None) -> bool:
     """Сказано ТО ЖЕ САМОЕ, пусть и другими словами? (решение 109)
+
+    §91.6 (22.11.2026): «есть ли», any/some/a и this/that сравниваются как
+    одно и то же (см. _canon_words), а the ↔ a остаётся ошибкой.
+    rule принимается для совместимости и будущих правил: сейчас сверка от
+    него НЕ зависит — мягкость одна для всех уроков.
+
 
     Правило простое: все значимые слова эталона есть в ответе, порядок не
     важен, сокращения и вежливые вставки не считаются. Чего этот путь НЕ
@@ -568,16 +626,20 @@ def same_meaning(said: Any, want: Any) -> bool:
     Отрицание сверяется ОТДЕЛЬНО: «I do» и «I don't» дают одинаковый набор
     значимых слов, и без этой проверки промах засчитывался бы как верный.
     """
-    want_words = _meaning_words(want)
+    want_all = _canon_words(want)
+    said_all = _canon_words(said)
+    want_words = [w for w in want_all
+                  if w not in _FILLERS and w not in _SKIP]
     if not want_words:
         return False
-    said_words = _meaning_words(said)
+    said_words = [w for w in said_all
+                  if w not in _FILLERS and w not in _SKIP]
     if not said_words:
         return False
     bad = sum(1 for w in said_words if w in _NEGATIONS)
     if bad != sum(1 for w in want_words if w in _NEGATIONS):
         return False
-    if _skeleton(said) != _skeleton(want):
+    if _skeleton_words(said_all) != _skeleton_words(want_all):
         return False
     have = set(said_words)
     return all(w in have for w in want_words)
