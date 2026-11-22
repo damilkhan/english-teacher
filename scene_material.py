@@ -37,6 +37,9 @@ job work done ready try think know mean understand remember forget
 say said tell talk speak repeat ask answer question word words sentence
 english russian student teacher name lesson task example correct wrong
 one ones
+# глаголы про ученика, а не про сцену: ими модель не выдумывает факт
+want wants like likes love prefer choose wish feel notice guess imagine
+see look show tell try start stop need buy pay cost
 """.split())
 
 
@@ -140,6 +143,80 @@ def without_question(text):
     if cut < 0:
         return ""
     return body[:cut + 1].strip()
+
+# С каких слов начинается ВОПРОС. Нужно, чтобы «Hello Damil, which phone did
+# Ann take?» и «Which phone did Ann take?» считались ОДНИМ вопросом: имя
+# ученика стоит между приветствием и вопросом и ломало сравнение (живой лог
+# 22.11.2026 — из-за этого бот повторил вопрос).
+QUESTION_STARTERS = set("""
+what which who whom whose where when why how
+do does did is are was were am
+can could would will shall should may might must have has had
+tell describe say give name explain
+""".split())
+
+
+def norm_question(text):
+    """Вопрос в виде для СРАВНЕНИЯ: без регистра, знаков, похвалы и имени.
+
+    Отрезаем всё до первого ВОПРОСНОГО слова: «Hello Damil, which phone did
+    Ann take?» -> «which phone did ann take». Так повтор ловится, даже если
+    учитель поздоровался и назвал ученика по имени.
+    """
+    part = question_only(text).lower()
+    chars = [ch if (ch.isalnum() or ch == " ") else " " for ch in part]
+    words = "".join(chars).split()
+    for index, word in enumerate(words):
+        if word in QUESTION_STARTERS:
+            words = words[index:]
+            break
+    return " ".join(words).strip()
+
+
+def _asked_keys(asked):
+    """Набор нормализованных вопросов из того, что передали (set/список)."""
+    if asked is None:
+        return set()
+    if isinstance(asked, str):
+        asked = [asked]
+    return set(norm_question(item) for item in asked if str(item or "").strip())
+
+
+def pick_unasked(lesson, asked=None, avoid=""):
+    """Первый вопрос урока, которого ещё НЕ задавали и который ≠ avoid.
+
+    🔴 22.11.2026, живой урок: `next_question` брал ask[ask_done], а ask_done —
+    это число ЗАСЧИТАННЫХ заданий, и оно отстаёт на один ход: ученик ответил
+    на вопрос 3, а ask_done было ещё 2 — код подставлял ТОТ ЖЕ вопрос, и бот
+    повторял его. Теперь спрашиваем по СПИСКУ ЗАДАННЫХ, а не по счётчику.
+
+    Пусто — новых вопросов нет (тогда вопрос лучше не задавать вовсе).
+    Заданные важнее счётчика: если вопрос уже прозвучал, второй раз его не
+    берём, даже когда ask_done говорит «ещё не спрашивали».
+    """
+    if not isinstance(lesson, dict):
+        return ""
+    ask = [str(item).strip() for item in (lesson.get("ask") or ())
+           if str(item).strip()]
+    if not ask:
+        return ""
+    seen = _asked_keys(asked)
+    # ask_done — только НИЖНЯЯ ГРАНИЦА («столько уже позади»), а не решение:
+    # он отстаёт на ход, поэтому одного его мало. Он спасает, когда приложение
+    # перезапустили посреди урока и списка заданных ещё нет.
+    try:
+        done = int(lesson.get("ask_done") or 0)
+    except (TypeError, ValueError):
+        done = 0
+    for item in ask[:max(0, min(len(ask), done))]:
+        seen.add(norm_question(item))
+    bad = norm_question(avoid)
+    for item in ask:
+        key = norm_question(item)
+        if key in seen or (bad and key == bad):
+            continue
+        return item
+    return ""
 
 def next_question(lesson):
     """Вопрос из файла урока, который сейчас на очереди (или "")."""

@@ -73,6 +73,11 @@ class ChatController:
         self.history = []
         self.busy = False
         self._last_question = ""
+        # §91.8 (22.11.2026): какие вопросы по сцене уже ЗАДАВАЛИ. По этому
+        # списку выбирается следующий вопрос урока — счётчик ask_done
+        # отстаёт на один ход и заставлял бота повторять вопрос.
+        self._scene_asked = []
+        self._scene_ask_key = ""
 
         # роль-Аналитик (необязательна): разбирает реплики ПОСЛЕ ответа Учителя
         self.analyst = analyst
@@ -207,6 +212,8 @@ class ChatController:
         self.history = []
         self._lesson = None
         self._last_question = ""     # §71: новый диалог — вопросов ещё нет
+        self._scene_asked = []       # §91.8: новые уроки — вопросы не заданы
+        self._scene_ask_key = ""
         self._opening = False
         self._exam_asked = None
         self._reset_plan()
@@ -404,6 +411,9 @@ class ChatController:
         # §91.7: в фазе «вопросы по сцене» вопрос вне материала заменяем
         # вопросом из файла урока — иначе урок спрашивает о том, чего нет.
         cleaned = self._keep_question_in_material(cleaned)
+        # §91.8: последний засов — повтор вопроса не выпускаем в чат никогда,
+        # кто бы его ни сочинил (модель, правка §91.7, повторный запрос).
+        cleaned = self._final_question_guard(cleaned)
         self._last_question = self._question_of(cleaned)
         return True, cleaned
 
@@ -691,6 +701,77 @@ class ChatController:
               % (question, "да" if verdict else "НЕТ"))
         return {"question": question, "question_ok": verdict}
 
+    # ---------------- §91.8: вопрос не повторяем -------------------------
+    def _ask_signature(self, lesson):
+        """Отпечаток списка ask: сменился — значит это ДРУГОЙ урок."""
+        try:
+            return "|".join(str(x).strip() for x in (lesson.get("ask") or ()))
+        except Exception:
+            return ""
+
+    def _final_question_guard(self, reply):
+        """Повтор вопроса в чат не выпускаем — ЛЮБОЙ ценой.
+
+        🔴 Живой урок 22.11.2026 (лог 10275): модель задала вопрос вне
+        материала, правка §91.7 подставила вопрос урока — и это оказался ТОТ
+        ЖЕ вопрос, который ученик только что слышал, потому что `ask_done`
+        отстаёт на ход. Ученик увидел повтор.
+
+        Здесь последний засов: если итоговый вопрос совпал с предыдущим
+        (`_last_question`) — вопрос отрезается, похвала остаётся. Срабатывает
+        ПОСЛЕ всех правок, поэтому поймает и модель, и код.
+        """
+        lesson = self._lesson if isinstance(self._lesson, dict) else {}
+        if not lesson.get("scene"):
+            return reply          # не урок со сценой — тут свои правила (§71)
+        # Только фаза «вопросы по сцене». В fix/drill учитель по делу просит
+        # повторить — там повтор вопроса сторожить нечем (и не нужно).
+        phase = str(lesson.get("task_phase") or "").strip().lower()
+        if phase != lesson_mod.TASK_ASK:
+            return reply
+        question = self._question_of(reply)
+        if not question:
+            return reply
+        previous = str(getattr(self, "_last_question", "") or "").strip()
+        if previous and (scene_material.norm_question(question)
+                         == scene_material.norm_question(previous)):
+            print("🛡️ Вопрос повторён (%s) — отрезаю, похвалу оставляю"
+                  % question[:60])
+            head = scene_material.without_question(reply)
+            return head or reply
+        self._remember_scene_question(question, lesson)
+        return reply
+
+    def _remember_scene_question(self, text, lesson=None):
+        """Запомнить вопрос по сцене как ЗАДАННЫЙ (для выбора следующего).
+
+        Список сбрасывается сам, когда меняется набор ask урока: новый урок —
+        чистый список, ничего вручную звать не нужно.
+        """
+        lesson = lesson if isinstance(lesson, dict) else (
+            self._lesson if isinstance(self._lesson, dict) else {})
+        key = self._ask_signature(lesson)
+        try:
+            done = int(lesson.get("ask_done") or 0)
+        except (TypeError, ValueError):
+            done = 0
+        total = len(lesson.get("ask") or ())
+        restart = (done == 0 and total
+                   and len(getattr(self, "_scene_asked", []) or []) >= total)
+        if key != getattr(self, "_scene_ask_key", "") or restart:
+            # другой урок ИЛИ тот же урок начали заново (ask_done снова 0,
+            # а все вопросы уже прозвучали) — список заданных чистый
+            self._scene_asked = []
+            self._scene_ask_key = key
+        question = str(text or "").strip()
+        if not question:
+            return
+        asked = list(getattr(self, "_scene_asked", []) or [])
+        norm = scene_material.norm_question(question)
+        if norm and all(scene_material.norm_question(x) != norm for x in asked):
+            asked.append(question)
+        self._scene_asked = asked[-12:]
+
     def _keep_question_in_material(self, reply):
         """§91.7: в фазе «вопросы по сцене» спрашиваем только ПРО материал.
 
@@ -718,14 +799,21 @@ class ChatController:
         if not bad:
             return reply
         head = scene_material.without_question(reply)
-        own = scene_material.next_question(lesson)
+        # 🔴 22.11.2026 (живой урок): здесь стоял `next_question(lesson)`, а он
+        # берёт ask[ask_done]. ask_done = число ЗАСЧИТАННЫХ заданий и отстаёт
+        # на один ход: ученик ответил на вопрос 3, ask_done было 2 — код
+        # подставлял ТОТ ЖЕ вопрос, и бот его ПОВТОРЯЛ. Теперь только НЕ
+        # заданные вопросы; повтор запрещён и по вчерашнему вопросу (avoid).
+        own = scene_material.pick_unasked(
+            lesson, getattr(self, "_scene_asked", []),
+            getattr(self, "_last_question", ""))
         print("🛡️ Вопрос не по материалу (%s) — беру вопрос урока: %s"
               % (culprit, own or "-"))
         if not own:
+            # новых вопросов нет — лучше промолчать, чем спросить то же самое
+            print("🛡️ Новых вопросов нет — вопрос не задаю (повтор запрещён)")
             return head or reply
-        if not head:
-            return own
-        return head + " " + own
+        return own if not head else head + " " + own
 
     def _asked_question(self, lesson):
         """Вопрос, на который ученик должен был ответить.
