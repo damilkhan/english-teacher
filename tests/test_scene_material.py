@@ -266,6 +266,61 @@ out = ctl5._final_question_guard("Nice. What color is it?")
 check("первый вопрос урока снова можно задать", "?" in out, out)
 check("список заданных начат заново", len(ctl5._scene_asked) <= 1,
       ctl5._scene_asked)
+print("15) §91.9: урок не застревает — переход на фразы")
+# Живой урок 22.11.2026, 21:26: ученик ответил на все три вопроса, но
+# `tasks_done` отставал (зачёт ставит Аналитик после ответа учителя),
+# переход на фразы не срабатывал, а бот уже не задавал вопросов — урок
+# стоял. Считаем по РЕАЛЬНО заданным вопросам.
+from ui import app as app_mod    # noqa: E402
+
+
+class _Session:
+    lesson_id = "city/4.3"
+    tasks_done = 2
+
+
+class _App:
+    chat = None
+
+    _material_of = app_mod.EnglishTeacherApp._material_of
+    _material_ask_left = app_mod.EnglishTeacherApp._material_ask_left
+    _scene_asked_count = app_mod.EnglishTeacherApp._scene_asked_count
+
+
+app_stub = _App()
+sess = _Session()
+
+# без контроллера — прежнее поведение (1 вопрос ещё впереди)
+app_stub.chat = None
+check("без контроллера считаем по tasks_done",
+      app_stub._material_ask_left(sess) == 1,
+      app_stub._material_ask_left(sess))
+
+# с контроллером, где все три вопроса прозвучали
+app_stub.chat = ctl
+check("все вопросы прозвучали — осталось 0",
+      app_stub._material_ask_left(sess) == 0,
+      app_stub._material_ask_left(sess))
+check("счётчик заданных = 3", app_stub._scene_asked_count(sess) == 3,
+      app_stub._scene_asked_count(sess))
+
+# и обратный случай: задан только один — урок ещё не готов к фразам
+one = cc.ChatController.__new__(cc.ChatController)
+one._lesson = dict(lesson_base())
+one._lesson["task_phase"] = "ask"
+one._lesson["ask_done"] = 0
+one._last_question = ""
+one._scene_asked = ["Which phone did Ann take"]
+one._scene_ask_key = ""
+app_stub.chat = one
+class _Session0(_Session):
+    tasks_done = 0
+
+
+sess0 = _Session0()
+check("задан один, зачёта ещё нет — осталось 2",
+      app_stub._material_ask_left(sess0) == 2,
+      app_stub._material_ask_left(sess))
 print("")
 if FAILS:
     print("ПРОВАЛЕНО: %d" % len(FAILS))

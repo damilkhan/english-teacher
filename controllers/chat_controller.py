@@ -742,6 +742,25 @@ class ChatController:
         self._remember_scene_question(question, lesson)
         return reply
 
+    def asked_scene_count(self, lesson_id=""):
+        """Сколько вопросов по сцене РЕАЛЬНО прозвучало в этом уроке.
+
+        Нужно приложению: по этому числу оно решает, что вопросы по сцене
+        позади и пора переходить на фразы. Считать по `tasks_done` нельзя —
+        зачёт опаздывает на ход, и урок 22.11.2026 застрял без вопросов.
+
+        Считаем только вопросы ИЗ ФАЙЛА урока: живой уточняющий вопрос модели
+        не должен двигать урок вперёд.
+        """
+        lesson = self._lesson if isinstance(self._lesson, dict) else {}
+        ask = [str(item) for item in (lesson.get("ask") or ())]
+        if not ask:
+            return 0
+        have = set(scene_material.norm_question(x)
+                   for x in (getattr(self, "_scene_asked", []) or []))
+        return sum(1 for item in ask
+                   if scene_material.norm_question(item) in have)
+
     def _remember_scene_question(self, text, lesson=None):
         """Запомнить вопрос по сцене как ЗАДАННЫЙ (для выбора следующего).
 
@@ -810,8 +829,12 @@ class ChatController:
         print("🛡️ Вопрос не по материалу (%s) — беру вопрос урока: %s"
               % (culprit, own or "-"))
         if not own:
-            # новых вопросов нет — лучше промолчать, чем спросить то же самое
-            print("🛡️ Новых вопросов нет — вопрос не задаю (повтор запрещён)")
+            # Новых вопросов файла нет, а вопрос модели — ВНЕ материала (иначе
+            # мы бы сюда не попали). Такой не выпускаем: ученик ответит про
+            # то, чего в сцене нет, и урок снова станет бессмысленным.
+            # Застревания тут нет: приложение само видит, что вопросы по
+            # сцене пройдены, и переходит на фразы (§91.9).
+            print("🛡️ Новых вопросов нет — вопрос не задаю")
             return head or reply
         return own if not head else head + " " + own
 

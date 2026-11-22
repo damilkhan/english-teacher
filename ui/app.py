@@ -2682,7 +2682,36 @@ class EnglishTeacherApp:
             done = int(getattr(session, "tasks_done", 0) or 0)
         except (TypeError, ValueError):
             done = 0
-        return max(0, len(material.get("ask") or []) - done)
+        # 🔴 22.11.2026 (живой урок): `tasks_done` отстаёт на один ход — зачёт
+        # ставит Аналитик, уже после ответа учителя. Из-за этого урок с 3
+        # вопросами не переходил на фразы: ученик ответил на все три, а здесь
+        # было «осталось 1», и бот ждал ответа на вопрос, которого не задавал.
+        # Поэтому берём БОЛЬШЕЕ из счётчика и реально заданных вопросов.
+        counter = getattr(self, "_scene_asked_count", None)
+        said = counter(session) if counter is not None else 0
+        behind = max(done, said)
+        return max(0, len(material.get("ask") or []) - behind)
+
+    def _scene_asked_count(self, session):
+        """Сколько вопросов по сцене РЕАЛЬНО прозвучало (§91.8/§91.9).
+
+        🔴 22.11.2026: урок застрял. Ученик ответил на все три вопроса, но
+        `tasks_done` отстаёт на ход (зачёт ставит Аналитик уже после ответа
+        учителя). Переход на фразы ждал `tasks_done == 3`, не дожидался, а
+        бот к этому времени уже не задавал вопросов (§91.8) — ученику нечего
+        было отвечать, урок стоял.
+
+        Считаем по списку заданных вопросов в контроллере. Нет контроллера или
+        метода (заглушки в тестах) — 0, прежнее поведение.
+        """
+        chat = getattr(self, "chat", None)
+        counter = getattr(chat, "asked_scene_count", None)
+        if counter is None:
+            return 0
+        try:
+            return int(counter(getattr(session, "lesson_id", "")) or 0)
+        except Exception:
+            return 0
 
     def _start_material_translate(self, session):
         """Вопросы по сцене пройдены — дальше фразы на перевод (§86).
@@ -2707,8 +2736,13 @@ class EnglishTeacherApp:
             done = int(getattr(session, "tasks_done", 0) or 0)
         except (TypeError, ValueError):
             return False
-        if done != len(material.get("ask") or []):
-            return False                 # фразы уже идут (или ещё рано)
+        # 22.11.2026: сравнение строго с `done` не срабатывало, когда зачёт
+        # опаздывал (ученик ответил на все вопросы, а done = 2). Смотрим, все
+        # ли вопросы РЕАЛЬНО прозвучали — иначе бот застревал без вопроса.
+        counter = getattr(self, "_scene_asked_count", None)
+        asked = max(done, counter(session) if counter is not None else 0)
+        if asked < len(material.get("ask") or []):
+            return False                 # ещё не все вопросы по сцене
         print("➡️ §86: вопросы по сцене пройдены — дальше фразы")
         return bool(self._translate_ask(session))
 
