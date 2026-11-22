@@ -18,6 +18,9 @@
     материала, и в нём возвращается это слово (для лога).
 """
 
+import re
+
+
 # Служебные слова и «школьный обиход»: они не факт о сцене, поэтому не
 # считаются выдумкой. Список длинный намеренно: лучше пропустить чужой
 # вопрос, чем отрезать верный.
@@ -148,6 +151,9 @@ def without_question(text):
 # Ann take?» и «Which phone did Ann take?» считались ОДНИМ вопросом: имя
 # ученика стоит между приветствием и вопросом и ломало сравнение (живой лог
 # 22.11.2026 — из-за этого бот повторил вопрос).
+# Заглавные слова, которые ИМЕНАМИ не считаются (иначе выпадет смысл).
+KEEP_NAMES = set("i english russian".split())
+
 QUESTION_STARTERS = set("""
 what which who whom whose where when why how
 do does did is are was were am
@@ -157,21 +163,33 @@ tell describe say give name explain
 
 
 def norm_question(text):
-    """Вопрос в виде для СРАВНЕНИЯ: без регистра, знаков, похвалы и имени.
+    """Вопрос в виде для СРАВНЕНИЯ: без регистра, знаков и обращения по имени.
 
-    Отрезаем всё до первого ВОПРОСНОГО слова: «Hello Damil, which phone did
-    Ann take?» -> «which phone did ann take». Так повтор ловится, даже если
-    учитель поздоровался и назвал ученика по имени.
+    «What is worse about the small phone, Damil?» и «What is worse about the
+    small phone?» — ОДИН вопрос. Живой прогон 22.11.2026 (7-й): имя в КОНЦЕ
+    вопроса не давало поймать повтор, и вопрос прозвучал дважды.
+
+    Имя узнаём по МЕСТУ, а не по заглавной букве: обращение стоит перед
+    запятой или перед «?» («…, Damil?», «Hello Damil, which…»). Иначе слова
+    вопроса, набранного капсом (WHICH PHONE…), выпадали бы как имена.
     """
-    part = question_only(text).lower()
-    chars = [ch if (ch.isalnum() or ch == " ") else " " for ch in part]
-    words = "".join(chars).split()
+    raw = question_only(text)
+    chunks = re.findall(r"[A-Za-z']+|[,.!?;:]", raw)
+    words = []
+    for index, chunk in enumerate(chunks):
+        if not chunk[0].isalpha():
+            continue
+        after = chunks[index + 1] if index + 1 < len(chunks) else ""
+        before = chunks[index - 1] if index > 0 else ""
+        vocative = (after in (",", "?") or before in (",",))
+        if vocative and chunk[0].isupper() and not chunk.isupper():
+            continue                     # обращение: «Damil», «Ann,»
+        words.append(chunk.lower())
     for index, word in enumerate(words):
         if word in QUESTION_STARTERS:
             words = words[index:]
             break
     return " ".join(words).strip()
-
 
 def _asked_keys(asked):
     """Набор нормализованных вопросов из того, что передали (set/список)."""

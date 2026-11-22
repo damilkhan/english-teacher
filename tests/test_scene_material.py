@@ -227,8 +227,15 @@ ctl2._lesson = dict(live)
 ctl2._last_question = "Which phone did Ann take"
 ctl2._scene_asked = []
 ctl2._scene_ask_key = ""
+# 22.11.2026: раньше здесь ждали «вопроса нет». Это и заглушило урок в
+# 22:02 — вопрос отрезали, а новый не поставили. Теперь повтор ЗАМЕНЯЕТСЯ
+# следующим вопросом урока: ни повтора, ни молчания.
+ctl2._scene_asked = ["Which phone did Ann take"]
 got = ctl2._final_question_guard("Right. Which phone did Ann take?")
-check("повтор отрезан", "?" not in got, got)
+check("повтор не прозвучал снова",
+      sm.norm_question(cc.ChatController._question_of(got))
+      != sm.norm_question("Which phone did Ann take"), got)
+check("вместо него задан следующий вопрос", "?" in got, got)
 check("похвала осталась", got.startswith("Right."), got)
 
 print("12) §91.8: прочие фазы не трогаем")
@@ -321,6 +328,84 @@ sess0 = _Session0()
 check("задан один, зачёта ещё нет — осталось 2",
       app_stub._material_ask_left(sess0) == 2,
       app_stub._material_ask_left(sess))
+print("16) §91.10: вопрос отрезан ЧУЖИМ механизмом — ставим следующий")
+# Живой урок 22.11.2026, 22:02 (лог 104xx): модель повторила вопрос, старый
+# механизм §76 отрезал его («Повтор не помог (повтор вопроса) — вопрос
+# отрезан») — и вопрос не задавал никто. Урок застрял на 2/9.
+ctl6 = cc.ChatController.__new__(cc.ChatController)
+ctl6._lesson = dict(live)
+ctl6._last_question = "What is worse about the small phone, Damil"
+ctl6._scene_asked = ["Which phone did Ann take",
+                     "What is worse about the small phone"]
+ctl6._scene_ask_key = ""
+got = ctl6._final_question_guard("That is correct.")
+check("вопрос поставлен, а не отрезан", "?" in got, got)
+check("это следующий по плану",
+      "Would you take the expensive phone or the cheap one?" in got, got)
+check("похвала сохранена", got.startswith("That is correct."), got)
+
+print("17) §91.10: все вопросы прозвучали — вопрос не сочиняем")
+ctl7 = cc.ChatController.__new__(cc.ChatController)
+ctl7._lesson = dict(live)
+ctl7._last_question = "Would you take the expensive phone or the cheap one"
+ctl7._scene_asked = list(lesson_base()["ask"])
+ctl7._scene_ask_key = ""
+got = ctl7._final_question_guard("Good job, Damil.")
+check("вопросов нет и новых не надо", "?" not in got, got)
+check("похвала на месте", got == "Good job, Damil.", got)
+
+print("18) §91.10: за урок не бывает ни повтора, ни молчания")
+ctl8 = cc.ChatController.__new__(cc.ChatController)
+ctl8._lesson = dict(live)
+ctl8._lesson["ask_done"] = 0
+ctl8._last_question = ""
+ctl8._scene_asked = []
+ctl8._scene_ask_key = ""
+
+
+def turn8(reply, ask_done):
+    ctl8._lesson["ask_done"] = ask_done
+    out = ctl8._final_question_guard(ctl8._keep_question_in_material(reply))
+    ctl8._last_question = ctl8._question_of(out)
+    return out
+
+
+# модель ведёт себя плохо (повтор, выдумка) и хорошо — по очереди
+script = [
+    "Hello Damil. Which phone did Ann take?",
+    "Right. What is worse about the small phone, Damil?",
+    "That is correct.",                      # вопроса нет вообще
+    "Great choice, Damil. What is worse about the small phone?",  # повтор
+]
+outs = []
+for k, reply in enumerate(script):
+    outs.append(turn8(reply, k))
+repeats = 0
+for k in range(1, len(outs)):
+    a = sm.norm_question(cc.ChatController._question_of(outs[k - 1]))
+    b = sm.norm_question(cc.ChatController._question_of(outs[k]))
+    if a and b and a == b:
+        repeats += 1
+check("ни одного повтора", repeats == 0, repeats)
+silent = [k for k, text in enumerate(outs[:3]) if "?" not in text]
+check("пока вопросы есть — молчания нет", silent == [], silent)
+print("19) §91.10: имя в КОНЦЕ вопроса не мешает поймать повтор")
+# Живой прогон 22.11.2026 (7-й из 8): «Would you take the expensive phone or
+# the cheap one, Damil?» не совпало с вопросом файла — и прозвучало дважды.
+check("обращение в конце не мешает",
+      sm.norm_question("Would you take the expensive phone or the cheap one,"
+                       " Damil?")
+      == sm.norm_question("Would you take the expensive phone or the cheap one?"),
+      sm.norm_question("Would you take the expensive phone or the cheap one, Damil?"))
+check("обращение в начале не мешает",
+      sm.norm_question("Hello Damil, what is worse about the small phone?")
+      == sm.norm_question("What is worse about the small phone?"))
+check("вопрос КАПСОМ не теряет слова",
+      sm.norm_question("WHICH PHONE did Ann take")
+      == sm.norm_question("which phone did ann take?"),
+      sm.norm_question("WHICH PHONE did Ann take"))
+check("имя в середине (Ann) остаётся", "ann" in
+      sm.norm_question("Which phone did Ann take?"))
 print("")
 if FAILS:
     print("ПРОВАЛЕНО: %d" % len(FAILS))

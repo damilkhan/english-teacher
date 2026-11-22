@@ -710,37 +710,60 @@ class ChatController:
             return ""
 
     def _final_question_guard(self, reply):
-        """Повтор вопроса в чат не выпускаем — ЛЮБОЙ ценой.
+        """В фазе вопросов по сцене реплика ВСЕГДА несёт годный вопрос.
 
-        🔴 Живой урок 22.11.2026 (лог 10275): модель задала вопрос вне
-        материала, правка §91.7 подставила вопрос урока — и это оказался ТОТ
-        ЖЕ вопрос, который ученик только что слышал, потому что `ask_done`
-        отстаёт на ход. Ученик увидел повтор.
+        История живых уроков 22.11.2026 — две аварии подряд, обе мои:
+          1) 21:07 — повтор: правка §91.7 подставила вопрос файла по
+             `ask_done`, а он отстаёт на ход, и вопрос прозвучал дважды;
+          2) 22:02 — МОЛЧАНИЕ: повтор отрезал старый механизм §76
+             («Повтор не помог (повтор вопроса) — вопрос отрезан»), после
+             чего вопрос не задавал никто, и урок ЗАСТРЯЛ.
 
-        Здесь последний засов: если итоговый вопрос совпал с предыдущим
-        (`_last_question`) — вопрос отрезается, похвала остаётся. Срабатывает
-        ПОСЛЕ всех правок, поэтому поймает и модель, и код.
+        Поэтому здесь не «отрезать и забыть», а ЗАМЕНИТЬ: если вопрос
+        повторён, задан не по материалу или его нет вовсе — берём следующий
+        НЕзаданный вопрос урока. Молчания не будет, пока такие есть; когда
+        их нет, приложение переходит на фразы (§91.9).
         """
         lesson = self._lesson if isinstance(self._lesson, dict) else {}
-        if not lesson.get("scene"):
-            return reply          # не урок со сценой — тут свои правила (§71)
+        if not lesson.get("scene") or not lesson.get("ask"):
+            return reply          # не урок с вопросами по сцене
         # Только фаза «вопросы по сцене». В fix/drill учитель по делу просит
         # повторить — там повтор вопроса сторожить нечем (и не нужно).
         phase = str(lesson.get("task_phase") or "").strip().lower()
         if phase != lesson_mod.TASK_ASK:
             return reply
-        question = self._question_of(reply)
-        if not question:
-            return reply
+        asked = list(getattr(self, "_scene_asked", []) or [])
         previous = str(getattr(self, "_last_question", "") or "").strip()
-        if previous and (scene_material.norm_question(question)
-                         == scene_material.norm_question(previous)):
-            print("🛡️ Вопрос повторён (%s) — отрезаю, похвалу оставляю"
-                  % question[:60])
-            head = scene_material.without_question(reply)
-            return head or reply
-        self._remember_scene_question(question, lesson)
-        return reply
+        question = self._question_of(reply)
+        if question:
+            norm = scene_material.norm_question(question)
+            if previous and norm == scene_material.norm_question(previous):
+                print("🛡️ Вопрос повторён (%s) — отрезаю, похвалу оставляю"
+                      % question[:60])
+                reply = scene_material.without_question(reply)
+                question = ""
+            else:
+                self._remember_scene_question(question, lesson)
+                return reply
+        # Вопроса нет (его не было или он отрезан) — ставим следующий по плану.
+        own = scene_material.pick_unasked(lesson, asked, previous)
+        if not own:
+            return reply          # новых вопросов нет: дальше фразы (§91.9)
+        print("🛡️ Вопроса нет — беру следующий вопрос урока: %s" % own)
+        self._remember_scene_question(own, lesson)
+        body = str(reply or "").strip()
+        # Обрывок отрезанного вопроса не должен остаться в тексте: живой
+        # прогон 22.11.2026 дал «What is worse about the small phone Would you
+        # take…» — склейку без знака. Если в теле уже стоит вопрос из файла
+        # (без «?» его не отличить иначе), тело выбрасываем целиком.
+        if body:
+            names = set(scene_material.norm_question(item)
+                        for item in (lesson.get("ask") or ()))
+            if scene_material.norm_question(body) in names:
+                body = ""
+            elif not body.endswith((".", "!", "?", ",")):
+                body += "."
+        return (body + " " + own) if body else own
 
     def asked_scene_count(self, lesson_id=""):
         """Сколько вопросов по сцене РЕАЛЬНО прозвучало в этом уроке.
