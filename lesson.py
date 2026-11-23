@@ -843,6 +843,10 @@ class LessonSession:
         # мелочь (артикль, заглавная) больше не валит верный повтор.
         self.repeat_wrong = []       # type: List[str]
         self.last_credited = ""      # текст, за который задание уже засчитано
+        # §92 (23.11.2026, ученик-робот): за какую РЕПЛИКУ он засчитан.
+        # Без номера реплики одинаковый ответ («ok», «I like pizza») блокировал
+        # зачёт на СЛЕДУЮЩЕМ задании, и урок вставал навсегда.
+        self.last_credited_reply = -1
         # §70: ЧТО уже сделано в уроке (эталон, а не текст ученика).
         # По этому списку промпт и контроллер не дают попросить то же самое
         # второй раз: «одна фраза три раза — это что, молитва?».'«
@@ -1254,7 +1258,13 @@ class LessonSession:
         Нужна потому, что зачёт приходит ДВАЖДЫ: сразу по тексту (вариант В,
         до ответа учителя) и позже разбором Аналитика (вариант Б).
         """
-        return bool(self.last_credited) and _flat(student_text) == self.last_credited
+        # §92 (23.11.2026): сравниваем ещё и НОМЕР РЕПЛИКИ. Иначе один и тот
+        # же неверный ответ («ok», «I like pizza») на следующем задании
+        # считался «уже засчитанным» — и урок не двигался (робот-«молчун»
+        # вставал на 1/9, ученик повторял неверное и не получал нового).
+        return (bool(self.last_credited)
+                and _flat(student_text) == self.last_credited
+                and self.replies == self.last_credited_reply)
 
     def credit_task(self, student_text: Any = "", marked: bool = False) -> Dict[str, Any]:
         """Засчитать ТЕКУЩЕЕ задание и перейти к следующему.
@@ -1271,6 +1281,7 @@ class LessonSession:
         if marked:
             self.tasks_marked += 1
         self.last_credited = _flat(student_text)
+        self.last_credited_reply = self.replies
         self._remember_asked(self.drill_correct or student_text)
         self.repeat_expected = []
         self.repeat_wrong = []
