@@ -92,7 +92,9 @@ stats_store.drill_fail = _no_stats_write
 
 import lesson as lesson_mod                     # noqa: E402
 import lesson_material                          # noqa: E402
+import config                                   # noqa: E402
 import llm_client                               # noqa: E402
+from roles.analyst import Analyst               # noqa: E402
 import scene_material as sm                     # noqa: E402
 import translate_task                           # noqa: E402
 from controllers import chat_controller as cc   # noqa: E402
@@ -385,6 +387,12 @@ def _driver(app, ctl, session, lesson_id, char, ask, replies, payload, send=None
         turns += 1
         payload["ask_done"] = int(getattr(session, "tasks_done", 0) or 0)
         ctl.set_lesson(payload)
+        # живому Аналитику нужен текст, который сейчас отправляем (§89)
+        app._last_student_text = student_text
+        try:
+            session.register_reply()
+        except Exception:
+            pass
         reply = _say(app, ctl, replies, student_text, send)
         if reply is None:
             out["problems"].append("учитель не ответил (ход %d)" % turns)
@@ -399,10 +407,16 @@ def _driver(app, ctl, session, lesson_id, char, ask, replies, payload, send=None
                 out["repeats"] += 1
                 out["problems"].append("ПОВТОР вопроса (ход %d)" % turns)
             if key not in ask_keys:
-                out["invented"] += 1
-                out["invented_list"].append(question)
-                out["problems"].append(
-                    "вопрос не из файла (ход %d): %s" % (turns, question[:60]))
+                # Инвариант 5 — про ВЫДУМАННЫЕ вопросы (о том, чего нет в
+                # сцене). Вопрос ПРО материал задавать можно, даже если его
+                # нет в ask: так решил ученик 22.11.2026 (§91.7).
+                outside, culprit = sm.outside_material(question, payload)
+                if outside:
+                    out["invented"] += 1
+                    out["invented_list"].append(question)
+                    out["problems"].append(
+                        "выдуманный вопрос (%s, ход %d): %s"
+                        % (culprit, turns, question[:60]))
             seen.append(key)
         elif left > 0:
             out["silence"] += 1
@@ -418,11 +432,6 @@ def _driver(app, ctl, session, lesson_id, char, ask, replies, payload, send=None
         # ученик отвечает
         answer = scene_answer(char, turns, key, lesson_id)
         student_text = answer["text"]
-        app._last_student_text = student_text
-        try:
-            session.register_reply()      # как окно: одна реплика ученика
-        except Exception:
-            pass
         if send is None:
             before_done = int(session.tasks_done or 0)
             tries_before = int(session.task_attempts or 0)
@@ -493,8 +502,11 @@ def run_fast(lesson_id, char):
 def run_live(lesson_id, char):
     ask = [str(x) for x in (lesson_material.ask(lesson_id) or [])]
     session = make_session(lesson_id)
-    ctl = cc.ChatController(llm_client.LLMClient(), dispatch=lambda fn: fn(),
-                            mode="lesson", lang="en", user_id=None)
+    llm = llm_client.LLMClient()
+    analyst = Analyst(llm) if getattr(config, "ANALYST_ENABLED", True) else None
+    ctl = cc.ChatController(llm, dispatch=lambda fn: fn(),
+                            mode="lesson", lang="en", user_id=None,
+                            analyst=analyst)
     payload = make_payload(lesson_id)
     ctl.set_lesson(payload)
     replies = []
@@ -507,7 +519,10 @@ def run_live(lesson_id, char):
         analyses[0] += 1
         if not result:
             return None
-        app._last_student_text = getattr(app, "_last_student_text", "")
+        # Фразы на перевод засчитывает ПРИЛОЖЕНИЕ по эталону (§82); разбор
+        # Аналитика к ним не применяем, иначе зачёт придёт дважды.
+        if str(getattr(session, "task_phase", "")) != lesson_mod.TASK_ASK:
+            return None
         return app._task_from_analysis(result)
 
     ctl.on_analysis = _on_analysis
