@@ -35,6 +35,17 @@ for _stream in (sys.stdout, sys.stderr):
         pass
 
 import lesson_material                        # noqa: E402
+import profile_store                          # noqa: E402
+
+# 🔴 22.11.2026: контроллер ПИШЕТ в профиль (record_from_dialogue / record_analysis),
+# а с user_id=None это даже не база, а живой student_profile.json. Прогон теста
+# уже дважды засорял его «успехами» из прогона. Поэтому запись выключаем.
+profile_store.record_from_dialogue = lambda *a, **k: []
+profile_store.record_analysis = lambda *a, **k: []
+profile_store.load = lambda user_id=None: {
+    "mistakes": {"grammar": [], "vocabulary": [], "pronunciation": []},
+    "strengths": [], "topics_passed": [], "total_lessons": 0,
+}
 import scene_material as sm                   # noqa: E402
 from controllers import chat_controller as cc  # noqa: E402
 from ui import app as app_mod                 # noqa: E402
