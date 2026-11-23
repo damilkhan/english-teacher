@@ -747,6 +747,16 @@ class ChatController:
                 return reply
         # Вопроса нет (его не было или он отрезан) — ставим следующий по плану.
         own = scene_material.pick_unasked(lesson, asked, previous)
+        if not own and asked:
+            # §92 (23.11.2026, ученик-робот city/4.2): зачёт может ОБОГНАТЬ
+            # реально заданные вопросы — модель ответила без вопроса, а
+            # Аналитик засчитал задание. Тогда `ask_done` говорит «всё
+            # спрошено», и вопрос урока терялся НАВСЕГДА (робот: 2 из 3).
+            # Когда список заданных есть, он точнее счётчика: снимаем нижнюю
+            # границу ask_done и ищем по списку.
+            fresh = dict(lesson)
+            fresh["ask_done"] = 0
+            own = scene_material.pick_unasked(fresh, asked, previous)
         if not own:
             return reply          # новых вопросов нет: дальше фразы (§91.9)
         print("🛡️ Вопроса нет — беру следующий вопрос урока: %s" % own)
