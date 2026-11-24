@@ -1,10 +1,11 @@
-"""Материал урока A2: мини-сцена, вопросы по ней, фразы (17.11.2026).
+"""Материал урока: мини-сцена, вопросы по ней, фразы (17.11.2026).
 
 Зачем: в живом уроке city/4.1 (16.11.2026) модель НЕ знала, о чём говорить —
 в промпт уходило только название блока («Comparing Things»), и она выдумывала
 вопросы («какое самое большое здание рядом»). Теперь материал лежит в
-data/lessons_a2.json: короткая сцена (4-6 реплик), 2-3 вопроса ТОЛЬКО по
-сцене и фразы, которые ученик должен уметь сказать сам.
+data/lessons_<уровень>.json (a0, a1, a2 …): короткая сцена (4-6
+реплик), 2-3 вопроса ТОЛЬКО по сцене и фразы, которые ученик должен уметь
+сказать сам. С 24.11.2026 читаются ВСЕ такие файлы, а не только a2.
 
 Тексты пишет человек, модель их НЕ сочиняет (решение 67). Урока нет в файле —
 поведение прежнее, байт-в-байт (smoke_test).
@@ -17,24 +18,41 @@ import json
 import os
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-LESSONS_PATH = os.path.join(ROOT, "data", "lessons_a2.json")
+DATA_DIR = os.path.join(ROOT, "data")
+# Первый файл материала — для обратной совместимости (и для проб в logs/).
+LESSONS_PATH = os.path.join(DATA_DIR, "lessons_a2.json")
 
-_cache = {"mtime": None, "lessons": {}}
+_cache = {"stamp": None, "lessons": {}}
 
 
-def load(force=False):
-    """{id урока: материал}. Кэш по mtime: правишь файл — видно сразу."""
+def material_files():
+    """Все файлы материала по порядку: data/lessons_<уровень>.json.
+
+    РЕШЕНИЕ 24.11.2026: материал больше НЕ лежит в одном файле. Раньше путь
+    был жёстко `lessons_a2.json`, и уроки Пустыни (A0) пришлось бы писать в
+    файл с именем «a2» — файл врал бы о своём содержимом. Теперь читаются
+    ВСЕ `data/lessons_*.json` по алфавиту (a0, a1, a2 …); если id встретился
+    дважды, побеждает файл, прочитанный позже.
+    """
     try:
-        mtime = os.path.getmtime(LESSONS_PATH)
+        names = sorted(n for n in os.listdir(DATA_DIR)
+                       if n.startswith("lessons_") and n.endswith(".json"))
     except OSError:
-        return {}
-    if not force and _cache["mtime"] == mtime:
-        return _cache["lessons"]
+        return []
+    return [os.path.join(DATA_DIR, n) for n in names]
+
+
+def _parse_file(path):
+    """Материал одного файла: {id урока: разобранный материал}.
+
+    Битый файл не роняет остальные: печатаем предупреждение и идём дальше.
+    """
     try:
-        with open(LESSONS_PATH, "r", encoding="utf-8") as fh:
+        with open(path, "r", encoding="utf-8") as fh:
             data = json.load(fh)
     except (OSError, ValueError) as exc:
-        print("\u26a0\ufe0f Материал уроков не прочитался: %s" % exc)
+        print("\u26a0\ufe0f Материал уроков не прочитался (%s): %s"
+              % (os.path.basename(path), exc))
         return {}
     raw = data.get("lessons") if isinstance(data, dict) else {}
     out = {}
@@ -72,7 +90,30 @@ def load(force=False):
             "phrases": phrases,
             "picture": str(item.get("picture") or "").strip(),
         }
-    _cache["mtime"] = mtime
+    return out
+
+
+def load(force=False):
+    """{id урока: материал} из ВСЕХ файлов data/lessons_*.json.
+
+    Кэш по mtime: правишь любой файл — видно сразу.
+    """
+    paths = material_files()
+    if not paths:
+        return {}
+    stamp = []
+    for one in paths:
+        try:
+            stamp.append((one, os.path.getmtime(one)))
+        except OSError:
+            pass
+    stamp = tuple(stamp)
+    if not force and _cache["stamp"] == stamp:
+        return _cache["lessons"]
+    out = {}
+    for one in paths:
+        out.update(_parse_file(one))
+    _cache["stamp"] = stamp
     _cache["lessons"] = out
     return out
 
