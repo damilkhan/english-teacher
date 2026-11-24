@@ -3828,7 +3828,11 @@ class EnglishTeacherApp:
         # засчитывает задание за «bye» / «bolger» / одно слово (живой урок
         # city/3.3, 11.11.2026). Мусор попытку всё равно считает — иначе
         # урок висел бы вечно.
-        answer_like = lesson_mod.looks_like_answer(text)
+        # §93 (24.11.2026): короткий ответ («hello», «red», «seven») — тоже
+        # ответ, если Аналитик подтвердил, что он по ВОПРОСУ. Разбор — в
+        # lesson.answer_or_confirmed.
+        answer_like = lesson_mod.answer_or_confirmed(
+            text, result.get("question_ok"))
         if not answer_like:
             print("⏭️ Не ответ по заданию (%r) — зачёт не ставлю" % (text or ""))
             if session.note_task_attempt() >= lesson_mod.MAX_TASK_ATTEMPTS:

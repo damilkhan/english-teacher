@@ -691,6 +691,27 @@ def looks_like_answer(said: Any) -> bool:
     return any(word not in FILLER_WORDS for word in words)
 
 
+def answer_or_confirmed(said: Any, question_ok: Any = None) -> bool:
+    """Ответ по заданию? Короткий ответ тоже, если Аналитик подтвердил.
+
+    §93 (24.11.2026). Живой урок Пустыни 1.1: учитель попросил «Can you say
+    "Hello" to me?», ученик сказал «hello» — ДВА раза «⏭️ Не ответ по
+    заданию», хотя модель уже сказала «That is correct». Ученик слышал
+    похвалу и видел, что задание стоит.
+
+    Причина: ``looks_like_answer`` требует ДВА слова и выбрасывает
+    hello/hi/yes/ok/fine (§76, защита от мусора вида «bolger»). На A0 верный
+    ответ ЧАСТО одно слово: «hello», «red», «seven», «Monday».
+
+    Правило: мусорную защиту оставляем, но она НЕ спорит с Аналитиком.
+    ``question_ok is True`` значит «Аналитик посчитал, что это ответ на
+    заданный вопрос» — тогда короткий ответ засчитывается.
+    """
+    if looks_like_answer(said):
+        return True
+    return question_ok is True
+
+
 def fix_sentence(said: Any, wrongs: Any, corrections: Any) -> str:
     """Реплика ученика с исправленной ошибкой — то, что просим повторить.
 
