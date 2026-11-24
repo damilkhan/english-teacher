@@ -181,7 +181,12 @@ def norm_question(text):
             continue
         after = chunks[index + 1] if index + 1 < len(chunks) else ""
         before = chunks[index - 1] if index > 0 else ""
-        vocative = (after in (",", "?") or before in (",",))
+        # 24.11.2026: КОНЕЦ строки — тоже граница обращения. Робот поймал
+        # асимметрию: модель спросила «Does Anna ask about Tom?», хвостовой
+        # «?» отрезал question_of → «…about Tom», и «Tom» перестал считаться
+        # обращением: ключ «does anna ask about tom» ≠ «does anna ask about»
+        # (у вопроса из файла «?» есть). Вопрос повторялся (1.3: rep 2).
+        vocative = (after in (",", "?", "") or before in (",",))
         if vocative and chunk[0].isupper() and not chunk.isupper():
             continue                     # обращение: «Damil», «Ann,»
         words.append(chunk.lower())

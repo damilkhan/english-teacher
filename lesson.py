@@ -675,6 +675,12 @@ FILLER_WORDS = {
 }
 
 
+# §93 (24.11.2026): ЧИСТЫЙ ШУМ. Подтверждение Аналитика такие слова не спасает:
+# «ok», «hmm», «мм» — не ответ на вопрос, даже если разбор ошибся.
+NOISE_WORDS = {"ok", "okay", "hmm", "mm", "mmm", "ah", "oh", "uh", "well",
+               "eh", "hm"}
+
+
 def looks_like_answer(said: Any) -> bool:
     """Похоже ли это на ОТВЕТ ПО ЗАДАНИЮ, а не на случайное слово.
 
@@ -709,6 +715,12 @@ def answer_or_confirmed(said: Any, question_ok: Any = None) -> bool:
     """
     if looks_like_answer(said):
         return True
+    # Шум подтверждением не лечится: «ok» / «hmm» — не ответ, даже если
+    # Аналитик ошибся. Робот (24.11.2026) поймал это на характере «молчун»:
+    # за «ok» задание засчитывалось. До предела попыток (3) урок дойдёт сам.
+    words = [w for w in _flat(said).split() if w]
+    if len(words) == 1 and words[0] in NOISE_WORDS:
+        return False
     return question_ok is True
 
 

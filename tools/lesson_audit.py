@@ -241,7 +241,10 @@ def analyst_for(char, text, question, clarify=False):
     if char == "average":
         result["errors"] = [{"type": "grammar", "wrong": "are", "correct": "is",
                              "note": "форма", "rule": "comparison"}]
-    if char in ("offtopic", "russian"):
+    # «молчун» отвечает «ok» / «yes» / «hmm» — это НЕ ответ на вопрос, и
+    # настоящий Аналитик вернул бы question_ok=False. 24.11.2026 робот
+    # показал, что при True (§93) такие реплики засчитывались.
+    if char in ("offtopic", "russian", "silent"):
         result["question_ok"] = False
     return result
 
