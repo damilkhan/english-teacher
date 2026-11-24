@@ -5290,7 +5290,19 @@ class EnglishTeacherApp:
         parts.extend(self._lesson_stt_words())
         parts.extend(self._picture_stt_words())
         parts.extend(self._my_stt_words())
-        return ", ".join(p for p in parts if p)
+        # 24.11.2026: без повторов и не длиннее STT_HOTWORDS_MAX.
+        # Замер tools/stt_eval.py: длинная подсказка РАЗМЫВАЕТ имена
+        # («Ann» 0/15 -> 15/15 при короткой), поэтому имя не должно
+        # тратиться дважды (name и name_latin часто совпадают).
+        out, seen = [], set()
+        for item in parts:
+            text = str(item or "").strip()
+            key = text.lower()
+            if not text or key in seen:
+                continue
+            seen.add(key)
+            out.append(text)
+        return ", ".join(out)
 
     def _picture_stt_words(self):
         """Ключевые слова фото-задания — подсказка распознаванию.
@@ -5417,7 +5429,12 @@ class EnglishTeacherApp:
         if session is None or not getattr(session, "is_active", False):
             return []
         if getattr(session, "is_scene", False):
-            return []
+            # 24.11.2026: ИМЕНА ПЕРСОНАЖЕЙ нужны и в сцене. Раньше здесь был
+            # пустой список («у сцены свой набор»), и в живом уроке city/4.3
+            # ученик говорил «Ann took a black phone», а в лог шло «and took
+            # the black phone» — семь реплик подряд. Замер tools/stt_eval.py:
+            # с подсказкой «Ann» имя верное 15/15, без неё 0/15.
+            return self._material_stt_names(session)
         words = self._material_stt_names(session)
         for item in (getattr(session, "repeat_expected", None) or []):
             words.extend(str(item).split())

@@ -256,13 +256,55 @@ class STTEngine:
                     % (prob, self.model_size))
         english = self._ensure_english_model() or base_model
         lang = str(getattr(config, "STT_ENGLISH_LANGUAGE", "en") or "en")
+        # 24.11.2026: раньше в лог шло «речь не русская (pl, p=0.32)», и это
+        # читалось как «распознаём по-польски». Неправда: pl — только ЯРЛЫК
+        # детектора, текст пишет английская модель с жёстким language="en".
+        # Теперь в логе прямо сказано, какая модель и с каким языком работала.
         return (english, lang,
-                "речь не русская (%s, p=%.2f) — модель '%s'"
-                % (detected or "?", prob, self.english_model_size or self.model_size))
+                "не русская (%s p=%.2f — только ярлык) -> модель '%s', язык '%s'"
+                % (detected or "?", prob, self.english_model_size or self.model_size,
+                   lang))
 
     # -----------------------------------------------------
     # Подсказки и подготовка аудио
     # -----------------------------------------------------
+    @staticmethod
+    def _limit_hotwords(text):
+        """Подсказка в пределах STT_HOTWORDS_MAX слов (24.11.2026, замер).
+
+        Замер tools/stt_eval.py на 40 записях ученика:
+          только имена                   -> имя верное 15/15, фраза 14/15
+          то же + контекст (11+ слов)    -> имя верное 11/15
+          без подсказки                  -> 0/15 («and took» вместо «Ann took»)
+        То есть ДЛИННЫЙ список размывает подсказку. Режем по словам, порядок
+        не меняем: окно кладёт имена ПЕРВЫМИ.
+        """
+        text = str(text or "").strip()
+        if not text:
+            return ""
+        try:
+            limit = int(getattr(config, "STT_HOTWORDS_MAX", 0) or 0)
+        except (TypeError, ValueError):
+            limit = 0
+        if limit <= 0:
+            return text
+        if len(text.split()) <= limit:
+            return text
+        # Режем ЦЕЛЫМИ кусками через запятую, а не по словам: иначе в конце
+        # остаётся обрывок фразы («i would» вместо «i would like»), и Whisper
+        # получает подсказку, которой нет.
+        kept, used = [], 0
+        for item in text.split(","):
+            item = item.strip()
+            if not item:
+                continue
+            count = len(item.split())
+            if kept and used + count > limit:
+                break
+            kept.append(item)
+            used += count
+        return ", ".join(kept) if kept else " ".join(text.split()[:limit])
+
     def _resolve_hotwords(self):
         """Строка-подсказка: сначала провайдер (всегда свежая), иначе config."""
         if self.hotwords_provider is not None:
@@ -272,8 +314,8 @@ class STTEngine:
                 print("⚠️ STT: подсказка недоступна (%s)" % exc)
                 text = None
             if text:
-                return str(text)
-        return self.hotwords
+                return self._limit_hotwords(text)
+        return self._limit_hotwords(self.hotwords)
 
     @staticmethod
     def _trim_silence(audio, threshold):
