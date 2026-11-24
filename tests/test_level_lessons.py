@@ -38,6 +38,7 @@ for _stream in (sys.stdout, sys.stderr):
     except Exception:
         pass
 
+import config                                                    # noqa: E402
 import progress_map                                              # noqa: E402
 from progress_map import ProgressMap, COMPLETED, UNLOCKED        # noqa: E402
 
@@ -60,6 +61,24 @@ def profile(level=None, done=None):
 
 def main():
     pm = ProgressMap(os.path.join(ROOT, "knowledge_base"))
+
+    # ---------- 0. ФЛАГ ПРОПУСКА ВЫКЛЮЧЕН ПО УМОЛЧАНИЮ ----------
+    # РЕШЕНИЕ УЧЕНИКА 24.11.2026: «разработку приложения не ориентируем на мой
+    # уровень, начинаем с самого начала карты». Правило «ниже уровня = пройдено»
+    # осталось в коде, но спрятано за выключатель. Проверяем и то, и другое.
+    print("[0] Флаг пропуска локаций по уровню")
+    check("по умолчанию пропуск ВЫКЛЮЧЕН (config.SKIP_LESSONS_BY_LEVEL = False)",
+          getattr(config, "SKIP_LESSONS_BY_LEVEL", None) is False,
+          getattr(config, "SKIP_LESSONS_BY_LEVEL", "поля нет"))
+    check("пропуск выключен: ученик A2 начинает с Пустыни (1.1)",
+          pm.next_lesson(profile("A2")) == "1.1", pm.next_lesson(profile("A2")))
+    check("пропуск выключен: пропущенных уроков нет",
+          pm.skipped_lessons(profile("A2")) == set(), pm.skipped_lessons(profile("A2")))
+    check("пропуск выключен: Пустыня открыта, а не пройдена",
+          pm.get_location_state("desert", profile("A2")) == UNLOCKED,
+          pm.get_location_state("desert", profile("A2")))
+    # дальше проверяем само правило варианта В — включаем флаг явно
+    config.SKIP_LESSONS_BY_LEVEL = True
 
     # ---------- 1. обратная совместимость ----------
     print("[1] Без уровня — как раньше")

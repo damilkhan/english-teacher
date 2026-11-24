@@ -37,6 +37,21 @@ COMPLETED = "completed"
 _CEFR_ORDER = ("A0", "A1", "A2", "B1", "B2", "C1")
 
 
+def _skip_below_level() -> bool:
+    """Пропускать ли локации НИЖЕ уровня ученика (настройка config).
+
+    РЕШЕНИЕ УЧЕНИКА 24.11.2026: по умолчанию НЕТ — занятие идёт по карте с
+    самого начала. Раньше пропуск был всегда включён (решение 25.10.2026,
+    вариант В), и ученик A2 никогда не попадал в Пустыню (A0).
+    Выключатель — ``config.SKIP_LESSONS_BY_LEVEL``.
+    """
+    try:
+        import config
+        return bool(getattr(config, "SKIP_LESSONS_BY_LEVEL", False))
+    except Exception:
+        return False
+
+
 class ProgressMap:
     """Логика карты прогресса: локации, точки (блоки) и уроки.
 
@@ -250,6 +265,8 @@ class ProgressMap:
         Пустой ответ, если уровня нет (обратная совместимость: карта как
         раньше начинается с первых уроков) или он самый низкий (A0).
         """
+        if not _skip_below_level():
+            return set()
         if not isinstance(profile, dict):
             return set()
         rank = self.level_rank(profile.get("level"))
