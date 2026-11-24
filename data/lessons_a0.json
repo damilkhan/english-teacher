@@ -1,0 +1,264 @@
+{
+  "version": 1,
+  "level": "A0",
+  "english": "american",
+  "status": "пилот 24.11.2026 — блок 1 «Saying Hi», тексты пишет ассистент, ученик утверждает",
+  "note": "Материал урока A0: мини-сцена (4-6 реплик), 2-3 вопроса ТОЛЬКО по сцене, фразы на перевод. Язык сцены — самый простой: to be, одно-два слова в ответе. id совпадает с knowledge_base/curriculum.json (у Пустыни простые id: 1.1, 1.2 …).",
+  "lessons": {
+    "1.1": {
+      "topic": "Saying Hi",
+      "title": "Hello / Hi",
+      "words": [
+        "hello",
+        "hi",
+        "I am",
+        "my name is"
+      ],
+      "phrases": [
+        {
+          "ru": "Привет!",
+          "en": "Hi!",
+          "rule": "word_choice",
+          "why": "Hi! — короткое приветствие другу."
+        },
+        {
+          "ru": "Здравствуйте!",
+          "en": "Hello!",
+          "rule": "word_choice",
+          "why": "Hello! — нейтральное приветствие, можно любому."
+        },
+        {
+          "ru": "Я Том.",
+          "en": "I am Tom.",
+          "rule": "word_choice",
+          "why": "I am = я. Дальше имя."
+        },
+        {
+          "ru": "Привет, Анна!",
+          "en": "Hi, Anna!",
+          "rule": "word_choice",
+          "why": "Имя ставим в конце, через запятую."
+        }
+      ],
+      "scene": [
+        {
+          "who": "Tom",
+          "en": "Hello!"
+        },
+        {
+          "who": "Anna",
+          "en": "Hi!"
+        },
+        {
+          "who": "Tom",
+          "en": "I am Tom. Hello!"
+        },
+        {
+          "who": "Anna",
+          "en": "I am Anna. Hi, Tom!"
+        },
+        {
+          "who": "Tom",
+          "en": "Hi, Anna!"
+        }
+      ],
+      "ask": [
+        "Who says hello first?",
+        "Does Anna say hello or goodbye?",
+        "What is the man's name?"
+      ]
+    },
+    "1.2": {
+      "topic": "Saying Hi",
+      "title": "Good morning / Good evening",
+      "words": [
+        "good morning",
+        "good evening",
+        "good night",
+        "early",
+        "late"
+      ],
+      "phrases": [
+        {
+          "ru": "Доброе утро!",
+          "en": "Good morning!",
+          "rule": "word_choice",
+          "why": "Good morning — до полудня."
+        },
+        {
+          "ru": "Добрый вечер!",
+          "en": "Good evening!",
+          "rule": "word_choice",
+          "why": "Good evening — после шести, при встрече."
+        },
+        {
+          "ru": "Доброй ночи!",
+          "en": "Good night!",
+          "rule": "word_choice",
+          "why": "Good night — когда уходишь спать, а не при встрече."
+        },
+        {
+          "ru": "Уже поздно.",
+          "en": "It is late.",
+          "rule": "word_choice",
+          "why": "It is late — «уже поздно»."
+        }
+      ],
+      "scene": [
+        {
+          "who": "Tom",
+          "en": "Good morning, Anna!"
+        },
+        {
+          "who": "Anna",
+          "en": "Good morning, Tom! It is nine o'clock."
+        },
+        {
+          "who": "Tom",
+          "en": "Good evening, Anna!"
+        },
+        {
+          "who": "Anna",
+          "en": "Good evening! It is eight o'clock. It is late."
+        },
+        {
+          "who": "Tom",
+          "en": "Good night!"
+        }
+      ],
+      "ask": [
+        "What does Tom say first?",
+        "What does Anna say in the evening?",
+        "Is it late?"
+      ]
+    },
+    "1.3": {
+      "topic": "Saying Hi",
+      "title": "How are you?",
+      "words": [
+        "how are you",
+        "fine",
+        "thanks",
+        "and you",
+        "OK"
+      ],
+      "phrases": [
+        {
+          "ru": "Как дела?",
+          "en": "How are you?",
+          "rule": "word_choice",
+          "why": "How are you? — вопрос про дела, не про здоровье."
+        },
+        {
+          "ru": "Я в порядке, спасибо.",
+          "en": "I am fine, thanks.",
+          "rule": "word_choice",
+          "why": "I am fine, thanks — обычный ответ."
+        },
+        {
+          "ru": "А ты?",
+          "en": "And you?",
+          "rule": "word_choice",
+          "why": "And you? — вернуть вопрос."
+        },
+        {
+          "ru": "Нормально, спасибо.",
+          "en": "I am OK, thanks.",
+          "rule": "word_choice",
+          "why": "I am OK — тоже нормальный ответ."
+        }
+      ],
+      "scene": [
+        {
+          "who": "Tom",
+          "en": "Hello, Anna! How are you?"
+        },
+        {
+          "who": "Anna",
+          "en": "I am fine, thanks. And you?"
+        },
+        {
+          "who": "Tom",
+          "en": "I am OK, thanks."
+        },
+        {
+          "who": "Anna",
+          "en": "Good! See you!"
+        },
+        {
+          "who": "Tom",
+          "en": "See you!"
+        }
+      ],
+      "ask": [
+        "How is Anna today?",
+        "Is Tom fine or OK?",
+        "Does Anna ask Tom about his day?"
+      ]
+    },
+    "1.4": {
+      "topic": "Saying Hi",
+      "title": "Goodbye",
+      "words": [
+        "goodbye",
+        "bye",
+        "see you",
+        "tomorrow",
+        "good night"
+      ],
+      "phrases": [
+        {
+          "ru": "До свидания!",
+          "en": "Goodbye!",
+          "rule": "word_choice",
+          "why": "Goodbye — нейтральное прощание."
+        },
+        {
+          "ru": "Пока!",
+          "en": "Bye!",
+          "rule": "word_choice",
+          "why": "Bye! — короткое прощание другу."
+        },
+        {
+          "ru": "Увидимся завтра!",
+          "en": "See you tomorrow!",
+          "rule": "word_choice",
+          "why": "See you + когда: tomorrow."
+        },
+        {
+          "ru": "Спокойной ночи!",
+          "en": "Good night!",
+          "rule": "word_choice",
+          "why": "Good night — только когда идёшь спать."
+        }
+      ],
+      "scene": [
+        {
+          "who": "Tom",
+          "en": "Goodbye, Anna!"
+        },
+        {
+          "who": "Anna",
+          "en": "Bye, Tom! See you tomorrow!"
+        },
+        {
+          "who": "Tom",
+          "en": "Yes, see you tomorrow."
+        },
+        {
+          "who": "Anna",
+          "en": "Good night!"
+        },
+        {
+          "who": "Tom",
+          "en": "Good night!"
+        }
+      ],
+      "ask": [
+        "What does Tom say first?",
+        "When does Anna see Tom again?",
+        "Is it morning or evening?"
+      ]
+    }
+  }
+}
