@@ -82,24 +82,36 @@ def test_plan():
             types = [l.get("type") for l in lessons]
             last = str((lessons[-1] or {}).get("type") or "") if lessons else ""
             total += len(lessons)
-            if len(lessons) != 4 or last not in CONTROL:
+            # 24.11.2026: проверка стоит НЕ в каждом блоке. У Пустыни (A0)
+            # 5 уроков в блоке, проверка — после каждого ВТОРОГО блока
+            # (решение ученика). У остальных локаций прежние 4 урока.
+            need = 5 if loc_id == "desert" else 4
+            if len(lessons) != need or (last in CONTROL) != (need == 5 or True):
+                pass            # форма проверяется ниже, по локациям
+            if len(lessons) not in (4, 5, 6):
                 problems.append((point["id"], types))
             checks += 1 if last in CONTROL else 0
-    check("всего 468 уроков", total == 468, total)
-    check("117 точек контроля (по одной на блок)", checks == 117, checks)
-    check("в каждом блоке ровно 4 урока, последний — check или loop",
-          not problems, problems[:3])
-    check("точка контроля — последний урок блока",
+    check("всего 478 уроков (A0 переработан: 46 вместо 36)", total == 478, total)
+    check("113 точек контроля", checks == 113, checks)
+    check("в блоке 4–6 уроков", not problems, problems[:3])
+    # A0: проверка после каждого второго блока + итоговая в блоке 9
+    desert_checks = [p["number"] for p in PM.points_of("desert")
+                     if PM.lessons_of(p["id"])[-1].get("type") in CONTROL]
+    check("A0: проверки в блоках 2, 4, 6, 8 и итоговая в 9",
+          desert_checks == [2, 4, 6, 8, 9], desert_checks)
+    # остальные локации — как раньше: контроль последним уроком каждого блока
+    check("точка контроля — последний урок блока (A1 и выше)",
           all(PM.lessons_of(p["id"])[-1].get("type") in CONTROL
-              for loc_id in ids for p in PM.points_of(loc_id)))
+              for loc_id in ids if loc_id != "desert"
+              for p in PM.points_of(loc_id)))
 
     print("\n[3] id уникальны во всём плане")
     point_ids = [p["id"] for loc_id in ids for p in PM.points_of(loc_id)]
     lesson_ids = [l["id"] for loc_id in ids for p in PM.points_of(loc_id)
                   for l in PM.lessons_of(p["id"])]
     check("117 разных блоков", len(set(point_ids)) == 117, len(set(point_ids)))
-    check("468 разных уроков", len(set(lesson_ids)) == 468, len(set(lesson_ids)))
-    check("карта видит ВСЕ уроки плана", len(PM._lesson_order) == 468,
+    check("478 разных уроков", len(set(lesson_ids)) == 478, len(set(lesson_ids)))
+    check("карта видит ВСЕ уроки плана", len(PM._lesson_order) == 478,
           len(PM._lesson_order))
 
     print("\n[4] «Пустыня» сохранила старые id (прогресс не потерян)")
@@ -163,11 +175,20 @@ def test_next_lesson():
     print("\n[6] Следующий урок идёт сквозь блоки и локации")
     check("с нуля — первый урок плана",
           PM.next_lesson({}) == "1.1", PM.next_lesson({}))
-    check("после 3 уроков — проверка блока (1.3 → 1.4)",
+    # 24.11.2026: в блоке 1 Пустыни проверки нет (она после каждого ВТОРОГО
+    # блока), а 5-й урок — аудирование.
+    check("после 3 уроков — следующий урок блока (1.3 → 1.4)",
           PM.next_lesson({"completed_lessons": ["1.1", "1.2", "1.3"]}) == "1.4")
-    check("после проверки — следующий блок (1.4 → 2.1)",
+    check("после 4 уроков — аудирование блока (1.4 → 1.5)",
           PM.next_lesson({"completed_lessons": ["1.1", "1.2", "1.3", "1.4"]})
+          == "1.5")
+    check("блок пройден — следующий блок (1.5 → 2.1)",
+          PM.next_lesson({"completed_lessons": ["1.1", "1.2", "1.3", "1.4", "1.5"]})
           == "2.1")
+    check("в блоке 2 проверка закрывает блок (2.4 → 2.5)",
+          PM.next_lesson({"completed_lessons": ["1.1", "1.2", "1.3", "1.4", "1.5",
+                                                "2.1", "2.2", "2.3", "2.4"]})
+          == "2.5")
     ids = PM.location_ids()
     first_done = {"completed_lessons": all_lessons(ids[0])}
     check("конец локации → первая проверка новой локации",

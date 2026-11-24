@@ -36,13 +36,19 @@
               "id": "1.3",
               "code": "1.3",
               "title": "How are you?",
-              "type": "chat"
+              "type": "speaking"
             },
             {
               "id": "1.4",
               "code": "1.4",
-              "title": "Проверка: Saying Hi",
-              "type": "check"
+              "title": "Goodbye",
+              "type": "speaking"
+            },
+            {
+              "id": "1.5",
+              "code": "1.5",
+              "title": "Listening: At the door",
+              "type": "listening"
             }
           ]
         },
@@ -53,30 +59,36 @@
             210,
             529
           ],
-          "block_title": "Introducing Yourself",
+          "block_title": "The Alphabet & Spelling",
           "lessons": [
             {
               "id": "2.1",
               "code": "2.1",
-              "title": "My name is…",
+              "title": "A, B, C…",
               "type": "speaking"
             },
             {
               "id": "2.2",
               "code": "2.2",
-              "title": "I'm from…",
+              "title": "How do you spell it?",
               "type": "speaking"
             },
             {
               "id": "2.3",
               "code": "2.3",
-              "title": "Nice to meet you",
-              "type": "chat"
+              "title": "My name in English",
+              "type": "speaking"
             },
             {
               "id": "2.4",
               "code": "2.4",
-              "title": "Проверка: Introducing Yourself",
+              "title": "Email and address",
+              "type": "listening"
+            },
+            {
+              "id": "2.5",
+              "code": "2.5",
+              "title": "Проверка: Saying Hi + Alphabet",
               "type": "check"
             }
           ]
@@ -88,31 +100,37 @@
             640,
             637
           ],
-          "block_title": "Numbers 0–10",
+          "block_title": "Introducing Yourself",
           "lessons": [
             {
               "id": "3.1",
               "code": "3.1",
-              "title": "Counting 1–10",
+              "title": "My name is…",
               "type": "speaking"
             },
             {
               "id": "3.2",
               "code": "3.2",
-              "title": "How many?",
+              "title": "I'm from…",
               "type": "speaking"
             },
             {
               "id": "3.3",
               "code": "3.3",
-              "title": "Phone numbers",
-              "type": "chat"
+              "title": "Nice to meet you",
+              "type": "speaking"
             },
             {
               "id": "3.4",
               "code": "3.4",
-              "title": "Проверка: Numbers 0–10",
-              "type": "check"
+              "title": "I'm not… / Are you…?",
+              "type": "speaking"
+            },
+            {
+              "id": "3.5",
+              "code": "3.5",
+              "title": "Listening: Two new friends",
+              "type": "listening"
             }
           ]
         },
@@ -123,30 +141,36 @@
             930,
             662
           ],
-          "block_title": "Numbers 11–100 & Age",
+          "block_title": "Numbers, Age & Phone",
           "lessons": [
             {
               "id": "4.1",
               "code": "4.1",
-              "title": "11–20",
+              "title": "0–10",
               "type": "speaking"
             },
             {
               "id": "4.2",
               "code": "4.2",
-              "title": "Tens: 20–100",
+              "title": "11–100",
               "type": "speaking"
             },
             {
               "id": "4.3",
               "code": "4.3",
               "title": "How old are you?",
-              "type": "chat"
+              "type": "speaking"
             },
             {
               "id": "4.4",
               "code": "4.4",
-              "title": "Проверка: Numbers 11–100 & Age",
+              "title": "Phone numbers",
+              "type": "listening"
+            },
+            {
+              "id": "4.5",
+              "code": "4.5",
+              "title": "Проверка: Alphabet + Numbers",
               "type": "check"
             }
           ]
@@ -158,7 +182,7 @@
             1053,
             541
           ],
-          "block_title": "Colors",
+          "block_title": "Colors & Objects",
           "lessons": [
             {
               "id": "5.1",
@@ -175,14 +199,20 @@
             {
               "id": "5.3",
               "code": "5.3",
-              "title": "Colors I like",
-              "type": "chat"
+              "title": "This is a pen",
+              "type": "speaking"
             },
             {
               "id": "5.4",
               "code": "5.4",
-              "title": "Проверка: Colors",
-              "type": "check"
+              "title": "My things",
+              "type": "speaking"
+            },
+            {
+              "id": "5.5",
+              "code": "5.5",
+              "title": "Listening: In my bag",
+              "type": "listening"
             }
           ]
         },
@@ -193,30 +223,36 @@
             876,
             396
           ],
-          "block_title": "Objects & This is…",
+          "block_title": "Where Is It?",
           "lessons": [
             {
               "id": "6.1",
               "code": "6.1",
-              "title": "This is a pen",
+              "title": "in / on / under",
               "type": "speaking"
             },
             {
               "id": "6.2",
               "code": "6.2",
-              "title": "Classroom objects",
+              "title": "Where is…?",
               "type": "speaking"
             },
             {
               "id": "6.3",
               "code": "6.3",
-              "title": "My things",
-              "type": "chat"
+              "title": "Here / there",
+              "type": "speaking"
             },
             {
               "id": "6.4",
               "code": "6.4",
-              "title": "Проверка: Objects & This is…",
+              "title": "Listening: Where is my phone?",
+              "type": "listening"
+            },
+            {
+              "id": "6.5",
+              "code": "6.5",
+              "title": "Проверка: Objects + Where?",
               "type": "check"
             }
           ]
@@ -246,13 +282,19 @@
               "id": "7.3",
               "code": "7.3",
               "title": "Who is this?",
-              "type": "chat"
+              "type": "speaking"
             },
             {
               "id": "7.4",
               "code": "7.4",
-              "title": "Проверка: Family & People",
-              "type": "check"
+              "title": "I have a brother",
+              "type": "speaking"
+            },
+            {
+              "id": "7.5",
+              "code": "7.5",
+              "title": "Listening: My family photo",
+              "type": "listening"
             }
           ]
         },
@@ -280,13 +322,19 @@
             {
               "id": "8.3",
               "code": "8.3",
-              "title": "Today is…",
-              "type": "chat"
+              "title": "On Monday, at 7",
+              "type": "speaking"
             },
             {
               "id": "8.4",
               "code": "8.4",
-              "title": "Проверка: Days & Time",
+              "title": "Listening: My week",
+              "type": "listening"
+            },
+            {
+              "id": "8.5",
+              "code": "8.5",
+              "title": "Проверка: Family + Days",
               "type": "check"
             }
           ]
@@ -309,19 +357,31 @@
             {
               "id": "9.2",
               "code": "9.2",
-              "title": "Do you like…?",
+              "title": "I don't like…",
               "type": "speaking"
             },
             {
               "id": "9.3",
               "code": "9.3",
-              "title": "My day: I get up at 7",
-              "type": "chat"
+              "title": "Do you like…?",
+              "type": "speaking"
             },
             {
               "id": "9.4",
               "code": "9.4",
-              "title": "Проверка: Likes & My Day",
+              "title": "My day: I get up at 7",
+              "type": "speaking"
+            },
+            {
+              "id": "9.5",
+              "code": "9.5",
+              "title": "Listening: My day",
+              "type": "listening"
+            },
+            {
+              "id": "9.6",
+              "code": "9.6",
+              "title": "Итоговая проверка: Пустыня",
               "type": "check"
             }
           ]

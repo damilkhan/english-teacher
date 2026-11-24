@@ -37,7 +37,7 @@ POINTS_FALLBACK = [(252, 676), (235, 530), (637, 623), (910, 646), (1024, 542),
                    (860, 414), (482, 321), (237, 288), (311, 159)]
 
 
-def point(number, title, lessons, prefix="", layout=None):
+def point(number, title, lessons, prefix="", layout=None, check=True):
     """Блок: заголовок + список (название, тип) для трёх уроков.
 
     Четвёртый урок — ПРОВЕРОЧНОЕ занятие — добавляется автоматически.
@@ -63,11 +63,16 @@ def point(number, title, lessons, prefix="", layout=None):
     # вместо экзамена. Остальные 33 блока пока с экзаменом: менять сразу
     # всё — после живой проверки пилота.
     is_loop = (prefix.rstrip("/") == "city" and number == 4)
-    out["lessons"].append({"id": "%s%d.4" % (prefix, number),
-                           "code": "%d.4" % number,
-                           "title": ("Работа над ошибками" if is_loop
-                                     else "Проверка: " + title),
-                           "type": "loop" if is_loop else "check"})
+    # 24.11.2026 (решение ученика): ПРОВЕРКА СТОИТ НЕ В КАЖДОМ БЛОКЕ, а после
+    # каждого ВТОРОГО. Поэтому список уроков может уже содержать проверку —
+    # тогда второй раз её не добавляем. Так же задаётся «Пустыня»: у неё
+    # 5 уроков в блоке (4 обучающих + проверка через блок).
+    if check and not any(t == "check" for _, t in lessons):
+        out["lessons"].append({"id": "%s%d.4" % (prefix, number),
+                               "code": "%d.4" % number,
+                               "title": ("Работа над ошибками" if is_loop
+                                         else "Проверка: " + title),
+                               "type": "loop" if is_loop else "check"})
     return out
 
 
@@ -83,43 +88,77 @@ def location(loc_id, title, level, points):
         # картинка локации: assets/map/<id>.png, все приведены к 1248×832
         "image": "assets/map/%s.png" % loc_id,
         "size": [1248, 832],
-        "points": [point(n, t, l, prefix, POINTS_XY.get(loc_id))
-                   for n, (t, l) in enumerate(points, start=1)],
+        # Строка points = (заголовок, уроки[, ставить_проверку]). Третий
+        # элемент нужен там, где проверка стоит не в каждом блоке (Пустыня,
+        # решение 24.11.2026: проверка после каждого ВТОРОГО блока).
+        "points": [point(n, row[0], row[1], prefix, POINTS_XY.get(loc_id),
+                         row[2] if len(row) > 2 else True)
+                   for n, row in enumerate(points, start=1)],
     }
 
 
 def build():
     locations = []
 
-    # ---------- A0 ----------
+    # ---------- A0 (24.11.2026: переработано по docs/A0_PROGRAM.md) ----------
+    # Решение ученика 24.11.2026: программа A0 должна доводить до A1, а не
+    # быть оглавлением. Что изменилось против прежней сетки:
+    #   + блок 2 «The Alphabet & Spelling» (спеллинг имени — база A0);
+    #   + блок 6 «Where Is It?» (in/on/under, Where is…?);
+    #   • числа: два блока слиты в один (было 22% курса);
+    #   • цвета и предметы слиты в один блок;
+    #   + в каждом блоке урок АУДИРОВАНИЯ (listening) — цель проекта
+    #     listening & speaking, а listening не было НИ ОДНОГО урока;
+    #   • все уроки ГЛАГОЛОМ: тип "chat" (печать) с A0 убран;
+    #   • проверка — после каждого ВТОРОГО блока (+ итоговая в блоке 9).
+    # Карта не меняется: на картинке 9 кружков, блоков остаётся 9.
     locations.append(location("desert", "Пустыня", "A0", [
         ("Saying Hi", [("Hello / Hi", "speaking"),
-                               ("Good morning / Good evening", "speaking"),
-                               ("How are you?", "chat")]),
+                       ("Good morning / Good evening", "speaking"),
+                       ("How are you?", "speaking"),
+                       ("Goodbye", "speaking"),
+                       ("Listening: At the door", "listening")], False),
+        ("The Alphabet & Spelling", [("A, B, C…", "speaking"),
+                                     ("How do you spell it?", "speaking"),
+                                     ("My name in English", "speaking"),
+                                     ("Email and address", "listening"),
+                                     ("Проверка: Saying Hi + Alphabet", "check")]),
         ("Introducing Yourself", [("My name is…", "speaking"),
                                   ("I'm from…", "speaking"),
-                                  ("Nice to meet you", "chat")]),
-        ("Numbers 0–10", [("Counting 1–10", "speaking"),
-                          ("How many?", "speaking"),
-                          ("Phone numbers", "chat")]),
-        ("Numbers 11–100 & Age", [("11–20", "speaking"),
-                                  ("Tens: 20–100", "speaking"),
-                                  ("How old are you?", "chat")]),
-        ("Colors", [("Basic colors", "speaking"),
-                    ("What color is it?", "speaking"),
-                    ("Colors I like", "chat")]),
-        ("Objects & This is…", [("This is a pen", "speaking"),
-                                ("Classroom objects", "speaking"),
-                                ("My things", "chat")]),
+                                  ("Nice to meet you", "speaking"),
+                                  ("I'm not… / Are you…?", "speaking"),
+                                  ("Listening: Two new friends", "listening")], False),
+        ("Numbers, Age & Phone", [("0–10", "speaking"),
+                                  ("11–100", "speaking"),
+                                  ("How old are you?", "speaking"),
+                                  ("Phone numbers", "listening"),
+                                  ("Проверка: Alphabet + Numbers", "check")]),
+        ("Colors & Objects", [("Basic colors", "speaking"),
+                              ("What color is it?", "speaking"),
+                              ("This is a pen", "speaking"),
+                              ("My things", "speaking"),
+                              ("Listening: In my bag", "listening")], False),
+        ("Where Is It?", [("in / on / under", "speaking"),
+                          ("Where is…?", "speaking"),
+                          ("Here / there", "speaking"),
+                          ("Listening: Where is my phone?", "listening"),
+                          ("Проверка: Objects + Where?", "check")]),
         ("Family & People", [("This is my mother", "speaking"),
                              ("He / She is…", "speaking"),
-                             ("Who is this?", "chat")]),
+                             ("Who is this?", "speaking"),
+                             ("I have a brother", "speaking"),
+                             ("Listening: My family photo", "listening")], False),
         ("Days & Time", [("Days of the week", "speaking"),
                          ("What's the time?", "speaking"),
-                         ("Today is…", "chat")]),
+                         ("On Monday, at 7", "speaking"),
+                         ("Listening: My week", "listening"),
+                         ("Проверка: Family + Days", "check")]),
         ("Likes & My Day", [("I like tea", "speaking"),
+                            ("I don't like…", "speaking"),
                             ("Do you like…?", "speaking"),
-                            ("My day: I get up at 7", "chat")]),
+                            ("My day: I get up at 7", "speaking"),
+                            ("Listening: My day", "listening"),
+                            ("Итоговая проверка: Пустыня", "check")]),
     ]))
 
     # ---------- A1 ----------
