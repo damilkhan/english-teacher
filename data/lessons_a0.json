@@ -2,7 +2,7 @@
   "version": 1,
   "level": "A0",
   "english": "american",
-  "status": "пилот 24.11.2026 — блок 1 «Saying Hi», тексты пишет ассистент, ученик утверждает",
+  "status": "пилот 25.11.2026 — блоки 1 и 2 «Saying Hi» + «The Alphabet & Spelling», тексты пишет ассистент, ученик утверждает",
   "note": "Материал урока A0: мини-сцена (4-6 реплик), 2-3 вопроса ТОЛЬКО по сцене, фразы на перевод. Язык сцены — самый простой: to be, одно-два слова в ответе. id совпадает с knowledge_base/curriculum.json (у Пустыни простые id: 1.1, 1.2 …).",
   "lessons": {
     "1.1": {
@@ -258,6 +258,197 @@
         "What does Tom say first?",
         "When does Anna see Tom again?",
         "Is it morning or evening?"
+      ]
+    },
+    "2.1": {
+      "topic": "The Alphabet & Spelling",
+      "title": "A, B, C…",
+      "words": [
+        "letter",
+        "name",
+        "first letter",
+        "alphabet"
+      ],
+      "phrases": [
+        {
+          "ru": "Это буква A.",
+          "en": "This is the letter A.",
+          "rule": "word_choice",
+          "why": "letter — буква."
+        },
+        {
+          "ru": "Моё имя — Том.",
+          "en": "My name is Tom.",
+          "rule": "word_choice",
+          "why": "Имя ставим в конце."
+        },
+        {
+          "ru": "Т, О, М.",
+          "en": "T, O, M.",
+          "rule": "spelling",
+          "why": "Имя по буквам, между буквами запятая."
+        },
+        {
+          "ru": "Эй, би, си.",
+          "en": "A, B, C.",
+          "rule": "word_choice",
+          "why": "Первые три буквы алфавита."
+        }
+      ],
+      "scene": [
+        {
+          "who": "Tom",
+          "en": "My name is Tom. T, O, M."
+        },
+        {
+          "who": "Anna",
+          "en": "My name is Anna. A, N, N, A."
+        },
+        {
+          "who": "Tom",
+          "en": "A, N, N, A. Anna!"
+        },
+        {
+          "who": "Anna",
+          "en": "Yes. T, O, M is Tom."
+        },
+        {
+          "who": "Tom",
+          "en": "Good! A, B, C..."
+        }
+      ],
+      "ask": [
+        "How many letters are in Tom's name?",
+        "Whose name has four letters?",
+        "Does Anna spell Tom's name?"
+      ]
+    },
+    "2.2": {
+      "topic": "The Alphabet & Spelling",
+      "title": "How do you spell it?",
+      "words": [
+        "spell",
+        "again",
+        "please",
+        "letter",
+        "name"
+      ],
+      "phrases": [
+        {
+          "ru": "Как это пишется по буквам?",
+          "en": "How do you spell it?",
+          "rule": "word_choice",
+          "why": "spell — говорить по буквам."
+        },
+        {
+          "ru": "Как пишется твоё имя?",
+          "en": "How do you spell your name?",
+          "rule": "word_choice",
+          "why": "your — твоё."
+        },
+        {
+          "ru": "Повтори, пожалуйста.",
+          "en": "Again, please.",
+          "rule": "word_choice",
+          "why": "again — ещё раз."
+        },
+        {
+          "ru": "Пишется A, N, N, A.",
+          "en": "It is A, N, N, A.",
+          "rule": "spelling",
+          "why": "Буквы называем по одной."
+        }
+      ],
+      "scene": [
+        {
+          "who": "Tom",
+          "en": "How do you spell your name?"
+        },
+        {
+          "who": "Anna",
+          "en": "A, N, N, A."
+        },
+        {
+          "who": "Tom",
+          "en": "Again, please."
+        },
+        {
+          "who": "Anna",
+          "en": "A, N, N, A. Anna."
+        },
+        {
+          "who": "Tom",
+          "en": "Thank you!"
+        }
+      ],
+      "ask": [
+        "Who spells the name?",
+        "How many times does Anna spell her name?",
+        "What is the last letter of Anna's name?"
+      ]
+    },
+    "2.3": {
+      "topic": "The Alphabet & Spelling",
+      "title": "My name in English",
+      "words": [
+        "first name",
+        "last name",
+        "spell",
+        "name",
+        "letter"
+      ],
+      "phrases": [
+        {
+          "ru": "Моё имя — Том.",
+          "en": "My first name is Tom.",
+          "rule": "word_choice",
+          "why": "first name — имя, не фамилия."
+        },
+        {
+          "ru": "Моя фамилия — Смит.",
+          "en": "My last name is Smith.",
+          "rule": "word_choice",
+          "why": "last name — фамилия."
+        },
+        {
+          "ru": "Как пишется твоя фамилия?",
+          "en": "How do you spell your last name?",
+          "rule": "word_choice",
+          "why": "Тот же вопрос, только про фамилию."
+        },
+        {
+          "ru": "Моя фамилия по буквам: S, M, I, T, H.",
+          "en": "S, M, I, T, H.",
+          "rule": "spelling",
+          "why": "Латиницей, буквы по одной."
+        }
+      ],
+      "scene": [
+        {
+          "who": "Anna",
+          "en": "What is your last name?"
+        },
+        {
+          "who": "Tom",
+          "en": "Smith. S, M, I, T, H."
+        },
+        {
+          "who": "Anna",
+          "en": "How do you spell your first name?"
+        },
+        {
+          "who": "Tom",
+          "en": "T, O, M."
+        },
+        {
+          "who": "Anna",
+          "en": "Thank you, Tom Smith!"
+        }
+      ],
+      "ask": [
+        "What is Tom's last name?",
+        "How many letters are in the last name?",
+        "Does Anna spell her name?"
       ]
     }
   }
