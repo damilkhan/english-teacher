@@ -40,7 +40,7 @@ for _stream in (sys.stdout, sys.stderr):
 
 import config                                                    # noqa: E402
 import progress_map                                              # noqa: E402
-from progress_map import ProgressMap, COMPLETED, UNLOCKED        # noqa: E402
+from progress_map import (ProgressMap, COMPLETED, UNLOCKED, OPEN, LOCKED)  # noqa: E402
 
 FAILED = []
 
@@ -77,6 +77,50 @@ def main():
     check("пропуск выключен: Пустыня открыта, а не пройдена",
           pm.get_location_state("desert", profile("A2")) == UNLOCKED,
           pm.get_location_state("desert", profile("A2")))
+    # ---------- 0b. ДОСТУП К НИЖНИМ МИРАМ (§95, 25.11.2026) ----------
+    # Жалоба ученика 25.11.2026: «раньше был доступ к пройденным уровням, а ты
+    # закрыл». Пропуск уроков (§93.1) и ДОСТУП — разные вещи: уроки не
+    # засчитываются, но заходить в нижние миры можно. Локация уровнем не выше
+    # ученика получает состояние OPEN (зелёная, без пульсации), вход — с первого
+    # её урока. Выше уровня — по-прежнему закрыто.
+    print("\n[0b] Нижние локации открыты, но не пройдены")
+    a2 = profile("A2")
+    check("Пустыня (A0) — активная (unlocked)",
+          pm.get_location_state("desert", a2) == UNLOCKED,
+          pm.get_location_state("desert", a2))
+    check("Лес (A1) — открыт по уровню",
+          pm.get_location_state("forest", a2) == OPEN,
+          pm.get_location_state("forest", a2))
+    check("Город (A2 = уровень) — открыт по уровню",
+          pm.get_location_state("city", a2) == OPEN,
+          pm.get_location_state("city", a2))
+    check("уроки Леса НЕ засчитаны как пройденные",
+          "forest/1.1" not in pm.done_lessons(a2))
+    check("в Лес можно войти с первого урока",
+          pm.get_lesson_state("forest/1.1", a2) == UNLOCKED,
+          pm.get_lesson_state("forest/1.1", a2))
+    check("в Город можно войти с первого урока",
+          pm.get_lesson_state("city/1.1", a2) == UNLOCKED,
+          pm.get_lesson_state("city/1.1", a2))
+    check("второй урок Леса пока закрыт",
+          pm.get_lesson_state("forest/1.2", a2) == LOCKED,
+          pm.get_lesson_state("forest/1.2", a2))
+    check("Морской берег (B1) закрыт — выше уровня",
+          pm.get_location_state("coast", a2) == LOCKED,
+          pm.get_location_state("coast", a2))
+    check("автозапуск всё равно с Пустыни", pm.next_lesson(a2) == "1.1",
+          pm.next_lesson(a2))
+    a1 = profile("A1")
+    check("A1: Лес открыт", pm.get_location_state("forest", a1) == OPEN)
+    check("A1: Город (A2) закрыт",
+          pm.get_location_state("city", a1) == LOCKED,
+          pm.get_location_state("city", a1))
+    config.OPEN_LOCATIONS_UP_TO_LEVEL = False
+    check("выключатель: город снова закрыт",
+          pm.get_location_state("city", a2) == LOCKED,
+          pm.get_location_state("city", a2))
+    config.OPEN_LOCATIONS_UP_TO_LEVEL = True
+
     # дальше проверяем само правило варианта В — включаем флаг явно
     config.SKIP_LESSONS_BY_LEVEL = True
 

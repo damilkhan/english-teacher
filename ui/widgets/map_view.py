@@ -36,7 +36,7 @@ import customtkinter as ctk
 
 import profile_store
 import theme
-from progress_map import ProgressMap, LOCKED, UNLOCKED, COMPLETED
+from progress_map import ProgressMap, LOCKED, UNLOCKED, COMPLETED, OPEN
 
 _log = logging.getLogger(__name__)
 
@@ -150,6 +150,11 @@ def state_colors(state: str, palette: Dict[str, Any]) -> Tuple[str, str]:
                 palette.get("map_num_outline", "#0A3D26"))
     if state == UNLOCKED:
         return (palette.get("map_unlocked", "#4ADE80"),
+                palette.get("map_num_outline", "#0A3D26"))
+    # §95: открыта, но не текущая — тот же зелёный, но темнее (без пульсации),
+    # чтобы «можно зайти» не путалось с «ты сейчас здесь».
+    if state == OPEN:
+        return (palette.get("map_open", "#2F9E68"),
                 palette.get("map_num_outline", "#0A3D26"))
     return (palette.get("map_locked", "#8B223C"),
             palette.get("map_num_outline_locked", "#3A0814"))
@@ -477,6 +482,8 @@ class MapView(ctk.CTkFrame):
                 else "🔒 Закрыто"
         elif state == "completed":
             text = "✅ Пройдена"
+        elif state == "open":
+            text = "Открыта · можно зайти"
         else:
             text = "Локация %d из %d" % (idx + 1, len(ids))
         if level and state != "locked":
@@ -798,7 +805,8 @@ class MapView(ctk.CTkFrame):
             child.destroy()
         self._legend_photos = []
         p = self.palette
-        items = [(COMPLETED, "пройдено"), (UNLOCKED, "активный"), (LOCKED, "закрыто")]
+        items = [(COMPLETED, "пройдено"), (UNLOCKED, "активный"),
+                 (OPEN, "открыто"), (LOCKED, "закрыто")]
         for state, label in items:
             row = ctk.CTkFrame(self.legend, fg_color="transparent")
             row.pack(side="left", padx=(0, 16))

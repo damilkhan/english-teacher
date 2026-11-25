@@ -31,10 +31,30 @@ _log = logging.getLogger(__name__)
 LOCKED = "locked"
 UNLOCKED = "unlocked"
 COMPLETED = "completed"
+# 25.11.2026 (§95): ОТКРЫТА, но не «текущая». Так помечаются локации, куда
+# можно зайти (уровень не выше ученика), но которые ещё не пройдены:
+# зелёные, без пульсации. Пульсирует только активная (UNLOCKED).
+OPEN = "open"
 
 # Шкала уровней (lower → higher). По ней «пропускаем» локации, которые
 # ученик уже закрыл вступительным тестом (см. skipped_lessons).
 _CEFR_ORDER = ("A0", "A1", "A2", "B1", "B2", "C1")
+
+
+def _open_up_to_level() -> bool:
+    """Открывать ли локации уровнем НЕ ВЫШЕ ученика (настройка config).
+
+    РЕШЕНИЕ УЧЕНИКА 25.11.2026: «раньше был доступ к пройденным уровням».
+    Пропуск уроков (§93.1) и ДОСТУП — разные вещи: пропускать уроки больше
+    нельзя (решение 24.11.2026), а заходить в нижние миры можно и нужно.
+    такой заход НЕ помечает уроки пройденными — в этом была ошибка старого
+    правила варианта В. Выключатель — ``config.OPEN_LOCATIONS_UP_TO_LEVEL``.
+    """
+    try:
+        import config
+        return bool(getattr(config, "OPEN_LOCATIONS_UP_TO_LEVEL", True))
+    except Exception:
+        return True
 
 
 def _skip_below_level() -> bool:
@@ -310,6 +330,17 @@ class ProgressMap:
         loc_id = self._point_location.get(self._lesson_point.get(lesson_id))
         if loc_id and not self.is_location_unlocked(loc_id, profile):
             return LOCKED
+        # §95 (25.11.2026): в локации, открытой «по уровню», вход — с первого
+        # её урока, а дальше цепочка идёт ВНУТРИ локации. Иначе город у
+        # ученика A2 был бы открыт, но ни один урок в нём не пускал.
+        if loc_id and self.get_location_state(loc_id, profile) == OPEN:
+            lessons = self._location_lessons.get(loc_id, [])
+            if lesson_id in lessons:
+                here = lessons.index(lesson_id)
+                done_now = self.done_lessons(profile)
+                if here == 0 or lessons[here - 1] in done_now:
+                    return UNLOCKED
+            return LOCKED
         idx = self._lesson_order.index(lesson_id)
         if idx == 0:
             return UNLOCKED
@@ -386,8 +417,41 @@ class ProgressMap:
         if idx == 0:
             return UNLOCKED
         previous = order[idx - 1]
-        return (UNLOCKED if self.is_location_completed(previous, profile)
-                else LOCKED)
+        if self.is_location_completed(previous, profile):
+            return UNLOCKED
+        # §95 (25.11.2026): «следующая по очереди» — пульсирует, остальные
+        # нижние миры просто ОТКРЫТЫ (но не пройдены): уровень локации не
+        # выше уровня ученика или он там уже учился. Уроки НЕ засчитаны.
+        return OPEN if self.opens_by_level(location_id, profile) else LOCKED
+
+    def opens_by_level(self, location_id: str,
+                       profile: Optional[Dict[str, Any]]) -> bool:
+        """Можно ли зайти в локацию СВОБОДНО (§95, решение 25.11.2026).
+
+        Да, если:
+          * выключатель включён и уровень локации НЕ ВЫШЕ уровня ученика
+            (ученик A2 может гулять по Пустыне и Лесу — и наоборот);
+          * или в этой локации у него уже есть пройденные уроки.
+        Это ДОСТУП, а не зачёт: `done_lessons` не меняется, пропуска нет.
+        """
+        location_id = str(location_id or "")
+        if location_id not in self._locations:
+            return False
+        if not isinstance(profile, dict):
+            return False
+        # 1) здесь уже учились — дверь открыта всегда
+        done = self.completed_lessons(profile)
+        for lesson_id in self._location_lessons.get(location_id, []):
+            if lesson_id in done:
+                return True
+        # 2) уровень локации не выше уровня ученика
+        if not _open_up_to_level():
+            return False
+        rank = self.level_rank(profile.get("level"))
+        if rank < 0:
+            return False
+        here = self.level_rank((self._locations.get(location_id) or {}).get("level"))
+        return 0 <= here <= rank
 
     def is_location_unlocked(self, location_id: str,
                              profile: Optional[Dict[str, Any]]) -> bool:
