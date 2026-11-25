@@ -41,7 +41,16 @@ def test_levels():
     check("пусто → ''", pt.normalize_level(None) == "")
     check("порог A2 = 105", pt.threshold_for("A2") == 105, pt.threshold_for("A2"))
     check("порог B1 = 135", pt.threshold_for("B1") == 135, pt.threshold_for("B1"))
-    check("порог A0 = 40", pt.threshold_for("A0") == 40)
+    # §94 (25.11.2026): у A0 порог РАСТЁТ по блоку: уровень фото берётся
+    # у локации (пустыня A0), а 40 букв на первом уроке было неподъёмно.
+    check("порог A0 (блок 1) = 10", pt.threshold_for("A0") == 10,
+          pt.threshold_for("A0"))
+    check("порог A0 блок 2 = 13", pt.threshold_for("A0", 2) == 13)
+    check("порог A0 блок 5 = 22", pt.threshold_for("A0", 5) == 22)
+    check("порог A0 блок 9 = 34", pt.threshold_for("A0", 9) == 34)
+    check("номер блока не больше 9", pt.threshold_for("A0", 99) == 34)
+    check("мусор вместо блока → блок 1", pt.threshold_for("A0", "x") == 10)
+    check("у A1 блочной лестницы нет", pt.threshold_for("A1", 5) == 45)
     check("неизвестный уровень → как A2", pt.threshold_for("") == 105)
     check("уровень для порога у пустого — A2", pt.level_for_threshold("") == "A2")
     check("порог = число", isinstance(pt.threshold_for("A2"), int))
@@ -110,15 +119,15 @@ def test_check():
 def test_catalog():
     print("\n[4] Каталог фото")
     catalog = pt.load_catalog()
-    check("20 фото в каталоге", len(catalog) == 20, len(catalog))
+    check("21 фото в каталоге", len(catalog) == 21, len(catalog))
     check("у записи есть абсолютный путь",
           os.path.isabs(catalog["a2/city-street"]["path"]), catalog.get("a2/city-street"))
     check("файл на месте", os.path.exists(catalog["a2/city-street"]["path"]))
     check("A0 — 5 фото", len(pt.pictures_for_level("A0")) == 5,
           len(pt.pictures_for_level("A0")))
     check("A1 — 6 фото", len(pt.pictures_for_level("A1")) == 6)
-    check("A2 — 9 фото", len(pt.pictures_for_level("A2")) == 9)
-    check("B1 — своих нет, берём A2", len(pt.pictures_for_level("B1")) == 9,
+    check("A2 — 10 фото", len(pt.pictures_for_level("A2")) == 10)
+    check("B1 — своих нет, берём A2", len(pt.pictures_for_level("B1")) == 10,
           len(pt.pictures_for_level("B1")))
     check("без уровня — A0", len(pt.pictures_for_level("")) == 5)
     check("все ключи A2 на месте",
@@ -144,6 +153,14 @@ def test_describe_task():
     check("пороги в config на все уровни",
           set(config.PICTURE_LETTER_THRESHOLDS) == {"A0", "A1", "A2", "B1", "B2", "C1"},
           sorted(config.PICTURE_LETTER_THRESHOLDS))
+    # §94: задание блока 1 Пустыни — порог 10 букв, а не 105
+    a0 = pt.describe_task("A0", block=1)
+    check("A0 блок 1: порог 10 в задании", (a0 or {}).get("threshold") == 10,
+          (a0 or {}).get("threshold"))
+    check("A0 блок 1: номер блока в задании", (a0 or {}).get("block") == 1)
+    a0_late = pt.describe_task("A0", block=9)
+    check("A0 блок 9: порог 34", (a0_late or {}).get("threshold") == 34,
+          (a0_late or {}).get("threshold"))
     check("отправлять не меньше 768 px",
           config.PICTURE_MIN_SEND_SIDE >= 768, config.PICTURE_MIN_SEND_SIDE)
 

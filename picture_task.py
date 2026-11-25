@@ -105,17 +105,37 @@ def words_report(text, words):
     return "\U0001F50E Words from the lesson — %s." % "; ".join(parts)
 
 
-def threshold_for(level):
-    """Порог букв (ЖЁСТКИЙ) для уровня."""
+def block_number(block=None):
+    """Номер блока (1..9) для порога. Пусто/мусор → 1."""
+    try:
+        number = int(block)
+    except (TypeError, ValueError):
+        return 1
+    return max(1, min(number, 9))
+
+
+def threshold_for(level, block=None):
+    """Порог букв (ЖЁСТКИЙ) для уровня и блока.
+
+    25.11.2026 (§94): у A0 порог НЕ один на всю Пустыню. Ученик A2 идёт
+    по Пустыне — уровень берётся у ЛОКАЦИИ (A0), а порог растёт по блоку:
+    блок 1 = 12 букв («I see a red car.»), блок 9 = 36. A2 = 105 не тронут:
+    единственная ЗАМЕРЕННАЯ цифра (§18), 40 у A0 был «на глаз».
+    """
     table = getattr(config, "PICTURE_LETTER_THRESHOLDS", {}) or {}
     key = level_for_threshold(level)
     value = table.get(key)
     if value is None:
         value = getattr(config, "PICTURE_LETTER_DEFAULT", 105)
     try:
-        return int(value)
+        value = int(value)
     except (TypeError, ValueError):
-        return 105
+        value = 105
+    if key == "A0":
+        start = int(getattr(config, "PICTURE_A0_BLOCK_START", 10))
+        step = int(getattr(config, "PICTURE_A0_BLOCK_STEP", 3))
+        return start + (block_number(block) - 1) * step
+    return value
 
 
 def pictures_for_level(level, catalog=None):
@@ -184,23 +204,36 @@ def word_stats(text):
     return len(items), len(counts), top / float(len(items))
 
 
-def expected_words(level):
-    """Сколько РАЗНЫХ слов ждём: примерно порог букв / 4 (A2 → 26 → 13)."""
-    return max(6, int(round(threshold_for(level) / 4.0)))
+def expected_words(level, threshold=None):
+    """Сколько РАЗНЫХ слов ждём: примерно порог букв / 4 (A2 → 26 → 13).
+
+    threshold — уже посчитанный порог (у A0 он зависит от блока).
+    """
+    base = threshold_for(level) if threshold is None else int(threshold)
+    return max(6, int(round(base / 4.0)))
 
 
-def check_description(text, level):
+def check_description(text, level, threshold=None):
     """Годится ли описание. Словарь с причиной отказа (None = принято).
 
     Причины:
       too_short  — меньше порога букв;
       repeated   — одно слово больше 40 % слов (накрутка повтором);
       few_words  — слишком мало разных слов для уровня.
+
+    threshold — порог, уже посчитанный при показе фото (у A0 он от блока).
+    Передавать его ОБЯЗАТЕЛЬНО: иначе урок 2 Пустыни проверится порогом 1-го.
     """
-    threshold = threshold_for(level)
+    if threshold is None:
+        threshold = threshold_for(level)
+    else:
+        try:
+            threshold = int(threshold)
+        except (TypeError, ValueError):
+            threshold = threshold_for(level)
     count = letters(text)
     total, unique, top_share = word_stats(text)
-    want_unique = max(3, int(round(expected_words(level)
+    want_unique = max(3, int(round(expected_words(level, threshold)
                                   * getattr(config, "PICTURE_UNIQUE_SHARE", 0.5))))
     max_share = getattr(config, "PICTURE_MAX_WORD_SHARE", 0.40)
     reason = None
@@ -252,10 +285,12 @@ def pick_by_topic(level, topic="", catalog=None, used=None):
     return random.choice(fresh or keys)
 
 
-def describe_task(level, catalog=None, used=None, topic="", key=""):
+def describe_task(level, catalog=None, used=None, topic="", key="",
+                  block=None):
     """Данные задания для одного фото: тема, пункты, путь, порог.
 
     used — ключи уже показанных фото (профиль ученика), чтобы не повторяться.
+    block — номер блока: у A0 порог букв растёт от блока к блоку (§94).
     """
     catalog = load_catalog() if catalog is None else catalog
     # §86: фото может быть привязано к уроку — по ключу (data/lessons_a2.json,
@@ -271,6 +306,7 @@ def describe_task(level, catalog=None, used=None, topic="", key=""):
     key = chosen
     entry = dict(catalog[key])
     entry["key"] = key
-    entry["threshold"] = threshold_for(level)
+    entry["threshold"] = threshold_for(level, block)
     entry["level"] = level_for_threshold(level)
+    entry["block"] = block_number(block)
     return entry

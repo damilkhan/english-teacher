@@ -82,6 +82,12 @@ def make_app(level="A2"):
 
     app.add_message = types.MethodType(App.add_message, app)
     app._picture_level = types.MethodType(App._picture_level, app)
+    # §94 (25.11.2026): уровень берётся у ЛОКАЦИИ, порог A0 — по блоку.
+    app._picture_block_number = types.MethodType(App._picture_block_number, app)
+    app.progress_map = types.SimpleNamespace(
+        location_of=lambda point_id: "",
+        get_location=lambda place: {},
+        get_point=lambda point_id: {})
     app._start_picture_task = types.MethodType(App._start_picture_task, app)
     app._picture_reply = types.MethodType(App._picture_reply, app)
     # §42: проверка грамматики идёт в фоне и зовёт модель — в этом тесте

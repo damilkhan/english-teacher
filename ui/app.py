@@ -1609,6 +1609,11 @@ class EnglishTeacherApp:
         material = self._material_of(data.get("id"))
         # фото после урока берётся ПО ТЕМЕ этого урока (§86, шаг 3)
         self._picture_material = material or {}
+        # §94 (25.11.2026): уровень фото — у ЛОКАЦИИ, а не у профиля.
+        # Ученик A2 шёл по Пустыне (A0) и получал «не меньше 105 букв».
+        # Блок нужен для порога: на A0 он растёт от блока к блоку.
+        self._picture_point = data.get("point_id") or ""
+        self._picture_block_n = data.get("block_number")
         if material:
             try:
                 session.set_tasks_total(lesson_material.tasks_count(data.get("id")))
@@ -2016,6 +2021,33 @@ class EnglishTeacherApp:
             # сцена: фото-задание после неё не даём — пилот идёт без модели
             print("🎬 Сцена закрыта: фото-задание пропущено")
             return
+        # §94 (25.11.2026): на A0 фото — ОДНО за блок, в конце блока.
+        # Иначе 45 уроков Пустыни = 45 заданий «опиши фото». Решение ученика:
+        # «прошёл первый урок — и сразу опиши фото на 105 символов, это слишком».
+        # Признак «последний урок блока» берём из ПЛАНА, а не из прогресса:
+        # состояние блока в этот момент ещё может быть старым.
+        one_per_block = False
+        try:
+            levels = tuple(getattr(config, "PICTURE_ONE_PER_BLOCK_LEVELS", ()) or ())
+            one_per_block = str(self._picture_level()).upper() in levels
+        except Exception:
+            one_per_block = False
+        if one_per_block:
+            last_of_block = False
+            try:
+                # Проверка блока из списка ВЫКИНУТА: после экзамена фото
+                # не даётся вовсе (урок заканчивается итогом балла),
+                # поэтому «конец блока» = последний ОБУЧАЮЩИЙ урок.
+                ids = [str((row or {}).get("id") or "")
+                       for row in self.progress_map.lessons_of(session.point_id)
+                       if str((row or {}).get("type") or "") != "check"]
+                last_of_block = bool(ids) and ids[-1] == str(session.lesson_id)
+            except Exception as exc:
+                print("⚠️ Последний урок блока не определён: %s" % exc)
+                last_of_block = bool(block_done)
+            if not last_of_block:
+                print("📷 Фото: A0 — одно за блок, урок не последний, пропуск (§94)")
+                return
         self._wait_for_speech(self._start_picture_task)
 
     # ---------- задание с картинкой ----------
@@ -2039,8 +2071,36 @@ class EnglishTeacherApp:
         return True
 
     def _picture_level(self):
-        """Уровень ученика для порога букв ("" → порог как у A2)."""
-        return (self.current_user or {}).get("level") or ""
+        """Уровень для порога букв: сначала ЛОКАЦИЯ урока, потом профиль.
+
+        §94 (25.11.2026): раньше брался только уровень ПРОФИЛЯ — ученик A2
+        на первом уроке Пустыни получал «не меньше 105 букв». У локаций
+        уровень в плане уже есть (пустыня A0, лес A1, город A2).
+        Пусто → "" (порог как у A2, как было).
+        """
+        point_id = getattr(self, "_picture_point", "") or ""
+        level = ""
+        if point_id:
+            try:
+                place = self.progress_map.location_of(point_id)
+                level = str((self.progress_map.get_location(place) or {})
+                            .get("level") or "")
+            except Exception as exc:
+                print("⚠️ Уровень локации не прочитан: %s" % exc)
+        if not level:
+            level = (self.current_user or {}).get("level") or ""
+        return level
+
+    def _picture_block_number(self):
+        """Номер блока для порога букв (0 — не знаем)."""
+        number = getattr(self, "_picture_block_n", None)
+        if number:
+            return number
+        point_id = getattr(self, "_picture_point", "") or ""
+        try:
+            return (self.progress_map.get_point(point_id) or {}).get("number") or 0
+        except Exception:
+            return 0
 
     def _start_picture_task(self):
         """Показать фото и включить порог букв. Одно фото за заход.
@@ -2062,7 +2122,8 @@ class EnglishTeacherApp:
         # assets/pictures/pictures.json есть topic и points.
         task = picture_task.describe_task(self._picture_level(), used=used,
                                           topic=material.get("topic") or "",
-                                          key=material.get("picture") or "")
+                                          key=material.get("picture") or "",
+                                          block=self._picture_block_number())
         if not task:
             print("ℹ️ Фото для задания не найдено (§18: assets/pictures)")
             # Фото нет — урок всё равно кончился: снимаем блокировку, иначе
@@ -2102,7 +2163,9 @@ class EnglishTeacherApp:
         """Проверить описание фото. True — реплику модель НЕ получает."""
         task = self._picture or {}
         level = task.get("level") or self._picture_level()
-        result = picture_task.check_description(text, level)
+        # §94: порог берём тот, что показали ученику (у A0 он от блока).
+        result = picture_task.check_description(text, level,
+                                                threshold=task.get("threshold"))
         try:
             self.input_bar.set_counter(result["threshold"])
         except Exception:
